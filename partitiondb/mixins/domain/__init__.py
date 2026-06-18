@@ -1,0 +1,1 @@
+from partitiondb.mixins.domain.base import *  # noqa

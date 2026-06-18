@@ -1,0 +1,25 @@
+{% extends "admin/base.html" %}
+{% load i18n static tenant %}
+
+{% block extrastyle %}
+{% current_tenant app as current_tenant %}
+{% is_db_tenant app as is_db_tenant %}
+{{ block.super }}
+{% if is_db_tenant %}
+<style>
+:root {
+    --secondary: #bb79c8 !important;
+}
+</style>
+{% endif %}
+{% endblock %}
+{% block title %}{% current_tenant app as current_tenant %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ current_tenant.name|default:site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block branding %}{% current_tenant app as current_tenant %}
+<div id="site-name"><a href="{% url 'admin:index' %}">{{ current_tenant.name|default:site_header|default:_('Django administration') }}</a></div>
+{% if user.is_anonymous %}
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
