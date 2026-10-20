@@ -68,6 +68,16 @@ def check_configuration(app_configs, **kwargs):
     if "partitiondb.adapters.django.router.TenantRouter" not in settings.DATABASE_ROUTERS:
         errors.append(Error("Install TenantRouter in DATABASE_ROUTERS", id="partitiondb.E004"))
     middleware = list(getattr(settings, "MIDDLEWARE", []))
+    host_guard = "partitiondb.adapters.django.hosts.RegistryHostMiddleware"
+    if host_guard in middleware and (
+        middleware[0] != host_guard or list(settings.ALLOWED_HOSTS) != ["*"]
+    ):
+        errors.append(
+            Error(
+                "Install RegistryHostMiddleware first with ALLOWED_HOSTS=['*']",
+                id="partitiondb.E026",
+            )
+        )
     hostname_boundary = "partitiondb.adapters.django.middleware.TenantMiddleware"
     path_boundary = "partitiondb.adapters.django.subfolder.TenantSubfolderMiddleware"
     boundary = path_boundary if path_boundary in middleware else hostname_boundary
