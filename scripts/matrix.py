@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MATRIX = [
     (python, django)
     for python in ("3.11", "3.12", "3.13", "3.14")
-    for django in (">=5.2,<5.3", ">=6.0,<6.1")
-    if (python, django) != ("3.11", ">=6.0,<6.1")
+    for django in (">=5.2,<5.3", ">=6.0,<6.1", ">=6.1,<6.2")
+    if python != "3.11" or django == ">=5.2,<5.3"
 ]
 
 

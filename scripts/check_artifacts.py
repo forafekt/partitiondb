@@ -35,6 +35,8 @@ def main():
     source = options.dist_dir / f"partitiondb-{version}.tar.gz"
     with zipfile.ZipFile(wheel) as archive:
         check_names(archive.namelist())
+        for template in ("index.html", "app_index.html", "provision.html"):
+            archive.getinfo("partitiondb/adapters/django/templates/partitiondb/admin/" + template)
         metadata = email.message_from_bytes(
             archive.read(f"partitiondb-{version}.dist-info/METADATA")
         )

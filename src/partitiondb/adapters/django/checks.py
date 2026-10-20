@@ -14,6 +14,34 @@ def check_configuration(app_configs, **kwargs):
     if not isinstance(config, dict):
         return [Error("PARTITIONDB must be a dictionary", id="partitiondb.E008")]
     errors = []
+    hosts = config.get("SHARED_HOSTS", [])
+    if not isinstance(hosts, (list, tuple)) or any(
+        not isinstance(h, str)
+        or not h
+        or h != h.lower().rstrip(".")
+        or "/" in h
+        or ":" in h
+        or "*" in h
+        for h in hosts
+    ):
+        errors.append(
+            Error(
+                "SHARED_HOSTS must contain exact lowercase hostnames without ports",
+                id="partitiondb.E022",
+            )
+        )
+    if hosts or config.get("SHARED_URLCONF"):
+        try:
+            if not hosts or not isinstance(config.get("SHARED_URLCONF"), str):
+                raise ValueError("Configure SHARED_HOSTS and SHARED_URLCONF together")
+            _ = get_resolver(config["SHARED_URLCONF"]).url_patterns
+        except (ImportError, AttributeError, ImproperlyConfigured, ValueError):
+            errors.append(
+                Error(
+                    "Configure SHARED_HOSTS with an importable SHARED_URLCONF",
+                    id="partitiondb.E023",
+                )
+            )
     shared, tenant = config.get("SHARED_APPS", []), config.get("TENANT_APPS", [])
     if not all(
         isinstance(v, (list, tuple)) and all(isinstance(x, str) for x in v)
@@ -23,9 +51,19 @@ def check_configuration(app_configs, **kwargs):
     if set(shared) & set(tenant):
         errors.append(Error("Shared and tenant apps overlap", id="partitiondb.E002"))
     installed = {app.label for app in apps.get_app_configs()} - {"partitiondb"}
-    if installed != (set(shared) | set(tenant)):
+    if (
+        installed != (set(shared) | set(tenant))
+        or len(shared) != len(set(shared))
+        or len(tenant) != len(set(tenant))
+    ):
         errors.append(
-            Error("Classify every installed app label exactly once", id="partitiondb.E003")
+            Error(
+                "Classify every installed app label exactly once",
+                hint=f"Missing: {sorted(installed - set(shared) - set(tenant))}; "
+                f"unknown: {sorted((set(shared) | set(tenant)) - installed)}; "
+                "remove duplicate entries.",
+                id="partitiondb.E003",
+            )
         )
     if "partitiondb.adapters.django.router.TenantRouter" not in settings.DATABASE_ROUTERS:
         errors.append(Error("Install TenantRouter in DATABASE_ROUTERS", id="partitiondb.E004"))

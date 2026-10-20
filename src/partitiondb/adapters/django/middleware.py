@@ -1,5 +1,7 @@
 """Synchronous request boundary; Django adapts it for ASGI."""
 
+from urllib.parse import urlsplit
+
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.http import Http404
@@ -30,6 +32,34 @@ class TenantMiddleware:
         authorize = settings.PARTITIONDB.get("AUTHORIZE")
         self.authorize = import_string(authorize) if authorize else None
 
+    def shared_response(self, request):
+        config = settings.PARTITIONDB
+        hosts = config.get("SHARED_HOSTS", [])
+        if not hosts:
+            return None
+        hostname = (urlsplit("//" + request.get_host()).hostname or "").lower().rstrip(".")
+        if hostname not in hosts:
+            return None
+        urlconf = config.get("SHARED_URLCONF")
+        if not urlconf:
+            raise ImproperlyConfigured("SHARED_HOSTS requires SHARED_URLCONF")
+        with tenant_scope(None), request_urlconf(request, urlconf):
+            had_tenant = hasattr(request, "tenant")
+            previous_tenant = getattr(request, "tenant", None)
+            request.tenant = None
+            try:
+                response = self.get_response(request)
+                if response.streaming:
+                    raise RuntimeError("Shared streaming requires an independent scoped worker")
+                if hasattr(response, "render") and not response.is_rendered:
+                    response.render()
+                return response
+            finally:
+                if had_tenant:
+                    request.tenant = previous_tenant
+                else:
+                    del request.tenant
+
     def resolve_tenant(self, request):
         host = request.get_host().lower().rstrip(".")
         if host.startswith("["):
@@ -39,6 +69,9 @@ class TenantMiddleware:
         return self.resolve(host)
 
     def __call__(self, request):
+        shared = self.shared_response(request)
+        if shared is not None:
+            return shared
         if hasattr(request, "principal") and self.authorize is None:
             raise ImproperlyConfigured("Shared identity requires an AUTHORIZE membership callback")
         with tenant_scope(None):

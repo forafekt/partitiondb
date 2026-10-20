@@ -1,6 +1,6 @@
 # Django adapter setup
 
-This adapter targets Django 5.2 and 6.0, subject to the configured CI matrix passing. Django 6.0 requires Python 3.12+. PostgreSQL 16 is the initial integration target.
+This adapter targets Django 5.2, 6.0 and 6.1, subject to the configured CI matrix passing. Django 6.x requires Python 3.12+. PostgreSQL 16 is the initial integration target.
 
 ## Settings
 
@@ -128,3 +128,6 @@ before the tenant transaction; it does not allow shared ORM queries inside it.
 Registry activation/deactivation is available through RegistryLifecycle and the
 tenant_admission operator command. See [REGISTRY_LIFECYCLE.md](REGISTRY_LIFECYCLE.md)
 for exact readiness checks and the distinction between admission and revocation.
+
+For explicit shared-host routing, scoped admin navigation and the provisioning form extension,
+see [shared administration](SHARED_ADMIN.md).
