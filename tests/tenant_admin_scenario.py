@@ -82,6 +82,7 @@ def main(postgres=False):
             MIDDLEWARE=[
                 "django.contrib.sessions.middleware.SessionMiddleware",
                 "django.contrib.auth.middleware.AuthenticationMiddleware",
+                "partitiondb.adapters.django.admin_auth.TenantAdminAuthMiddleware",
                 "partitiondb.adapters.django.identity.SharedIdentityMiddleware",
                 "django.contrib.messages.middleware.MessageMiddleware",
                 "partitiondb.adapters.django.middleware.TenantMiddleware",
@@ -141,7 +142,47 @@ def main(postgres=False):
                 editor.create_model(Audit)
         user = get_user_model().objects.create_superuser("operator", password="test-only")
         client = Client(HTTP_HOST="alpha.test")
-        client.force_login(user)
+        response = client.get("/admin/")
+        assert response.status_code == 302 and "/admin/login/" in response.url
+        assert client.get("/admin/login/").status_code == 200
+        response = client.post(
+            "/admin/login/",
+            {
+                "username": "operator",
+                "password": "test-only",
+                "next": "http://evil.example/",
+            },
+        )
+        assert response.status_code == 302 and response.url == "/admin/"
+        assert client.cookies[settings.SESSION_COOKIE_NAME]["domain"] == ""
+        login_csrf = Client(HTTP_HOST="alpha.test", enforce_csrf_checks=True)
+        assert login_csrf.get("/admin/login/").status_code == 200
+        assert (
+            login_csrf.post(
+                "/admin/login/",
+                {
+                    "username": "operator",
+                    "password": "test-only",
+                },
+            ).status_code
+            == 403
+        )
+        token = login_csrf.cookies[settings.CSRF_COOKIE_NAME].value
+        assert (
+            login_csrf.post(
+                "/admin/login/",
+                {
+                    "username": "operator",
+                    "password": "test-only",
+                    "csrfmiddlewaretoken": token,
+                },
+            ).status_code
+            == 302
+        )
+        denied = Client(HTTP_HOST="beta.test")
+        response = denied.post("/admin/login/", {"username": "operator", "password": "test-only"})
+        assert response.status_code == 200  # Invalid membership/permission form response.
+        assert settings.SESSION_COOKIE_NAME not in denied.cookies
 
         # Record every executed query: shared DB must not be used during tenant scope.
         def guard(execute, sql, params, many, context):
@@ -193,8 +234,10 @@ def main(postgres=False):
         with tenant_scope(resolve("beta.test")):
             assert Audit.objects.count() == 0
             assert Item.objects.count() == 0
-        client.logout()
-        assert client.get("/admin/").status_code == 403
+        assert client.get("/admin/logout/").status_code == 405
+        response = client.post("/admin/logout/")
+        assert response.status_code == 302 and response.url == "/admin/login/"
+        assert client.get("/admin/").status_code == 302
         print("TENANT ADMIN CRUD, AUDIT AND PERMISSION ISOLATION PASSED")
 
 

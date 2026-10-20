@@ -1,5 +1,8 @@
 # Tenant administration
 
+For same-host login without shared cookies, use [tenant login](TENANT_LOGIN.md).
+That optional middleware supersedes the shared-login transport instructions below.
+
 Tenant admin is opt-in and separate from the shared platform AdminSite. It requires
 SharedIdentityMiddleware, an explicit membership authorizer, a shared-scope permissions
 callback and a tenant-local audit model. Platform superuser status does not bypass
