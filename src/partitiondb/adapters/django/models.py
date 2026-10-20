@@ -113,3 +113,20 @@ class DomainMixin(models.Model):
         self.clean()
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+class TenantAdminAuditMixin(models.Model):
+    """Subclass in a TENANT_APPS app; no relation to shared auth/contenttypes."""
+
+    occurred_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    actor_id = models.CharField(max_length=255)
+    actor_name = models.CharField(max_length=255)
+    model_label = models.CharField(max_length=255, db_index=True)
+    object_id = models.TextField()
+    object_repr = models.TextField()
+    action = models.CharField(max_length=16)
+    message = models.JSONField(default=list)
+
+    class Meta:
+        abstract = True
+        ordering = ["-occurred_at", "-pk"]

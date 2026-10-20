@@ -125,6 +125,33 @@ def check_configuration(app_configs, **kwargs):
                 )
             )
 
+    if config.get("TENANT_ADMIN_PERMISSIONS"):
+        try:
+            callback = import_string(config["TENANT_ADMIN_PERMISSIONS"])
+            if not callable(callback) or identity not in middleware or authorize is None:
+                raise ValueError("Missing tenant admin identity/authorization")
+        except (ImportError, AttributeError, TypeError, ValueError):
+            errors.append(
+                Error(
+                    "Tenant admin requires a permissions callable, "
+                    "SharedIdentityMiddleware and AUTHORIZE",
+                    id="partitiondb.E024",
+                )
+            )
+        try:
+            from .models import TenantAdminAuditMixin
+
+            audit = apps.get_model(config.get("TENANT_ADMIN_LOG_MODEL", ""))
+            if not issubclass(audit, TenantAdminAuditMixin) or audit._meta.app_label not in tenant:
+                raise ValueError("Invalid tenant audit model")
+        except (LookupError, ValueError, TypeError, AttributeError):
+            errors.append(
+                Error(
+                    "TENANT_ADMIN_LOG_MODEL must name a tenant TenantAdminAuditMixin model",
+                    id="partitiondb.E025",
+                )
+            )
+
     def contains_tenant_loader(value):
         if isinstance(value, str):
             return value.startswith("partitiondb.adapters.django.template_loaders.")
