@@ -1,16 +1,24 @@
 name: validation
 on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+concurrency:
+  group: validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         python: ['3.11', '3.12', '3.13', '3.14']
-        django: ['>=5.2,<5.3', '>=6.0,<6.1']
+        django: ['>=5.2,<5.3', '>=6.0,<6.1', '>=6.1,<6.2']
         exclude:
           - python: '3.11'
             django: '>=6.0,<6.1'
+          - python: '3.11'
+            django: '>=6.1,<6.2'
     services:
       postgres:
         image: postgres:16
@@ -29,9 +37,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '${{ matrix.python }}'
+      - run: git ls-files --error-unmatch scripts/validate.py scripts/check_artifacts.py
       - run: python -m pip install '.[django,dev]' 'Django${{ matrix.django }}'
       - run: python -m ruff check .
       - run: python -m ruff format --check .
       - run: python -m mypy
       - run: python scripts/validate.py --installed-package
       - run: python -m build
+      - run: python scripts/check_artifacts.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions-python-${{ matrix.python }}-django-${{ strategy.job-index }}
+          path: dist/

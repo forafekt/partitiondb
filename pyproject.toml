@@ -4,7 +4,7 @@ requires = ["hatchling>=1.27,<2"]
 
 [project]
 name = "partitiondb"
-version = "0.2.0a29"
+version = "0.2.0a30"
 description = "Explicit PostgreSQL tenant scopes with optional framework adapters"
 readme = "README.md"
 license = "MIT"

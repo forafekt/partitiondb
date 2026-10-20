@@ -102,3 +102,124 @@ class DomainRegistryAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
                 )
             )
         return errors
+
+
+class ControlPlaneAdminSite(admin.AdminSite):
+    """Shared-only site with a scoped app inventory and disabled tenant entries."""
+
+    index_template = "partitiondb/admin/index.html"
+    app_index_template = "partitiondb/admin/app_index.html"
+
+    def has_permission(self, request):
+        return current_tenant(required=False) is None and super().has_permission(request)
+
+    def register(self, model_or_iterable, admin_class=None, **options):
+        from django.core.exceptions import ImproperlyConfigured
+
+        models = (
+            [model_or_iterable] if hasattr(model_or_iterable, "_meta") else list(model_or_iterable)
+        )
+        shared, _ = app_sets()
+        if any(model._meta.app_label not in shared for model in models):
+            raise ImproperlyConfigured("ControlPlaneAdminSite accepts only shared models")
+        return super().register(models, admin_class, **options)
+
+    def get_app_list(self, request, app_label=None):
+        from django.apps import apps
+
+        result = super().get_app_list(request, app_label)
+        for app in result:
+            app["name"] = f"{app['name']} — Shared"
+        _, tenant_apps = app_sets()
+        for label in sorted(tenant_apps):
+            if app_label is not None and app_label != label:
+                continue
+            if not (request.user.is_superuser or request.user.has_module_perms(label)):
+                continue
+            config = apps.get_app_config(label)
+            result.append(
+                {
+                    "name": f"{config.verbose_name} — Tenant (disabled in shared admin)",
+                    "app_label": label,
+                    "app_url": None,
+                    "has_module_perms": True,
+                    "models": [
+                        {
+                            "name": model._meta.verbose_name_plural,
+                            "object_name": model._meta.object_name,
+                            "admin_url": None,
+                            "add_url": None,
+                            "perms": {},
+                        }
+                        for model in config.get_models()
+                    ],
+                }
+            )
+        return sorted(result, key=lambda app: str(app["name"]).lower())
+
+
+class ProvisioningTenantAdmin(TenantRegistryAdmin):
+    """Opt-in add form delegates creation to an application-owned service.
+
+    Set provisioning_form_class and implement provision_tenant(request, cleaned_data).
+    The service must persist inactive metadata, checkpoints, provision and activate;
+    it returns the saved instance or raises. No outer admin transaction is used.
+    """
+
+    provisioning_form_class = None
+
+    def provision_tenant(self, request, cleaned_data):
+        raise NotImplementedError("Implement the application provisioning service")
+
+    def has_add_permission(self, request):
+        return (
+            self.provisioning_form_class is not None
+            and request.user.is_superuser
+            and super().has_add_permission(request)
+        )
+
+    def add_view(self, request, form_url="", extra_context=None):
+        import logging
+
+        from django.http import HttpResponseRedirect
+        from django.template.response import TemplateResponse
+        from django.urls import reverse
+
+        self._require_control_plane()
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        request.current_app = self.admin_site.name
+        form = self.provisioning_form_class(request.POST if request.method == "POST" else None)
+        failed = False
+        if request.method == "POST" and form.is_valid():
+            try:
+                obj = self.provision_tenant(request, form.cleaned_data)
+            except Exception:
+                logging.getLogger(__name__).exception("Admin provisioning failed")
+                failed = True
+                form.add_error(
+                    None,
+                    "Provisioning did not complete. Metadata and schema may "
+                    "remain. Inspect records and logs before recovery; do not recreate.",
+                )
+            else:
+                self.log_addition(request, obj, "Provisioned through application service")
+                self.message_user(request, "Tenant provisioned successfully.")
+                return HttpResponseRedirect(
+                    reverse(
+                        f"{self.admin_site.name}:{self.opts.app_label}_{self.opts.model_name}_change",
+                        args=[obj.pk],
+                    )
+                )
+        return TemplateResponse(
+            request,
+            "partitiondb/admin/provision.html",
+            {
+                **self.admin_site.each_context(request),
+                **(extra_context or {}),
+                "title": "Create and provision tenant",
+                "opts": self.opts,
+                "form": form,
+                "provisioning_failed": failed,
+            },
+        )

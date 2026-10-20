@@ -31,6 +31,11 @@ def main(sqlite_name=None):
         client = Client(HTTP_HOST="alpha.test")
         client.force_login(user)
         assert client.get(reverse("registry:sharedapp_tenantrecord_changelist")).status_code == 200
+        dashboard = client.get(reverse("registry:index"))
+        assert dashboard.status_code == 200
+        assert b"Shared control plane" in dashboard.content
+        assert b"Tenant (disabled in shared admin)" in dashboard.content
+        assert b"/admin/tenantapp/item/" not in dashboard.content
         schema = "admin_" + uuid.uuid4().hex
         response = client.post(
             reverse("registry:sharedapp_tenantrecord_add"),
