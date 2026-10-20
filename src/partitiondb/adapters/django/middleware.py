@@ -86,6 +86,22 @@ class TenantMiddleware:
             with tenant_scope(None):
                 if self.authorize(request, tenant) is not True:
                     raise PermissionDenied("Tenant access denied")
+        permissions_path = settings.PARTITIONDB.get("TENANT_ADMIN_PERMISSIONS")
+        if permissions_path:
+            if self.authorize is None or not hasattr(request, "principal"):
+                raise ImproperlyConfigured(
+                    "Tenant admin requires SharedIdentityMiddleware and AUTHORIZE"
+                )
+            with tenant_scope(None):
+                permissions = import_string(permissions_path)(request, tenant)
+            if not isinstance(permissions, (set, frozenset, list, tuple)) or any(
+                not isinstance(value, str) for value in permissions
+            ):
+                raise ImproperlyConfigured(
+                    "TENANT_ADMIN_PERMISSIONS must return permission strings"
+                )
+            request.tenant_admin_permissions = frozenset(permissions)
+            request.tenant_admin_identity = tenant
         with atomic_tenant(tenant), request_urlconf(request, policy.urlconf):
             response = self.get_response(request)
             if response.streaming:

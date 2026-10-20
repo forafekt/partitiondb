@@ -1,0 +1,5 @@
+{% extends "admin/base_site.html" %}
+{% block content %}<h2>{{ object }}</h2>
+<p>Tenant-local audit history (latest 200 events).</p>
+<table><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Changes</th></tr></thead>
+<tbody>{% for event in events %}<tr><td>{{ event.occurred_at }}</td><td>{{ event.actor_name }}</td><td>{{ event.action }}</td><td>{{ event.message }}</td></tr>{% empty %}<tr><td colspan="4">No recorded events.</td></tr>{% endfor %}</tbody></table>{% endblock %}

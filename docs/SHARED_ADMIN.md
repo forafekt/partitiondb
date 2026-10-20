@@ -108,3 +108,5 @@ Pass only the three declared service fields (`name`, `schema`, `hostname`); a fo
 confirmation checkbox must be removed from the callback arguments. Do not return
 success if the command reports a failure. Keep command output in server logs rather
 than rendering credentials or database errors into HTML.
+
+For the separate opt-in tenant site, see [tenant administration](TENANT_ADMIN.md).
