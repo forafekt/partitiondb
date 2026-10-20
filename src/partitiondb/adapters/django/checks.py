@@ -162,6 +162,34 @@ def check_configuration(app_configs, **kwargs):
                 )
             )
 
+    admin_auth = "partitiondb.adapters.django.admin_auth.TenantAdminAuthMiddleware"
+    if admin_auth in middleware:
+        expected = [
+            "django.contrib.sessions.middleware.SessionMiddleware",
+            "django.contrib.auth.middleware.AuthenticationMiddleware",
+            admin_auth,
+            identity,
+            hostname_boundary,
+        ]
+        if (
+            [name for name in middleware if name in expected] != expected
+            or not config.get("TENANT_ADMIN_PERMISSIONS")
+            or authorize is None
+        ):
+            errors.append(
+                Error(
+                    "Order sessions, auth, tenant admin auth, shared identity, tenant boundary; "
+                    "configure membership and permission callbacks",
+                    id="partitiondb.E027",
+                )
+            )
+        if settings.SESSION_COOKIE_DOMAIN is not None:
+            errors.append(
+                Error(
+                    "Tenant host login requires SESSION_COOKIE_DOMAIN=None", id="partitiondb.E028"
+                )
+            )
+
     def contains_tenant_loader(value):
         if isinstance(value, str):
             return value.startswith("partitiondb.adapters.django.template_loaders.")
