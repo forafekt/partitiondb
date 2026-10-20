@@ -271,7 +271,9 @@ pyrightconfig.json
 [Ll]ib
 [Ll]ib64
 [Ll]ocal
-[Ss]cripts
+# [Ss]cripts
+# Ignore virtual-environment scripts only.
+/.venv/[Ss]cripts/
 pyvenv.cfg
 pip-selfcheck.json
 
