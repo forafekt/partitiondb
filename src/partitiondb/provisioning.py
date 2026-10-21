@@ -20,6 +20,8 @@ class Stage(StrEnum):
     SCHEMA_READY = "schema_ready"
     MIGRATING = "migrating"
     MIGRATED = "migrated"
+    ACCESS_PROVISIONING = "access_provisioning"
+    ACCESS_READY = "access_ready"
     ACTIVE = "active"
 
 
@@ -77,12 +79,14 @@ class Provisioner:
         create: Callable[[Tenant], None],
         migrate: Callable[[Tenant], None],
         verify: Callable[[Tenant], None],
+        provision_access: Callable[[Tenant], None] | None = None,
         observer: Callable[[LifecycleEvent], None] | None = None,
     ) -> None:
         self.store = store
         self.create = create
         self.migrate = migrate
         self.verify = verify
+        self.provision_access = provision_access
         self.observer = observer
 
     def _emit(self, event: LifecycleEvent) -> None:
@@ -132,7 +136,16 @@ class Provisioner:
                 record = self._advance(record, Stage.MIGRATING)
                 self._invoke(record, self.migrate)
                 record = self._advance(record, Stage.MIGRATED)
-            if record.stage == Stage.MIGRATED:
+            if record.stage == Stage.ACCESS_PROVISIONING:
+                raise AmbiguousCreation(
+                    "Database access provisioning may have committed; inspect role and "
+                    "credential ownership before reconciling"
+                )
+            if record.stage == Stage.MIGRATED and self.provision_access is not None:
+                record = self._advance(record, Stage.ACCESS_PROVISIONING)
+                self._invoke(record, self.provision_access)
+                record = self._advance(record, Stage.ACCESS_READY)
+            if record.stage in (Stage.MIGRATED, Stage.ACCESS_READY):
                 self._invoke(record, self.verify)
                 record = self._advance(record, Stage.ACTIVE)
             return record
@@ -156,3 +169,25 @@ class Provisioner:
             if record.tenant != confirm or record.stage != Stage.CREATING:
                 raise ValueError("Reconciliation requires the exact tenant in CREATING state")
             return self._advance(record, Stage.SCHEMA_READY if schema_created else Stage.NEW)
+
+    def reconcile_access(
+        self, tenant_id: str, *, confirm: Tenant, access_ready: bool
+    ) -> ProvisioningRecord:
+        """Operator-confirmed recovery of ambiguous external role/secret operations.
+
+        access_ready=True requires independently verifying the role's ownership,
+        grants, secret persistence, and ability to authenticate. False requires
+        independently verifying that no role/secret side effects remain. This
+        method only records the operator decision and never inspects PostgreSQL.
+        """
+        if not isinstance(tenant_id, str) or not tenant_id:
+            raise ValueError("Tenant ID must be a nonempty string")
+        if type(access_ready) is not bool:
+            raise TypeError("access_ready must be a boolean")
+        with tenant_scope(None), self.store.lock(tenant_id):
+            record = self._record(tenant_id)
+            if record.tenant != confirm or record.stage != Stage.ACCESS_PROVISIONING:
+                raise ValueError("Reconciliation requires the exact tenant in ACCESS_PROVISIONING")
+            return self._advance(
+                record, Stage.ACCESS_READY if access_ready else Stage.MIGRATED
+            )
