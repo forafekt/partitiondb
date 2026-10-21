@@ -25,7 +25,7 @@ def main():
     from partitiondb.adapters.django.middleware import TenantMiddleware
     from partitiondb.adapters.django.scope import atomic_tenant
     from partitiondb.postgres import SchemaManager
-    from tests.tenantapp.models import Item
+    from apps.workspaces.models import Workspace
 
     call_command("migrate", verbosity=0, interactive=False)
     user = get_user_model().objects.create_user(username="auth_" + uuid.uuid4().hex, password=None)
@@ -44,11 +44,11 @@ def main():
                 created.append(tenant)
                 call_command("migrate_tenant", tenant.schema, verbosity=0)
                 with atomic_tenant(tenant):
-                    Item.objects.create(value=tenant.id)
+                    Workspace.objects.create(name=tenant.id)
 
             def view(request):
                 assert request.principal.id == str(user.pk)
-                return JsonResponse({"values": list(Item.objects.values_list("value", flat=True))})
+                return JsonResponse({"values": list(Workspace.objects.values_list("name", flat=True))})
 
             tenant_handler = TenantMiddleware(view)
             tenant_handler.resolve = lambda host: tenants[0] if host == "alpha.test" else tenants[1]

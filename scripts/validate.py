@@ -40,13 +40,13 @@ def validate(admin_dsn, *, examples_only=False, installed_package=False):
     with psycopg.connect(admin_dsn, autocommit=True) as admin:
         try:
             databases = {}
-            for purpose in ["examples"] if examples_only else ["tests", "examples"]:
+            for purpose in ["tests"]:
                 name = "pdb_validation_" + purpose + "_" + secrets.token_hex(8)
                 admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
                 created.append(name)
                 databases[purpose] = make_conninfo(admin_dsn, dbname=name)
             environment = os.environ.copy()
-            if not examples_only:
+            if True:
                 environment["PARTITIONDB_TEST_DSN"] = databases["tests"]
                 arguments = ["-m", "pytest", "--require-postgres", "-p", "no:cacheprovider"]
                 if installed_package:
@@ -59,41 +59,8 @@ def validate(admin_dsn, *, examples_only=False, installed_package=False):
                     )
                     arguments.extend(["--override-ini", "pythonpath=.", "--import-mode=importlib"])
                 run(arguments, environment)
-            environment["PARTITIONDB_EXAMPLE_DSN"] = databases["examples"]
-            for arguments in (
-                ["examples/plain_python/demo.py", "provision"],
-                ["examples/plain_python/demo.py", "list"],
-                ["examples/plain_python/demo.py", "cleanup"],
-                ["examples/plain_python/recoverable.py", "install"],
-                ["examples/plain_python/recoverable.py", "register"],
-                ["examples/plain_python/recoverable.py", "run"],
-                ["examples/plain_python/recoverable.py", "status"],
-                ["examples/plain_python/recoverable.py", "run"],
-                ["examples/django_demo/manage.py", "check"],
-                ["examples/django_demo/manage.py", "migrate", "--noinput"],
-                ["examples/django_demo/manage.py", "provision_demo"],
-                ["examples/django_demo/manage.py", "check_demo"],
-                ["examples/django_demo/manage.py", "check_admission"],
-                ["examples/django_demo/manage.py", "migrate_tenants", "--workers", "2", "--check"],
-                [
-                    "examples/django_demo/manage.py",
-                    "tenant_command",
-                    "demo_alpha",
-                    "dumpdata",
-                    "projects",
-                ],
-                [
-                    "examples/django_demo/manage.py",
-                    "all_tenants_command",
-                    "--workers",
-                    "2",
-                    "dumpdata",
-                    "projects",
-                ],
-                ["examples/django_demo/manage.py", "migrate_tenant", "demo_alpha", "--plan"],
-                ["examples/django_demo/manage.py", "migrate_tenant", "demo_alpha", "--check"],
-            ):
-                run(arguments, environment)
+            # The Django integration fixture now lives in tests/django_project.
+            # Its management commands are exercised by the pytest suite.
         finally:
             # Cleanup all owned databases, even if one DROP fails. Failed names
             # are safe to report; no DSNs/passwords are included in this message.
@@ -112,7 +79,7 @@ def validate(admin_dsn, *, examples_only=False, installed_package=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--examples-only", action="store_true")
+
     parser.add_argument(
         "--installed-package",
         action="store_true",
@@ -122,7 +89,7 @@ def main():
     dsn = os.environ.get("PARTITIONDB_TEST_DSN")
     if not dsn:
         parser.error("PARTITIONDB_TEST_DSN must point to a disposable validation server")
-    validate(dsn, examples_only=options.examples_only, installed_package=options.installed_package)
+    validate(dsn, installed_package=options.installed_package)
 
 
 if __name__ == "__main__":

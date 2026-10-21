@@ -70,7 +70,7 @@ fresh admissions through cooperating lookups; it does not revoke running work.
 | Migrations and operations | [Fleet](docs/FLEET.md), [events](docs/OPERATION_EVENTS.md), [operating contract](docs/OPERATIONS.md) |
 | Optional integrations | [Celery](docs/CELERY.md), [tenant types](docs/TENANT_TYPES.md) |
 | Assets and tests | [Storage/testing](docs/STORAGE_TESTING.md), [templates/static/admin/routing](docs/ASSETS_ADMIN_ROUTING.md) |
-| Examples and upgrades | [Examples](examples/README.md), [migration guide](docs/MIGRATION.md) |
+| Examples and upgrades | [Django test project](tests/django_project/), [migration guide](docs/MIGRATION.md) |
 | Release checks | [Validation](docs/RELEASE_VALIDATION.md) |
 
 ## Development

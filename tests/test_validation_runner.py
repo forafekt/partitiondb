@@ -19,7 +19,7 @@ class Admin:
     def execute(self, statement):
         query = statement.as_string()
         self.statements.append(query)
-        if self.fail_second_create and query.startswith('CREATE DATABASE "pdb_validation_examples'):
+        if self.fail_second_create and query.startswith('CREATE DATABASE "pdb_validation_tests'):
             raise validate.psycopg.OperationalError("simulated creation failure")
 
 
@@ -36,10 +36,7 @@ def test_failed_child_cleans_only_owned_databases(monkeypatch):
     with pytest.raises(subprocess.CalledProcessError):
         validate.validate("dbname=original")
     drops = [query for query in admin.statements if query.startswith("DROP")]
-    assert drops == [
-        'DROP DATABASE "pdb_validation_examples_fixed"',
-        'DROP DATABASE "pdb_validation_tests_fixed"',
-    ]
+    assert drops == ['DROP DATABASE "pdb_validation_tests_fixed"']
     assert not any('"original"' in query for query in admin.statements)
 
 
@@ -49,9 +46,7 @@ def test_partial_creation_cleans_only_successful_creations(monkeypatch):
     monkeypatch.setattr(validate.secrets, "token_hex", lambda n: "fixed")
     with pytest.raises(validate.psycopg.OperationalError):
         validate.validate("dbname=original")
-    assert [query for query in admin.statements if query.startswith("DROP")] == [
-        'DROP DATABASE "pdb_validation_tests_fixed"'
-    ]
+    assert [query for query in admin.statements if query.startswith("DROP")] == []
 
 
 def test_installed_validation_checks_origin_and_disables_source_pythonpath(monkeypatch):
@@ -64,7 +59,6 @@ def test_installed_validation_checks_origin_and_disables_source_pythonpath(monke
     assert "Imported checkout source" in calls[0][1]
     assert "== expected" in calls[0][1]
     assert calls[1][-3:] == ["--override-ini", "pythonpath=.", "--import-mode=importlib"]
-    assert ["examples/django_demo/manage.py", "check_admission"] in calls
 
 
 def test_validation_cli_accepts_installed_package_flag(monkeypatch):
@@ -73,4 +67,4 @@ def test_validation_cli_accepts_installed_package_flag(monkeypatch):
     monkeypatch.setenv("PARTITIONDB_TEST_DSN", "dbname=disposable")
     monkeypatch.setattr(validate.sys, "argv", ["validate.py", "--installed-package"])
     validate.main()
-    assert calls == [(("dbname=disposable",), {"examples_only": False, "installed_package": True})]
+    assert calls == [(("dbname=disposable",), {"installed_package": True})]

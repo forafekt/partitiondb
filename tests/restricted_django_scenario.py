@@ -28,7 +28,7 @@ def worker():
     from partitiondb.adapters.django.identity import SharedIdentityMiddleware
     from partitiondb.adapters.django.middleware import TenantMiddleware
     from partitiondb.adapters.django.scope import atomic_tenant
-    from tests.tenantapp.models import Item
+    from apps.workspaces.models import Workspace
 
     data = json.loads(os.environ["PARTITIONDB_RESTRICTED_SCENARIO"])
     tenants = [Tenant(str(i), schema) for i, schema in enumerate(data["schemas"])]
@@ -37,8 +37,8 @@ def worker():
     def view(request):
         assert request.principal.id == data["user_id"]
         calls.append(request.tenant.id)
-        assert list(Item.objects.values_list("value", flat=True)) == [request.tenant.id]
-        Item.objects.create(value="committed" if request.path == "/ok" else "rollback")
+        assert list(Workspace.objects.values_list("name", flat=True)) == [request.tenant.id]
+        Workspace.objects.create(name="committed" if request.path == "/ok" else "rollback")
         return HttpResponse(status=200 if request.path == "/ok" else 400)
 
     boundary = TenantMiddleware(view)
@@ -67,12 +67,12 @@ def worker():
                 raise AssertionError("Unauthorized request reached tenant view")
         assert calls == ["0", "0"]
         with atomic_tenant(tenants[0]):
-            assert list(Item.objects.order_by("pk").values_list("value", flat=True)) == [
+            assert list(Workspace.objects.order_by("pk").values_list("name", flat=True)) == [
                 "0",
                 "committed",
             ]
         with atomic_tenant(tenants[1]):
-            assert list(Item.objects.values_list("value", flat=True)) == ["1"]
+            assert list(Workspace.objects.values_list("name", flat=True)) == ["1"]
         for statement in (
             "CREATE TABLE forbidden_table (id integer)",
             "CREATE SCHEMA forbidden_schema",
@@ -104,7 +104,9 @@ def main():
     from partitiondb import Tenant
     from partitiondb.adapters.django.scope import atomic_tenant
     from partitiondb.postgres import SchemaManager
-    from tests.tenantapp.models import Item
+    from apps.workspaces.models import Workspace
+    
+    user_table = get_user_model()._meta.db_table
 
     call_command("migrate", verbosity=0, interactive=False)
     role = "pdb_runtime_" + uuid.uuid4().hex
@@ -128,7 +130,7 @@ def main():
                 created.append(tenant)
                 call_command("migrate_tenant", tenant.schema, verbosity=0)
                 with atomic_tenant(tenant):
-                    Item.objects.create(value=tenant.id)
+                    Workspace.objects.create(name=tenant.id)
             admin.execute(
                 sql.SQL(
                     "CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
@@ -145,9 +147,9 @@ def main():
             )
             admin.execute(
                 sql.SQL(
-                    "GRANT SELECT ON public.auth_user, public.auth_group, public.auth_permission, "
-                    "public.auth_group_permissions, public.auth_user_groups, "
-                    "public.auth_user_user_permissions, public.django_content_type TO {}"
+                    "GRANT SELECT ON public.accounts_user, public.auth_group, public.auth_permission, "
+                    "public.auth_group_permissions, public.accounts_user_groups, "
+                    "public.accounts_user_user_permissions, public.django_content_type TO {}"
                 ).format(sql.Identifier(role))
             )
             admin.execute(

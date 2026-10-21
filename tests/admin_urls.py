@@ -5,9 +5,9 @@ from partitiondb.adapters.django.admin import (
     DomainRegistryAdmin,
     TenantRegistryAdmin,
 )
-from tests.sharedapp.models import DomainRecord, TenantRecord
+from apps.organizations.models import Domain, Organization
 
 site = ControlPlaneAdminSite(name="registry")
-site.register(TenantRecord, TenantRegistryAdmin)
-site.register(DomainRecord, DomainRegistryAdmin)
+site.register(Organization, TenantRegistryAdmin)
+site.register(Domain, DomainRegistryAdmin)
 urlpatterns = [path("admin/", site.urls)]

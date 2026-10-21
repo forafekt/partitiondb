@@ -7,10 +7,29 @@ from django.utils.module_loading import import_string
 
 from .tenant_types import type_policies
 
+FULL_PARTITIONDB_DEFAULT_CONFIG = {
+    "SHARED_HOSTS": [],
+    "SHARED_URLCONF": None,
+    "TENANT_APPS": [],
+    "TENANT_TYPES": {},
+    "SHARED_APPS": [],
+    "RESOLVER": None,
+    "TENANTS": None,
+    "PROVISIONER_FACTORY": None,
+    "REGISTRY_LIFECYCLE_FACTORY": None,
+    "OPERATION_OBSERVER": None,
+    "AUTHORIZE": None,
+    "TENANT_ADMIN_PERMISSIONS": None,
+    "TENANT_ADMIN_PATH": "/admin/",
+    "PROVISIONER": None,
+    "REGISTRY_LIFECYCLE": None,
+    "OPERATION_OBSERVER_FACTORY": None,
+}
+
 
 @register()
 def check_configuration(app_configs, **kwargs):
-    config = getattr(settings, "PARTITIONDB", {})
+    config = getattr(settings, "PARTITIONDB", FULL_PARTITIONDB_DEFAULT_CONFIG)
     if not isinstance(config, dict):
         return [Error("PARTITIONDB must be a dictionary", id="partitiondb.E008")]
     errors = []

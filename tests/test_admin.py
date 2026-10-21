@@ -11,20 +11,20 @@ from tests.django_setup import configure
 
 configure()
 from partitiondb.adapters.django.admin import DomainRegistryAdmin, TenantRegistryAdmin  # noqa: E402
-from tests.sharedapp.models import DomainRecord, TenantRecord  # noqa: E402
+from apps.organizations.models import Domain, Organization  # noqa: E402
 
 
 def test_registry_admin_locks_routing_and_activation_and_denies_tenant_scope():
     site = AdminSite()
-    tenant_admin = TenantRegistryAdmin(TenantRecord, site)
-    assert tenant_admin.get_readonly_fields(None, TenantRecord()) == (
+    tenant_admin = TenantRegistryAdmin(Organization, site)
+    assert tenant_admin.get_readonly_fields(None, Organization()) == (
         "active",
         "schema_name",
         "database_alias",
     )
     assert not tenant_admin.has_delete_permission(None)
     with tenant_scope(Tenant("one", "alpha")):
-        for model_admin in (tenant_admin, DomainRegistryAdmin(DomainRecord, site)):
+        for model_admin in (tenant_admin, DomainRegistryAdmin(Domain, site)):
             assert not model_admin.has_module_permission(None)
             with pytest.raises(PermissionDenied):
                 model_admin.get_queryset(None)
