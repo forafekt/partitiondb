@@ -70,9 +70,9 @@ def check(admin_dsn, *, workers=8, iterations=100):
     with psycopg.connect(admin_dsn, autocommit=True) as admin:
         try:
             admin.execute(
-                sql.SQL(
-                    "CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD {}"
-                ).format(sql.Identifier(role), sql.Literal(password))
+                sql.SQL("CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD {}").format(
+                    sql.Identifier(role), sql.Literal(password)
+                )
             )
             role_created = True
             for name in (source, restored):
@@ -82,11 +82,7 @@ def check(admin_dsn, *, workers=8, iterations=100):
             restored_dsn = make_conninfo(admin_dsn, dbname=restored)
             with psycopg.connect(source_dsn, autocommit=True) as conn:
                 conn.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
-                conn.execute(
-                    sql.SQL("REVOKE CREATE ON DATABASE {} FROM PUBLIC").format(
-                        sql.Identifier(source)
-                    )
-                )
+                conn.execute(sql.SQL("REVOKE CREATE ON DATABASE {} FROM PUBLIC").format(sql.Identifier(source)))
                 manager = SchemaManager(conn)
                 for tenant in tenants:
                     manager.create(tenant.schema)
@@ -103,10 +99,9 @@ def check(admin_dsn, *, workers=8, iterations=100):
                             )
                         )
                         conn.execute(
-                            sql.SQL(
-                                "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES "
-                                "IN SCHEMA {} TO {}"
-                            ).format(sql.Identifier(tenant.schema), sql.Identifier(role))
+                            sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA {} TO {}").format(
+                                sql.Identifier(tenant.schema), sql.Identifier(role)
+                            )
                         )
                         conn.execute(
                             sql.SQL("GRANT USAGE ON ALL SEQUENCES IN SCHEMA {} TO {}").format(
@@ -131,8 +126,7 @@ def check(admin_dsn, *, workers=8, iterations=100):
                     raise AssertionError("Runtime role unexpectedly has database DDL rights")
             expected = exercise(runtime_dsn, tenants, workers=workers, iterations=iterations)
             print(
-                f"CREDENTIAL/CONCURRENCY PASSED: {workers} workers, "
-                f"{workers * iterations} transactions",
+                f"CREDENTIAL/CONCURRENCY PASSED: {workers} workers, {workers * iterations} transactions",
                 flush=True,
             )
             with tempfile.TemporaryDirectory(prefix="partitiondb-backup-") as folder:

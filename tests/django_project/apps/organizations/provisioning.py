@@ -1,7 +1,7 @@
-import os
 from contextlib import contextmanager
 
 import psycopg
+from apps.workspaces.models import Workspace
 from django.core.management import call_command
 
 from partitiondb.adapters.django.registry_lifecycle import RegistryLifecycle
@@ -10,7 +10,6 @@ from partitiondb.postgres import SchemaManager
 from partitiondb.provisioning import Provisioner
 from partitiondb.provisioning_postgres import PostgresProvisioningStore
 
-from apps.workspaces.models import Workspace
 from .database import provisioning_connection_params
 from .models import Organization
 
@@ -54,9 +53,7 @@ def provisioner_factory(tenant_id):
             record = store.get(tenant_id)
 
             if record is None or record.tenant != tenant:
-                raise ValueError(
-                    "Provisioning checkpoint does not match organization identity"
-                )
+                raise ValueError("Provisioning checkpoint does not match organization identity")
 
         yield Provisioner(
             store,

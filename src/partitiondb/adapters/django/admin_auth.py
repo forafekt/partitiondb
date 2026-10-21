@@ -32,9 +32,7 @@ class TenantAdminAuthMiddleware:
             raise ImproperlyConfigured("Tenant host login requires SESSION_COOKIE_DOMAIN=None")
         self.resolve = import_string(config["RESOLVER"])
         if not config.get("AUTHORIZE") or not config.get("TENANT_ADMIN_PERMISSIONS"):
-            raise ImproperlyConfigured(
-                "Tenant admin authentication requires membership and permissions callbacks"
-            )
+            raise ImproperlyConfigured("Tenant admin authentication requires membership and permissions callbacks")
         self.authorize = import_string(config["AUTHORIZE"])
         self.permissions = import_string(config["TENANT_ADMIN_PERMISSIONS"])
         self.shared = frozenset(config.get("SHARED_HOSTS", []))
@@ -55,9 +53,7 @@ class TenantAdminAuthMiddleware:
             "partitiondb.adapters.django.middleware.TenantMiddleware",
         ]
         if [name for name in order if name in expected] != expected:
-            raise ImproperlyConfigured(
-                "Order sessions, auth, tenant admin auth, shared identity, tenant boundary"
-            )
+            raise ImproperlyConfigured("Order sessions, auth, tenant admin auth, shared identity, tenant boundary")
 
     def __call__(self, request):
         path = request.path_info
@@ -131,7 +127,5 @@ class TenantAdminAuthMiddleware:
         if path == logout_path:
             return LogoutView.as_view(next_page=login_path)(request)
         if not request.user.is_authenticated:
-            return HttpResponseRedirect(
-                login_path + "?" + urlencode({"next": request.get_full_path()})
-            )
+            return HttpResponseRedirect(login_path + "?" + urlencode({"next": request.get_full_path()}))
         return self.get_response(request)

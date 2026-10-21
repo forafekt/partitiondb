@@ -31,9 +31,7 @@ def provision_restricted_role(connection, tenant: Tenant, role: str) -> None:
     with connection.transaction():
         # Do not grant CONNECT or CREATE, and never grant schema ownership.
         connection.execute(
-            sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
-                sql.Identifier(tenant.schema), sql.Identifier(role)
-            )
+            sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(sql.Identifier(tenant.schema), sql.Identifier(role))
         )
         connection.execute(
             sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA {} TO {}").format(

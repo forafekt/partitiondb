@@ -19,10 +19,7 @@ def test_temporary_schema_is_removed_after_test_failure(partitiondb_admin_connec
     with pytest.raises(ValueError):
         with temporary_tenant(admin, migrate=False) as tenant:
             raise ValueError("simulated failure")
-    assert (
-        admin.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (tenant.schema,)).fetchone()
-        is None
-    )
+    assert admin.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (tenant.schema,)).fetchone() is None
     assert current_tenant(required=False) is None
 
 

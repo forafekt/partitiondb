@@ -21,20 +21,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-=8m9k#=62*wk5+2b4&j4_3w93hhzmsc5@7ogcsrja+^e!i#x%h'
+SECRET_KEY = "django-insecure-=8m9k#=62*wk5+2b4&j4_3w93hhzmsc5@7ogcsrja+^e!i#x%h"
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
- 
 
 # (Django app label, installation path)
 SHARED_APP_DEFINITIONS = [
     ("accounts", "apps.accounts.apps.AccountsConfig"),
     ("organizations", "apps.organizations.apps.OrganizationsConfig"),
-    ("partitiondb_access_control", "partitiondb.adapters.django.access_control.apps.PartitionDBAccessControlConfig"),
+    (
+        "partitiondb_access_control",
+        "partitiondb.adapters.django.access_control.apps.PartitionDBAccessControlConfig",
+    ),
     # ("admin", "partitiondb.adapters.django.admin_apps.PartitionDBAdminConfig"),
     ("admin", "django.contrib.admin"),
     ("auth", "django.contrib.auth"),
@@ -50,31 +52,22 @@ TENANT_APP_DEFINITIONS = [
 ]
 
 INSTALLED_APPS = [
- # PartitionDB integration
+    # PartitionDB integration
     "partitiondb.adapters.django.apps.PartitionDBConfig",
-
     # PartitionDB control-plane persistence
     *[path for _, path in SHARED_APP_DEFINITIONS],
     *[path for _, path in TENANT_APP_DEFINITIONS],
 ]
 
 PARTITIONDB = {
-    "SHARED_APPS": [
-        label for label, _ in SHARED_APP_DEFINITIONS
-    ],
-    "TENANT_APPS": [
-        label for label, _ in TENANT_APP_DEFINITIONS
-    ],
+    "SHARED_APPS": [label for label, _ in SHARED_APP_DEFINITIONS],
+    "TENANT_APPS": [label for label, _ in TENANT_APP_DEFINITIONS],
     "SHARED_HOSTS": ["localhost", "127.0.0.1"],
     "SHARED_URLCONF": "config.urls",
     "RESOLVER": "apps.organizations.tenancy.resolve_host",
     "TENANTS": "apps.organizations.tenancy.list_tenants",
-    "PROVISIONER_FACTORY": (
-        "apps.organizations.provisioning.provisioner_factory"
-    ),
-    "REGISTRY_LIFECYCLE_FACTORY": (
-        "apps.organizations.provisioning.registry_lifecycle_factory"
-    ),
+    "PROVISIONER_FACTORY": ("apps.organizations.provisioning.provisioner_factory"),
+    "REGISTRY_LIFECYCLE_FACTORY": ("apps.organizations.provisioning.registry_lifecycle_factory"),
     "AUTHORIZE": "apps.organizations.tenancy.authorize_tenant",
     "TENANT_ADMIN_PERMISSIONS": "apps.organizations.tenancy.tenant_admin_permissions",
     "TENANT_ADMIN_LOG_MODEL": "audit.AdminAudit",
@@ -83,38 +76,37 @@ PARTITIONDB = {
 
 MIDDLEWARE = [
     "partitiondb.adapters.django.hosts.RegistryHostMiddleware",
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
     "partitiondb.adapters.django.identity.SharedIdentityMiddleware",
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "partitiondb.adapters.django.middleware.TenantMiddleware",
-    
 ]
 
 AUTH_USER_MODEL = "accounts.User"
 
-ROOT_URLCONF = 'config.urls'
+ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / "templates"],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'config.wsgi.application'
+WSGI_APPLICATION = "config.wsgi.application"
 
 
 # Database
@@ -149,16 +141,16 @@ DATABASE_ROUTERS = [
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -166,9 +158,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -178,14 +170,14 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
 
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
 MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+    "default": {
+        "BACKEND": "django.core.mail.backends.console.EmailBackend",
     },
 }

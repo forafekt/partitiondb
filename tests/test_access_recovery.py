@@ -6,8 +6,7 @@ import pytest
 from partitiondb.access_recovery import AccessRecoveryService, RecoveryDecision, RecoveryEvidence
 from partitiondb.core import Tenant
 from partitiondb.postgres_role_inspection import RoleInspection, RoleState
-from partitiondb.provisioning import ProvisioningRecord, Stage, Provisioner
-
+from partitiondb.provisioning import Provisioner, ProvisioningRecord, Stage
 
 TENANT = Tenant("1", "org_one")
 
@@ -32,7 +31,8 @@ def make_service(state, evidence, audit=None):
     p = Provisioner(store, create=Mock(), migrate=Mock(), verify=Mock())
     inspection = RoleInspection("pdb_org_one", state)
     return store, AccessRecoveryService(
-        p, inspect=lambda tenant: inspection,
+        p,
+        inspect=lambda tenant: inspection,
         evidence=lambda tenant, observed: evidence,
         audit=audit,
     )
@@ -71,8 +71,11 @@ def test_conflicting_role_cannot_be_adopted():
 
 
 def test_audit_failure_prevents_transition():
-    store, service = make_service(RoleState.CONFIGURED, RecoveryEvidence(True, True),
-                                  audit=Mock(side_effect=RuntimeError("audit down")))
+    store, service = make_service(
+        RoleState.CONFIGURED,
+        RecoveryEvidence(True, True),
+        audit=Mock(side_effect=RuntimeError("audit down")),
+    )
     with pytest.raises(RuntimeError, match="audit down"):
         service.reconcile("1", confirm=TENANT, decision=RecoveryDecision.READY)
     assert store.record.stage == Stage.ACCESS_PROVISIONING

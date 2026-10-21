@@ -55,11 +55,7 @@ class RegistryLifecycle:
         self._boundary()
         with self.store.lock(confirm.id):
             with transaction.atomic(using=self.using):
-                row = (
-                    self.model._base_manager.using(self.using)
-                    .select_for_update()
-                    .get(pk=confirm.id)
-                )
+                row = self.model._base_manager.using(self.using).select_for_update().get(pk=confirm.id)
                 identity = row.as_tenant()
                 if identity != confirm:
                     raise ValueError("Registry identity does not match confirmation")

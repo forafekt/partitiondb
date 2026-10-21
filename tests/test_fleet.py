@@ -67,9 +67,7 @@ def test_parallel_work_is_bounded_and_inflight_operations_drain():
     assert [r.status for r in results] == ["failed", "succeeded"]
 
 
-@pytest.mark.parametrize(
-    "inventory", [[TENANTS[0], TENANTS[0]], [TENANTS[0], Tenant("other", "tenant_0")], [None]]
-)
+@pytest.mark.parametrize("inventory", [[TENANTS[0], TENANTS[0]], [TENANTS[0], Tenant("other", "tenant_0")], [None]])
 def test_invalid_inventory_prevents_all_execution(inventory):
     called = []
     with pytest.raises((ValueError, TypeError)):

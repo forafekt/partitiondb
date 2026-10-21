@@ -44,8 +44,7 @@ def active_repository():
             def get(self, tenant_id):
                 assert current_tenant(required=False) is None
                 row = connection.execute(
-                    "SELECT schema_name FROM public.pdb_celery_registry "
-                    "WHERE tenant_id = %s AND active",
+                    "SELECT schema_name FROM public.pdb_celery_registry WHERE tenant_id = %s AND active",
                     (tenant_id,),
                 ).fetchone()
                 return Tenant(tenant_id, row[0]) if row else None
@@ -61,9 +60,7 @@ def write(self, marker, fail=False, retry=False):
         runtime_user = connection.info.user
         with transaction(connection, tenant):
             assert connection.execute("SELECT tenant_id FROM identity").fetchall() == [(tenant.id,)]
-            connection.execute(
-                "INSERT INTO work (marker, tenant_id) VALUES (%s, %s)", (marker, tenant.id)
-            )
+            connection.execute("INSERT INTO work (marker, tenant_id) VALUES (%s, %s)", (marker, tenant.id))
             if fail:
                 raise ValueError("Expected acceptance rollback")
             if retry and self.request.retries == 0:

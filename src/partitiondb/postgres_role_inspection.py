@@ -3,6 +3,7 @@
 Inspection is evidence, not proof of ownership. A role matching the expected
 name MUST NOT be adopted without independently verified provisioning records.
 """
+
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -45,7 +46,8 @@ class PostgresRoleInspector:
         row = self.connection.execute(
             """SELECT oid, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole,
                       rolinherit, rolreplication, rolbypassrls
-               FROM pg_roles WHERE rolname = %s""", (role,)
+               FROM pg_roles WHERE rolname = %s""",
+            (role,),
         ).fetchone()
         if row is None:
             return RoleInspection(role, RoleState.ABSENT, reason="Role does not exist")
@@ -58,12 +60,20 @@ class PostgresRoleInspector:
             "SELECT 1 FROM pg_namespace WHERE nspname = %s", (tenant.schema,)
         ).fetchone()
         if schema_exists is None:
-            return RoleInspection(role, RoleState.CONFLICT, bool(login),
-                                  memberships=int(memberships), reason="Tenant schema missing", role_oid=int(oid))
-        usage = bool(self.connection.execute(
-            "SELECT has_schema_privilege(%s, %s, 'USAGE')",
-            (role, tenant.schema),
-        ).fetchone()[0])
+            return RoleInspection(
+                role,
+                RoleState.CONFLICT,
+                bool(login),
+                memberships=int(memberships),
+                reason="Tenant schema missing",
+                role_oid=int(oid),
+            )
+        usage = bool(
+            self.connection.execute(
+                "SELECT has_schema_privilege(%s, %s, 'USAGE')",
+                (role, tenant.schema),
+            ).fetchone()[0]
+        )
         # All existing tables must have DML privileges. An empty schema cannot
         # establish access readiness; treat it as unverified.
         tables = self.connection.execute(
@@ -85,5 +95,8 @@ class PostgresRoleInspector:
         elif not usage or not table_access:
             state, reason = RoleState.CONFLICT, "Expected schema/table privileges are missing"
         else:
-            state, reason = RoleState.CONFIGURED, "Expected local grants and attributes present; ownership unverified"
+            state, reason = (
+                RoleState.CONFIGURED,
+                "Expected local grants and attributes present; ownership unverified",
+            )
         return RoleInspection(role, state, bool(login), usage, table_access, int(memberships), reason, int(oid))

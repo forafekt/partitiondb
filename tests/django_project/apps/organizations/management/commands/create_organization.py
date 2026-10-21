@@ -1,12 +1,10 @@
-import os
-
 import psycopg
+from apps.organizations.database import provisioning_connection_params
+from apps.organizations.models import Domain, Organization
 from django.core.management import BaseCommand, CommandError, call_command
 from django.db import transaction
 
 from partitiondb.provisioning_postgres import PostgresProvisioningStore
-from apps.organizations.models import Domain, Organization
-from apps.organizations.database import provisioning_connection_params
 
 
 class Command(BaseCommand):
@@ -49,9 +47,7 @@ class Command(BaseCommand):
 
         tenant_id = str(organization.pk)
 
-        self.stdout.write(
-            f"Registered organization {tenant_id}; provisioning {schema}"
-        )
+        self.stdout.write(f"Registered organization {tenant_id}; provisioning {schema}")
 
         # Metadata remains inactive if a later stage fails.
         try:
@@ -82,8 +78,4 @@ class Command(BaseCommand):
                 f"Cause: {error}"
             ) from error
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Ready: http://{hostname}:8000/api/workspaces/"
-            )
-        )
+        self.stdout.write(self.style.SUCCESS(f"Ready: http://{hostname}:8000/api/workspaces/"))

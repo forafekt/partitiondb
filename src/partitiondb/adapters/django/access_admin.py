@@ -4,15 +4,14 @@ Recovery is intentionally an application-supplied, operator-confirmed service:
 this adapter never guesses whether PostgreSQL DDL committed.
 """
 
-from django.contrib import admin, messages
+from django.contrib import messages
 from django.core.checks import Error
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
-from django.utils.html import format_html
 
-from .admin import TenantRegistryAdmin
 from .access_models import TenantAccessMixin
+from .admin import TenantRegistryAdmin
 
 
 class TenantAccessRegistryAdmin(TenantRegistryAdmin):
@@ -31,16 +30,21 @@ class TenantAccessRegistryAdmin(TenantRegistryAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         return super().get_readonly_fields(request, obj) + (
-            "access_policy", "credential_ref", "access_role"
+            "access_policy",
+            "credential_ref",
+            "access_role",
         )
 
     def check(self, **kwargs):
         errors = super().check(**kwargs)
         if not issubclass(self.model, TenantAccessMixin):
-            errors.append(Error(
-                "TenantAccessRegistryAdmin requires TenantAccessMixin",
-                obj=self.__class__, id="partitiondb.E022",
-            ))
+            errors.append(
+                Error(
+                    "TenantAccessRegistryAdmin requires TenantAccessMixin",
+                    obj=self.__class__,
+                    id="partitiondb.E022",
+                )
+            )
         return errors
 
     def has_reconcile_permission(self, request, obj=None):
@@ -66,10 +70,12 @@ class TenantAccessRegistryAdmin(TenantRegistryAdmin):
         # Never accept GET for security-sensitive actions.
         if request.method != "POST":
             from django.http import HttpResponseNotAllowed
+
             return HttpResponseNotAllowed(["POST"])
         obj = self.get_object(request, object_id)
         if obj is None:
             from django.http import Http404
+
             raise Http404("Tenant not found")
         if not self.has_reconcile_permission(request, obj):
             raise PermissionDenied
@@ -78,11 +84,10 @@ class TenantAccessRegistryAdmin(TenantRegistryAdmin):
         expected = str(obj.pk)
         if request.POST.get("confirm_tenant_id") != expected:
             from django.core.exceptions import SuspiciousOperation
+
             raise SuspiciousOperation("Exact tenant ID confirmation required")
         # Errors propagate: no misleading success message or audit entry.
-        self.access_reconciliation_service(
-            request, obj.as_tenant(), confirmation=expected
-        )
+        self.access_reconciliation_service(request, obj.as_tenant(), confirmation=expected)
         self.log_change(request, obj, "Explicit tenant database access reconciliation")
         self.message_user(request, "Access reconciliation completed.", messages.SUCCESS)
         url = reverse(

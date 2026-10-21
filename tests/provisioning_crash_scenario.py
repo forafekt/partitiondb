@@ -32,9 +32,7 @@ def service(store, dsn, crash=None):
 
     def verify(tenant):
         with psycopg.connect(dsn, autocommit=True) as connection, transaction(connection, tenant):
-            assert connection.execute("SELECT id, body FROM marker").fetchall() == [
-                (1, "preserved")
-            ]
+            assert connection.execute("SELECT id, body FROM marker").fetchall() == [(1, "preserved")]
         stop("verify")
 
     return Provisioner(store, create=create, migrate=migrate, verify=verify)
@@ -49,10 +47,7 @@ def read_after_exit(store, tenant):
             with store.lock(tenant.id):
                 return store.get(tenant.id)
         except RuntimeError as error:
-            if (
-                str(error) != "Another provisioner holds this tenant's lock"
-                or time.monotonic() >= deadline
-            ):
+            if str(error) != "Another provisioner holds this tenant's lock" or time.monotonic() >= deadline:
                 raise
             time.sleep(0.05)
 
@@ -113,15 +108,11 @@ def main():
                 assert provisioner.run(tenant.id).stage == Stage.ACTIVE
                 assert provisioner.run(tenant.id).stage == Stage.ACTIVE
                 with psycopg.connect(dsn, autocommit=True) as data, transaction(data, tenant):
-                    assert data.execute("SELECT id, body FROM marker").fetchall() == [
-                        (1, "preserved")
-                    ]
+                    assert data.execute("SELECT id, body FROM marker").fetchall() == [(1, "preserved")]
             print("PROVISIONING CRASH RECOVERY PASSED: create, migrate, verify; data preserved")
         finally:
             for tenant in tenants:
-                if control.execute(
-                    "SELECT 1 FROM pg_namespace WHERE nspname = %s", (tenant.schema,)
-                ).fetchone():
+                if control.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (tenant.schema,)).fetchone():
                     manager.drop(tenant.schema, confirm=tenant.schema, cascade=True)
             manager.drop(metadata_schema, confirm=metadata_schema, cascade=True)
 

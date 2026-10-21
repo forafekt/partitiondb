@@ -30,9 +30,7 @@ def test_checkpoint_store_explicit_upgrade_preserves_untyped_and_typed_identity(
         ).format(store.table)
     )
     conn.execute(
-        psycopg.sql.SQL("INSERT INTO {} VALUES (%s, %s, 'default', 'migrated')").format(
-            store.table
-        ),
+        psycopg.sql.SQL("INSERT INTO {} VALUES (%s, %s, 'default', 'migrated')").format(store.table),
         ("legacy", tenants[1].schema),
     )
     store.install()
@@ -61,9 +59,7 @@ def test_schema_events_report_committed_success_and_failure(conn):
         def observer(event):
             if event.phase == "succeeded":
                 expected = event.target_schema or event.schema
-                exists = reader.execute(
-                    "SELECT 1 FROM pg_namespace WHERE nspname = %s", (expected,)
-                ).fetchone()
+                exists = reader.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (expected,)).fetchone()
                 assert bool(exists) == (event.operation != "schema_drop")
             events.append(event)
 
@@ -87,9 +83,7 @@ def test_schema_events_report_committed_success_and_failure(conn):
             assert events[3].error_type == "DuplicateSchema"
         finally:
             for name in (source, target):
-                if conn.execute(
-                    "SELECT 1 FROM pg_namespace WHERE nspname = %s", (name,)
-                ).fetchone():
+                if conn.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (name,)).fetchone():
                     SchemaManager(conn).drop(name, confirm=name, cascade=True)
 
 

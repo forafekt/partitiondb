@@ -109,16 +109,14 @@ def test_cli_factory_confirmation_cleanup_and_safe_errors():
 
 
 @pytest.mark.postgres
-def test_durable_registry_admission_preserves_tenant_data(
-    tenant_factory, partitiondb_admin_connection
-):
+def test_durable_registry_admission_preserves_tenant_data(tenant_factory, partitiondb_admin_connection):
     from dataclasses import replace
 
+    from apps.workspaces.models import Workspace
     from django.db import transaction
 
     from partitiondb.adapters.django.scope import atomic_tenant
     from partitiondb.provisioning_postgres import PostgresProvisioningStore
-    from apps.workspaces.models import Workspace
 
     call_command("migrate", interactive=False, verbosity=0)
     schema = tenant_factory()
@@ -202,9 +200,7 @@ def test_deactivation_without_checkpoint_and_idempotency():
 
 
 @pytest.mark.postgres
-def test_admission_rejects_competing_provisioning_session_lock(
-    tenant_factory, partitiondb_admin_connection
-):
+def test_admission_rejects_competing_provisioning_session_lock(tenant_factory, partitiondb_admin_connection):
     import os
 
     import psycopg

@@ -24,9 +24,7 @@ def create_and_provision_organization(*, name, schema, hostname):
     )
 
     if not organization.active:
-        raise RuntimeError(
-            "Provisioning returned without activating the organization."
-        )
+        raise RuntimeError("Provisioning returned without activating the organization.")
 
     return organization
 
@@ -57,8 +55,8 @@ class OrganizationAdmin(ProvisioningTenantAdmin):
 class DomainAdmin(DomainRegistryAdmin):
     search_fields = ("hostname", "tenant__name")
     autocomplete_fields = ("tenant",)
-    
-    
+
+
 @admin.register(Membership)
 class MembershipAdmin(admin.ModelAdmin):
     list_display = ("user", "organization", "role", "active")

@@ -1,4 +1,5 @@
 from django.contrib import admin
+
 from partitiondb.adapters.django.tenant_admin import TenantModelAdmin
 
 from .models import Workspace

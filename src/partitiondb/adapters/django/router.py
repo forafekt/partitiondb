@@ -10,7 +10,7 @@ from .tenant_types import tenant_policy
 
 def app_sets():
     config = settings.PARTITIONDB
-    SHARED_APPS = [] if "SHARED_APPS" not in config  else config["SHARED_APPS"]
+    SHARED_APPS = [] if "SHARED_APPS" not in config else config["SHARED_APPS"]
     TENANT_APPS = [] if "TENANT_APPS" not in config else config["TENANT_APPS"]
     shared, tenant = set(SHARED_APPS), set(TENANT_APPS)
     if shared & tenant:

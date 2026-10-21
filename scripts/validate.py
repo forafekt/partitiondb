@@ -71,9 +71,7 @@ def validate(admin_dsn, *, examples_only=False, installed_package=False):
                 except psycopg.Error:
                     failures.append(name)
             if failures:
-                raise RuntimeError(
-                    "Cleanup required for validation databases: " + ", ".join(failures)
-                )
+                raise RuntimeError("Cleanup required for validation databases: " + ", ".join(failures))
     print(f"VALIDATION PASSED: Python {sys.version.split()[0]}, Django {django.get_version()}")
 
 

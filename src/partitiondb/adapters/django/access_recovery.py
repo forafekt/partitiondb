@@ -1,5 +1,7 @@
 """Django Admin bridge to the locked core access recovery service."""
+
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
+
 from partitiondb.access_recovery import RecoveryDecision
 
 
@@ -10,8 +12,7 @@ class DjangoAccessReconciliationService:
         self.recovery = recovery
 
     def __call__(self, request, tenant, *, confirmation):
-        if not (request.user.is_authenticated and request.user.is_active
-                and request.user.is_superuser):
+        if not (request.user.is_authenticated and request.user.is_active and request.user.is_superuser):
             raise PermissionDenied
         if confirmation != tenant.id:
             raise SuspiciousOperation("Tenant confirmation mismatch")

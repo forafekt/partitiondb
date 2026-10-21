@@ -16,9 +16,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("tenant_id", help="Trusted registry ID, including inactive tenants")
         actions = parser.add_mutually_exclusive_group()
-        actions.add_argument(
-            "--status", action="store_true", help="Read the durable checkpoint only"
-        )
+        actions.add_argument("--status", action="store_true", help="Read the durable checkpoint only")
         actions.add_argument("--reconcile-created", action="store_true")
         actions.add_argument("--reconcile-missing", action="store_true")
         parser.add_argument("--confirm-type", help="Exact tenant type inspected, for typed records")
@@ -33,9 +31,7 @@ class Command(BaseCommand):
         confirm_type = options["confirm_type"]
         if reconcile and not all(confirmations):
             raise CommandError("Reconciliation requires --confirm-schema and --confirm-database")
-        if not reconcile and (
-            any(value is not None for value in confirmations) or confirm_type is not None
-        ):
+        if not reconcile and (any(value is not None for value in confirmations) or confirm_type is not None):
             raise CommandError("Confirmation options are only valid for reconciliation")
         tenant_id = options["tenant_id"]
         if not isinstance(tenant_id, str) or not tenant_id:
@@ -58,9 +54,7 @@ class Command(BaseCommand):
                     if record is None:
                         raise LookupError("No provisioning record")
                 elif reconcile:
-                    confirm = Tenant(
-                        tenant_id, confirmations[0], confirmations[1], tenant_type=confirm_type
-                    )
+                    confirm = Tenant(tenant_id, confirmations[0], confirmations[1], tenant_type=confirm_type)
                     record = provisioner.reconcile_creation(
                         tenant_id, confirm=confirm, schema_created=options["reconcile_created"]
                     )

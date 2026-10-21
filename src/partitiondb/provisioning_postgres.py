@@ -25,10 +25,7 @@ class PostgresProvisioningStore:
         self._idle()
 
     def _idle(self):
-        if (
-            not self.connection.autocommit
-            or self.connection.info.transaction_status != TransactionStatus.IDLE
-        ):
+        if not self.connection.autocommit or self.connection.info.transaction_status != TransactionStatus.IDLE:
             raise RuntimeError("Checkpoint store needs an idle autocommit connection")
 
     def install(self):
@@ -51,9 +48,7 @@ class PostgresProvisioningStore:
 
         # Explicit administrative upgrade for stores installed before typed identity.
         # Existing untyped rows retain NULL and keep their identity/namespace.
-        self.connection.execute(
-            sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS tenant_type text").format(self.table)
-        )
+        self.connection.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS tenant_type text").format(self.table))
 
     @contextmanager
     def lock(self, tenant_id):
@@ -63,9 +58,7 @@ class PostgresProvisioningStore:
             raise RuntimeError("Checkpoint store locks cannot nest")
         self._idle()
         key = "partitiondb:provision:" + tenant_id
-        cursor = self.connection.execute(
-            "SELECT pg_try_advisory_lock(hashtextextended(%s, 0))", (key,)
-        )
+        cursor = self.connection.execute("SELECT pg_try_advisory_lock(hashtextextended(%s, 0))", (key,))
         if not cursor.fetchone()[0]:
             raise RuntimeError("Another provisioner holds this tenant's lock")
         self._tenant_id = tenant_id
@@ -74,9 +67,7 @@ class PostgresProvisioningStore:
         finally:
             self._tenant_id = None
             if not self.connection.closed:
-                self.connection.execute(
-                    "SELECT pg_advisory_unlock(hashtextextended(%s, 0))", (key,)
-                )
+                self.connection.execute("SELECT pg_advisory_unlock(hashtextextended(%s, 0))", (key,))
 
     def _require_lock(self, tenant_id):
         if self._tenant_id != tenant_id:
@@ -86,18 +77,13 @@ class PostgresProvisioningStore:
     def get(self, tenant_id):
         self._require_lock(tenant_id)
         cursor = self.connection.execute(
-            sql.SQL(
-                "SELECT schema_name, database_alias, stage, tenant_type FROM {} "
-                "WHERE tenant_id = %s"
-            ).format(self.table),
+            sql.SQL("SELECT schema_name, database_alias, stage, tenant_type FROM {} WHERE tenant_id = %s").format(
+                self.table
+            ),
             (tenant_id,),
         )
         row = cursor.fetchone()
-        return (
-            ProvisioningRecord(Tenant(tenant_id, row[0], row[1], tenant_type=row[3]), Stage(row[2]))
-            if row
-            else None
-        )
+        return ProvisioningRecord(Tenant(tenant_id, row[0], row[1], tenant_type=row[3]), Stage(row[2])) if row else None
 
     def register(self, tenant):
         """Register immutable routing; collisions raise rather than overwrite."""

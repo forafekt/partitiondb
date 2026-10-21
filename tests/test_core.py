@@ -78,16 +78,13 @@ def test_core_has_no_optional_imports():
         [
             sys.executable,
             "-c",
-            'import partitiondb,sys; assert "django" not in sys.modules; '
-            'assert "psycopg" not in sys.modules',
+            'import partitiondb,sys; assert "django" not in sys.modules; assert "psycopg" not in sys.modules',
         ],
         check=True,
     )
 
 
-@pytest.mark.parametrize(
-    "kwargs", [{"id": "", "schema": "alpha"}, {"id": "1", "schema": "alpha", "database": ""}]
-)
+@pytest.mark.parametrize("kwargs", [{"id": "", "schema": "alpha"}, {"id": "1", "schema": "alpha", "database": ""}])
 def test_invalid_identity(kwargs):
     with pytest.raises(ValueError):
         Tenant(**kwargs)

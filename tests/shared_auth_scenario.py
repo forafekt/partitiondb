@@ -9,6 +9,7 @@ from tests.django_setup import configure
 def main():
     configure(shared_auth=True)
     import psycopg
+    from apps.workspaces.models import Workspace
     from django.conf import settings
     from django.contrib.auth import get_user_model
     from django.contrib.auth.middleware import AuthenticationMiddleware
@@ -25,7 +26,6 @@ def main():
     from partitiondb.adapters.django.middleware import TenantMiddleware
     from partitiondb.adapters.django.scope import atomic_tenant
     from partitiondb.postgres import SchemaManager
-    from apps.workspaces.models import Workspace
 
     call_command("migrate", verbosity=0, interactive=False)
     user = get_user_model().objects.create_user(username="auth_" + uuid.uuid4().hex, password=None)
@@ -55,9 +55,7 @@ def main():
             tenant_handler.authorize = lambda request, tenant: (
                 request.principal.id == str(user.pk) and tenant == tenants[0]
             )
-            handler = SessionMiddleware(
-                AuthenticationMiddleware(SharedIdentityMiddleware(tenant_handler))
-            )
+            handler = SessionMiddleware(AuthenticationMiddleware(SharedIdentityMiddleware(tenant_handler)))
             factory = RequestFactory()
             request = factory.get("/", HTTP_HOST="alpha.test")
             request.COOKIES[settings.SESSION_COOKIE_NAME] = session.session_key

@@ -1,4 +1,5 @@
 """Abstract shared-control-plane operation journal. Applications own migrations."""
+
 from django.db import models
 
 
@@ -15,7 +16,9 @@ class AccessOperationMixin(models.Model):
 
     class Meta:
         abstract = True
-        constraints = [models.UniqueConstraint(
-            fields=['tenant_id', 'database_alias'],
-            name='%(app_label)s_%(class)s_target_unique',
-        )]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant_id", "database_alias"],
+                name="%(app_label)s_%(class)s_target_unique",
+            )
+        ]

@@ -1,5 +1,6 @@
 from django.apps import AppConfig
 
+
 class PartitionDBAccessControlConfig(AppConfig):
     name = "partitiondb.adapters.django.access_control"
     label = "partitiondb_access_control"

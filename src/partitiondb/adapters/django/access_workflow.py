@@ -31,9 +31,7 @@ class DjangoAccessResolver:
         return record.as_tenant_access()
 
 
-def django_access_provisioning_callback(
-    model, *, admin_connection, credential_provider, using="default"
-):
+def django_access_provisioning_callback(model, *, admin_connection, credential_provider, using="default"):
     """Build a Provisioner(provision_access=...) callback.
 
     admin_connection MUST have explicit role/grant permissions and must never be

@@ -15,7 +15,7 @@ The report was reviewed; individual gate logs were not supplied with it.
 | partitiondb-0.2.0a27.tar.gz | 2b24ba1c700d169ff84eefaa83aac37a63000c68460a445aad36a8baf86cc496 |
 
 The accepted scope is summarized in README.md. MIT was selected by the owner.
-Version 0.2.0a28 removes the legacy archive and obsolete development notes, adds
+The earlier 0.2.0a28 release removed the legacy archive and obsolete development notes, adds
 license/notices and license metadata, and verifies those files in artifacts.
 Runtime implementation is unchanged; only the package version changes. These
 new artifact hashes are distinct from the a27 acceptance evidence.

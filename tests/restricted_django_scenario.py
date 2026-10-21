@@ -16,6 +16,7 @@ from tests.django_setup import configure
 
 def worker():
     configure(shared_auth=True)
+    from apps.workspaces.models import Workspace
     from django.conf import settings
     from django.contrib.auth.middleware import AuthenticationMiddleware
     from django.contrib.sessions.middleware import SessionMiddleware
@@ -28,7 +29,6 @@ def worker():
     from partitiondb.adapters.django.identity import SharedIdentityMiddleware
     from partitiondb.adapters.django.middleware import TenantMiddleware
     from partitiondb.adapters.django.scope import atomic_tenant
-    from apps.workspaces.models import Workspace
 
     data = json.loads(os.environ["PARTITIONDB_RESTRICTED_SCENARIO"])
     tenants = [Tenant(str(i), schema) for i, schema in enumerate(data["schemas"])]
@@ -43,9 +43,7 @@ def worker():
 
     boundary = TenantMiddleware(view)
     boundary.resolve = lambda host: tenants[0] if host == "alpha.test" else tenants[1]
-    boundary.authorize = lambda request, tenant: (
-        request.principal.id == data["user_id"] and tenant == tenants[0]
-    )
+    boundary.authorize = lambda request, tenant: request.principal.id == data["user_id"] and tenant == tenants[0]
     handler = SessionMiddleware(AuthenticationMiddleware(SharedIdentityMiddleware(boundary)))
     factory = RequestFactory()
 
@@ -96,6 +94,7 @@ def main():
         worker()
         return
     configure(shared_auth=True)
+    from apps.workspaces.models import Workspace
     from django.contrib.auth import get_user_model
     from django.contrib.sessions.backends.db import SessionStore
     from django.core.management import call_command
@@ -104,12 +103,24 @@ def main():
     from partitiondb import Tenant
     from partitiondb.adapters.django.scope import atomic_tenant
     from partitiondb.postgres import SchemaManager
-    from apps.workspaces.models import Workspace
-    
+
     user_table = get_user_model()._meta.db_table
+    tables = [
+        user_table,
+        "auth_group",
+        "auth_permission",
+        "auth_group_permissions",
+        f"{user_table}_groups",
+        f"{user_table}_user_permissions",
+        "django_content_type",
+    ]
 
     call_command("migrate", verbosity=0, interactive=False)
     role = "pdb_runtime_" + uuid.uuid4().hex
+    statement = sql.SQL("GRANT SELECT ON {} TO {}").format(
+        sql.SQL(", ").join(sql.Identifier("public", table) for table in tables),
+        sql.Identifier(role),
+    )
     password = secrets.token_urlsafe(32)
     created = []
     role_created = False
@@ -132,9 +143,9 @@ def main():
                 with atomic_tenant(tenant):
                     Workspace.objects.create(name=tenant.id)
             admin.execute(
-                sql.SQL(
-                    "CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
-                ).format(sql.Identifier(role), sql.Literal(password))
+                sql.SQL("CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT").format(
+                    sql.Identifier(role), sql.Literal(password)
+                )
             )
             role_created = True
             admin.execute(
@@ -142,20 +153,12 @@ def main():
                     sql.Identifier(admin.info.dbname), sql.Identifier(role)
                 )
             )
+            admin.execute(sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(role)))
+            admin.execute(statement)
             admin.execute(
-                sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(role))
-            )
-            admin.execute(
-                sql.SQL(
-                    "GRANT SELECT ON public.accounts_user, public.auth_group, public.auth_permission, "
-                    "public.auth_group_permissions, public.accounts_user_groups, "
-                    "public.accounts_user_user_permissions, public.django_content_type TO {}"
-                ).format(sql.Identifier(role))
-            )
-            admin.execute(
-                sql.SQL(
-                    "GRANT SELECT, INSERT, UPDATE, DELETE ON public.django_session TO {}"
-                ).format(sql.Identifier(role))
+                sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON public.django_session TO {}").format(
+                    sql.Identifier(role)
+                )
             )
             for tenant in created:
                 admin.execute(
@@ -164,9 +167,9 @@ def main():
                     )
                 )
                 admin.execute(
-                    sql.SQL(
-                        "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA {} TO {}"
-                    ).format(sql.Identifier(tenant.schema), sql.Identifier(role))
+                    sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA {} TO {}").format(
+                        sql.Identifier(tenant.schema), sql.Identifier(role)
+                    )
                 )
                 admin.execute(
                     sql.SQL("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA {} TO {}").format(

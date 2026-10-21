@@ -10,8 +10,9 @@ from partitiondb import Tenant, tenant_scope
 from tests.django_setup import configure
 
 configure()
-from partitiondb.adapters.django.admin import DomainRegistryAdmin, TenantRegistryAdmin  # noqa: E402
 from apps.organizations.models import Domain, Organization  # noqa: E402
+
+from partitiondb.adapters.django.admin import DomainRegistryAdmin, TenantRegistryAdmin  # noqa: E402
 
 
 def test_registry_admin_locks_routing_and_activation_and_denies_tenant_scope():
@@ -40,6 +41,4 @@ def test_real_control_plane_admin_and_tenant_collectstatic():
 def test_real_admin_ui_and_collectstatic_without_postgres():
     # SQLite exercises Django's control-plane UI/static flows locally. The
     # separate PostgreSQL scenario remains the database-specific acceptance.
-    subprocess.run(
-        [sys.executable, "-m", "tests.admin_assets_scenario", "--sqlite"], check=True, timeout=90
-    )
+    subprocess.run([sys.executable, "-m", "tests.admin_assets_scenario", "--sqlite"], check=True, timeout=90)

@@ -17,9 +17,7 @@ A, B = Tenant("one", "alpha"), Tenant("two", "beta")
 
 @pytest.fixture
 def storage(tmp_path):
-    return TenantStorage(
-        backend=FileSystemStorage(location=tmp_path, base_url="/media/"), expose_urls=True
-    )
+    return TenantStorage(backend=FileSystemStorage(location=tmp_path, base_url="/media/"), expose_urls=True)
 
 
 def test_file_operations_isolate_names_and_reject_stale_references(storage):
@@ -49,9 +47,7 @@ def test_file_operations_isolate_names_and_reject_stale_references(storage):
         assert storage.exists(second)
 
 
-@pytest.mark.parametrize(
-    "name", ["../x", "a/../x", "/tmp/x", "a//x", "a/./x", "C:/x", "a\\x", "a\x00b"]
-)
+@pytest.mark.parametrize("name", ["../x", "a/../x", "/tmp/x", "a//x", "a/./x", "C:/x", "a\\x", "a\x00b"])
 def test_storage_rejects_unsafe_names(storage, name):
     with tenant_scope(A), pytest.raises(SuspiciousFileOperation):
         storage.save(name, ContentFile(b"no"))

@@ -21,10 +21,7 @@ class ProvisionOrganizationForm(forms.Form):
         help_text="For example: acme.localhost. Do not include a scheme or port.",
     )
     confirm = forms.BooleanField(
-        label=(
-            "Create the schema, apply migrations, seed the default "
-            "workspace and activate this organization."
-        ),
+        label=("Create the schema, apply migrations, seed the default workspace and activate this organization."),
     )
 
     def clean_schema(self):

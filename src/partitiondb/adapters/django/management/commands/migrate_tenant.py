@@ -14,9 +14,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("schema")
-        parser.add_argument(
-            "--tenant-type", help="Trusted tenant type; inferred from inventory when possible"
-        )
+        parser.add_argument("--tenant-type", help="Trusted tenant type; inferred from inventory when possible")
         parser.add_argument("app_label", nargs="?")
         parser.add_argument("migration_name", nargs="?")
         parser.add_argument("--database", default="default")
@@ -50,11 +48,7 @@ class Command(BaseCommand):
                 "started",
                 tenant.schema,
                 tenant=tenant,
-                mode="plan"
-                if options.get("plan")
-                else "check"
-                if options.get("check")
-                else "apply",
+                mode="plan" if options.get("plan") else "check" if options.get("check") else "apply",
             ),
             observer,
         ):
@@ -70,9 +64,7 @@ class Command(BaseCommand):
                         raise CommandError("Another process is migrating this tenant")
                     try:
                         call_command(
-                            ObservedMigrateCommand(
-                                tenant, progress_observer, stdout=self.stdout, stderr=self.stderr
-                            ),
+                            ObservedMigrateCommand(tenant, progress_observer, stdout=self.stdout, stderr=self.stderr),
                             database=tenant.database,
                             interactive=False,
                             verbosity=options["verbosity"],

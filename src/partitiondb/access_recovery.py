@@ -3,6 +3,7 @@
 Role structure alone is not evidence of ownership. Applications must provide
 independent, durable ownership and credential verification callbacks.
 """
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -27,6 +28,7 @@ class RecoveryEvidence:
         the expected tenant identity using a fresh connection.
     absence_verified: confirms no credential/role side effects remain.
     """
+
     ownership_verified: bool = False
     credential_verified: bool = False
     absence_verified: bool = False

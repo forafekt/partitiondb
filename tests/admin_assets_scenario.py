@@ -10,6 +10,7 @@ from tests.django_setup import configure
 
 def main(sqlite_name=None):
     configure(admin=True, sqlite_name=sqlite_name)
+    from apps.organizations.models import Domain, Organization
     from django.contrib.auth import get_user_model
     from django.core.management import call_command
     from django.db import connections
@@ -19,7 +20,6 @@ def main(sqlite_name=None):
     from partitiondb import Tenant, tenant_scope
     from partitiondb.keys import storage_prefix
     from tests.admin_urls import site
-    from apps.organizations.models import Domain, Organization
 
     assert not site.check(None)
 
@@ -83,10 +83,7 @@ def main(sqlite_name=None):
             },
         )
         assert response.status_code == 302, response.content[:1000]
-        assert (
-            Domain.objects.get(tenant=record).hostname
-            == username.replace("_", "-") + ".example"
-        )
+        assert Domain.objects.get(tenant=record).hostname == username.replace("_", "-") + ".example"
         if connections["default"].vendor == "postgresql":
             with connections["default"].cursor() as cursor:
                 cursor.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (schema,))
@@ -112,9 +109,7 @@ def main(sqlite_name=None):
                 ],
                 STORAGES={
                     "staticfiles": {
-                        "BACKEND": (
-                            "partitiondb.adapters.django.staticfiles.TenantStaticFilesStorage"
-                        ),
+                        "BACKEND": ("partitiondb.adapters.django.staticfiles.TenantStaticFilesStorage"),
                     }
                 },
             ):
@@ -126,9 +121,7 @@ def main(sqlite_name=None):
                 with tenant_scope(tenants[0]):
                     call_command("collectstatic", clear=True, interactive=False, verbosity=0)
                 for tenant in tenants:
-                    assert (
-                        collected / storage_prefix(tenant) / "css/site.css"
-                    ).read_text() == tenant.id
+                    assert (collected / storage_prefix(tenant) / "css/site.css").read_text() == tenant.id
         print("CONTROL-PLANE ADMIN AND COLLECTSTATIC PASSED", flush=True)
     finally:
         Domain.objects.filter(tenant_id__in=records).delete()

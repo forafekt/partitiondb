@@ -98,16 +98,12 @@ def authorize_tenant(request, tenant):
     principal = request.principal
     return (
         principal.is_authenticated
-        and Membership.objects.filter(
-            user_id=principal.id, organization_id=tenant.id, active=True
-        ).exists()
+        and Membership.objects.filter(user_id=principal.id, organization_id=tenant.id, active=True).exists()
     )
 
 
 def tenant_admin_permissions(request, tenant):
-    membership = Membership.objects.filter(
-        user_id=request.principal.id, organization_id=tenant.id, active=True
-    ).first()
+    membership = Membership.objects.filter(user_id=request.principal.id, organization_id=tenant.id, active=True).first()
     if membership is None:
         return set()
     actions = {

@@ -1,4 +1,5 @@
 """Unit tests of the Django registry resolver and composition boundary."""
+
 from unittest.mock import Mock, patch
 
 import pytest
@@ -6,11 +7,11 @@ import pytest
 pytest.importorskip("django")
 
 from partitiondb.access import AccessPolicy, TenantAccess
-from partitiondb.core import Tenant
 from partitiondb.adapters.django.access_workflow import (
     DjangoAccessResolver,
     django_access_provisioning_callback,
 )
+from partitiondb.core import Tenant
 
 
 class FakeQuerySet:

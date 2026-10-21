@@ -3,6 +3,7 @@
 Concrete subclasses and migrations belong to the Django application. Database
 permissions must prevent ordinary tenant/application roles modifying records.
 """
+
 from django.db import models
 
 
@@ -18,7 +19,9 @@ class RoleOwnershipReceiptMixin(models.Model):
 
     class Meta:
         abstract = True
-        constraints = [models.UniqueConstraint(fields=['tenant_id', 'database_alias'], name='%(app_label)s_%(class)s_target_uniq')]
+        constraints = [
+            models.UniqueConstraint(fields=["tenant_id", "database_alias"], name="%(app_label)s_%(class)s_target_uniq")
+        ]
 
 
 class AccessRecoveryAuditMixin(models.Model):

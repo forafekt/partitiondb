@@ -4,29 +4,32 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='AdminAudit',
+            name="AdminAudit",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('occurred_at', models.DateTimeField(auto_now_add=True, db_index=True)),
-                ('actor_id', models.CharField(max_length=255)),
-                ('actor_name', models.CharField(max_length=255)),
-                ('model_label', models.CharField(db_index=True, max_length=255)),
-                ('object_id', models.TextField()),
-                ('object_repr', models.TextField()),
-                ('action', models.CharField(max_length=16)),
-                ('message', models.JSONField(default=list)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("occurred_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("actor_id", models.CharField(max_length=255)),
+                ("actor_name", models.CharField(max_length=255)),
+                ("model_label", models.CharField(db_index=True, max_length=255)),
+                ("object_id", models.TextField()),
+                ("object_repr", models.TextField()),
+                ("action", models.CharField(max_length=16)),
+                ("message", models.JSONField(default=list)),
             ],
             options={
-                'ordering': ['-occurred_at', '-pk'],
-                'abstract': False,
+                "ordering": ["-occurred_at", "-pk"],
+                "abstract": False,
             },
         ),
     ]

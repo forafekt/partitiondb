@@ -26,12 +26,7 @@ class TenantSubfolderMiddleware(TenantMiddleware):
     def resolve_tenant(self, request):
         request.get_host()  # Validate ALLOWED_HOSTS before using path-based routing.
         pieces = request.path_info.split("/", 3)
-        if (
-            len(pieces) < 3
-            or pieces[0]
-            or pieces[1] != self.prefix
-            or not _SEGMENT.fullmatch(pieces[2])
-        ):
+        if len(pieces) < 3 or pieces[0] or pieces[1] != self.prefix or not _SEGMENT.fullmatch(pieces[2]):
             raise Http404("Unknown tenant path")
         key = pieces[2]
         tenant = self.resolve(key)

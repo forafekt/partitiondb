@@ -44,6 +44,4 @@ def test_postgres_tenant_admin_crud_and_audit():
                 timeout=90,
             )
         finally:
-            connection.execute(
-                sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name))
-            )
+            connection.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))

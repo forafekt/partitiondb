@@ -4,6 +4,7 @@ Requires a separate administrative connection with CREATEROLE and grant rights.
 Call after migrations; provision() is safe to repeat for the same owned role.
 Do not use this module from normal request handlers.
 """
+
 import secrets
 import string
 from dataclasses import dataclass
@@ -66,16 +67,12 @@ class PostgresRoleManager:
             provision_restricted_role(self.connection, tenant, role)
             with self.connection.transaction():
                 self.connection.execute(
-                    sql.SQL("ALTER ROLE {} LOGIN PASSWORD {}").format(
-                        sql.Identifier(role), sql.Literal(password)
-                    ),
+                    sql.SQL("ALTER ROLE {} LOGIN PASSWORD {}").format(sql.Identifier(role), sql.Literal(password)),
                 )
         except Exception:
             # Fail closed: a role left behind cannot authenticate.
             with self.connection.transaction():
-                self.connection.execute(
-                    sql.SQL("ALTER ROLE {} NOLOGIN").format(sql.Identifier(role))
-                )
+                self.connection.execute(sql.SQL("ALTER ROLE {} NOLOGIN").format(sql.Identifier(role)))
             raise
         return RoleBinding(role, credential_ref)
 
@@ -88,7 +85,5 @@ class PostgresRoleManager:
         if binding.role != tenant_role_name(tenant):
             raise ValueError("role does not match tenant")
         with self.connection.transaction():
-            self.connection.execute(
-                sql.SQL("ALTER ROLE {} NOLOGIN").format(sql.Identifier(binding.role))
-            )
+            self.connection.execute(sql.SQL("ALTER ROLE {} NOLOGIN").format(sql.Identifier(binding.role)))
         revoke_restricted_role(self.connection, tenant, binding.role)

@@ -1,18 +1,27 @@
 """Framework-neutral bridge from tenant access policy to provisioning callbacks."""
+
 from collections.abc import Callable
 from typing import Protocol
+
 from .access import AccessPolicy, TenantAccess
 from .core import Tenant
 from .postgres_role_manager import RoleBinding
 
+
 class RoleProvisioner(Protocol):
     def provision(self, tenant: Tenant, *, credential_ref: str) -> RoleBinding: ...
 
+
 class AccessProvisioningAdapter:
     """Pass as Provisioner(provision_access=...). Failures require reconciliation."""
-    def __init__(self, resolve_access: Callable[[Tenant], TenantAccess],
-                 role_manager: RoleProvisioner, *,
-                 on_provisioned: Callable[[Tenant, RoleBinding], None]):
+
+    def __init__(
+        self,
+        resolve_access: Callable[[Tenant], TenantAccess],
+        role_manager: RoleProvisioner,
+        *,
+        on_provisioned: Callable[[Tenant, RoleBinding], None],
+    ):
         self.resolve_access = resolve_access
         self.role_manager = role_manager
         self.on_provisioned = on_provisioned

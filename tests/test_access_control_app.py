@@ -1,11 +1,12 @@
 """Isolated Django acceptance: optional app models, migration and constraints."""
+
 import subprocess
 import sys
 import textwrap
 
 
 def test_access_control_app_migrates_without_activelane_models(tmp_path):
-    script = textwrap.dedent('''
+    script = textwrap.dedent("""
         from django.conf import settings
         settings.configure(
             SECRET_KEY='test',
@@ -90,7 +91,6 @@ def test_access_control_app_migrates_without_activelane_models(tmp_path):
             pass
         else:
             raise AssertionError('Audit identity mismatch must fail')
-    ''')
-    result = subprocess.run([sys.executable, '-c', script], capture_output=True,
-                            text=True, timeout=40)
+    """)
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=40)
     assert result.returncode == 0, result.stdout + result.stderr

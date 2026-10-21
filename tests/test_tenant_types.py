@@ -39,14 +39,9 @@ def test_type_identity_is_canonical(value):
 def test_type_is_part_of_identity_and_namespaces_without_changing_untyped_namespace():
     plain = Tenant("one", "alpha")
     assert plain != FULL
-    assert (
-        len({namespace(plain), namespace(FULL), namespace(replace(FULL, tenant_type="empty"))}) == 3
-    )
+    assert len({namespace(plain), namespace(FULL), namespace(replace(FULL, tenant_type="empty"))}) == 3
     # This is the historical v1 untyped namespace, retained for existing files.
-    assert (
-        namespace(plain)
-        == "pdb:v1:931536bc48402a34b21fc9953c6f8f2ed5eea206b03bd27b61ba561a0995032d"
-    )
+    assert namespace(plain) == "pdb:v1:931536bc48402a34b21fc9953c6f8f2ed5eea206b03bd27b61ba561a0995032d"
 
 
 @pytest.mark.parametrize(

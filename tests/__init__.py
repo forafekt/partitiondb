@@ -1,4 +1,5 @@
 """PartitionDB test suite; expose its nested Django apps for direct imports."""
+
 import sys
 from pathlib import Path
 

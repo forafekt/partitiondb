@@ -15,9 +15,7 @@ class Loader(CachedLoader):
     tenant_cache_isolated = True
 
     def _remember(self, key, value):
-        while (
-            key not in self.get_template_cache and len(self.get_template_cache) >= self.max_entries
-        ):
+        while key not in self.get_template_cache and len(self.get_template_cache) >= self.max_entries:
             self.get_template_cache.pop(next(iter(self.get_template_cache)))
         self.get_template_cache[key] = value
 
@@ -36,10 +34,7 @@ class Loader(CachedLoader):
     def get_template(self, template_name, skip=None):
         with self._lock:
             key = self.cache_key(template_name, skip)
-            if (
-                key not in self.get_template_cache
-                and len(self.get_template_cache) >= self.max_entries
-            ):
+            if key not in self.get_template_cache and len(self.get_template_cache) >= self.max_entries:
                 self.get_template_cache.pop(next(iter(self.get_template_cache)))
             cached = self.get_template_cache.get(key)
             if isinstance(cached, TemplateDoesNotExist):

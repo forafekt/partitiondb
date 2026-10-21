@@ -1,4 +1,5 @@
 """Security boundary tests for optional Django Admin access reconciliation."""
+
 from unittest.mock import Mock
 
 import pytest
@@ -7,6 +8,7 @@ pytest.importorskip("django")
 
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.http import HttpResponseNotAllowed
+
 from partitiondb.adapters.django.access_admin import TenantAccessRegistryAdmin
 
 

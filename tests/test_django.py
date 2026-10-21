@@ -7,6 +7,8 @@ from partitiondb import MissingTenant, Tenant, current_tenant, tenant_scope
 from tests.django_setup import configure
 
 configure()
+from apps.organizations.models import Organization
+from apps.workspaces.models import Workspace
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from django.db import connection, connections
@@ -16,8 +18,6 @@ from django.test import RequestFactory
 from partitiondb.adapters.django.middleware import TenantMiddleware
 from partitiondb.adapters.django.router import TenantRouter
 from partitiondb.adapters.django.scope import atomic_tenant
-from apps.organizations.models import Organization
-from apps.workspaces.models import Workspace
 
 
 def resolve(host):
@@ -151,7 +151,10 @@ def test_django_migrations_isolation_and_rollback(schemas):
         call_command("migrate_tenant", tenant.schema, verbosity=0)
         with atomic_tenant(tenant):
             Workspace.objects.create(name=tenant.id)
-            assert connection.introspection.table_names() == ["django_migrations", "workspaces_workspace"]
+            assert connection.introspection.table_names() == [
+                "django_migrations",
+                "workspaces_workspace",
+            ]
     for tenant in schemas * 3:
         with atomic_tenant(tenant):
             assert list(Workspace.objects.values_list("name", flat=True)) == [tenant.id]
@@ -207,9 +210,7 @@ def test_configuration_checks():
     from partitiondb.adapters.django.checks import check_configuration
 
     assert check_configuration(None) == []
-    with override_settings(
-        PARTITIONDB={"SHARED_APPS": ["workspaces"], "TENANT_APPS": ["workspaces"]}
-    ):
+    with override_settings(PARTITIONDB={"SHARED_APPS": ["workspaces"], "TENANT_APPS": ["workspaces"]}):
         ids = {error.id for error in check_configuration(None)}
         assert {"partitiondb.E002", "partitiondb.E003"} <= ids
 
@@ -349,9 +350,8 @@ def test_generic_tenant_command_scopes_dumpdata_and_closes_connection(schemas):
 
 
 def test_abstract_registry_model_validation():
-    from django.core.exceptions import ValidationError
-
     from apps.organizations.models import Domain, Organization
+    from django.core.exceptions import ValidationError
 
     with pytest.raises(ValidationError):
         Organization(schema_name="public").clean()
@@ -384,10 +384,9 @@ def test_django_lifecycle_signal_bridge():
 
 @pytest.mark.postgres
 def test_registry_models_constraints_routing_and_protected_domains(schemas):
+    from apps.organizations.models import Domain, Organization
     from django.core.exceptions import ValidationError
     from django.db.models.deletion import ProtectedError
-
-    from apps.organizations.models import Domain, Organization
 
     call_command("migrate", verbosity=0, interactive=False)
     org = Organization.objects.create(name="First test organization", schema_name=schemas[0].schema)
@@ -471,9 +470,7 @@ def test_subfolder_routing_rewrites_and_restores_paths_and_reverse_prefix(schema
         return HttpResponse("ok")
 
     routes.urlpatterns = [path("items/", view, name="items")]
-    with override_settings(
-        PARTITIONDB=dict(settings.PARTITIONDB, SUBFOLDER_RESOLVER="tests.test_subfolder.resolve")
-    ):
+    with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, SUBFOLDER_RESOLVER="tests.test_subfolder.resolve")):
         middleware = TenantSubfolderMiddleware(view)
         middleware.resolve = lambda key: tenant if key == "alpha" else None
         incoming = RequestFactory().get("/t/alpha/items/", HTTP_HOST="alpha.test")
@@ -532,8 +529,6 @@ def test_migration_progress_from_real_tenant_executor(schemas):
     ):
         call_command("migrate_tenant", tenant.schema, tenant_id=tenant.id, verbosity=0)
     assert any(event.action == "apply_start" for event in progress)
-    assert any(
-        event.action == "apply_success" and event.app_label == "workspaces" for event in progress
-    )
+    assert any(event.action == "apply_success" and event.app_label == "workspaces" for event in progress)
     assert all(event.tenant == tenant for event in progress)
     assert current_tenant(required=False) is None

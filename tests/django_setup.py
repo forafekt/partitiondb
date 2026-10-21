@@ -2,11 +2,11 @@ import os
 import sys
 from pathlib import Path
 
+from django.conf import settings
+
 _PROJECT = str(Path(__file__).resolve().parent / "django_project")
 if _PROJECT not in sys.path:
     sys.path.insert(0, _PROJECT)
-
-from django.conf import settings
 
 
 def configure(*, shared_auth=False, admin=False, sqlite_name=None):
@@ -31,17 +31,16 @@ def configure(*, shared_auth=False, admin=False, sqlite_name=None):
     settings.configure(
         SECRET_KEY="test-only",
         ALLOWED_HOSTS=["alpha.test", "unknown.test"],
-        INSTALLED_APPS=["partitiondb.adapters.django.apps.PartitionDBConfig", "apps.organizations.apps.OrganizationsConfig", "apps.workspaces.apps.WorkspacesConfig", "django.contrib.auth", "django.contrib.contenttypes", "apps.accounts.apps.AccountsConfig"]
-        + (
-            ["django.contrib.sessions"]
-            if shared_auth
-            else []
-        )
-        + (
-            ["django.contrib.admin", "django.contrib.messages", "django.contrib.staticfiles"]
-            if admin
-            else []
-        ),
+        INSTALLED_APPS=[
+            "partitiondb.adapters.django.apps.PartitionDBConfig",
+            "apps.organizations.apps.OrganizationsConfig",
+            "apps.workspaces.apps.WorkspacesConfig",
+            "django.contrib.auth",
+            "django.contrib.contenttypes",
+            "apps.accounts.apps.AccountsConfig",
+        ]
+        + (["django.contrib.sessions"] if shared_auth else [])
+        + (["django.contrib.admin", "django.contrib.messages", "django.contrib.staticfiles"] if admin else []),
         ROOT_URLCONF="tests.admin_urls",
         MIDDLEWARE=(
             [

@@ -43,9 +43,7 @@ def main():
             "tenant_history.html",
         ):
             archive.getinfo("partitiondb/adapters/django/templates/partitiondb/admin/" + template)
-        metadata = email.message_from_bytes(
-            archive.read(f"partitiondb-{version}.dist-info/METADATA")
-        )
+        metadata = email.message_from_bytes(archive.read(f"partitiondb-{version}.dist-info/METADATA"))
         if metadata["Name"] != "partitiondb" or metadata["Version"] != version:
             raise ValueError("Wheel metadata does not match project metadata")
         if metadata["License-Expression"] != "MIT":

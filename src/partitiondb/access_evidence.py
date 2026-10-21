@@ -4,6 +4,7 @@ The receipt must be persisted by a trusted administrative workflow after role
 creation, not inferred from a tenant's role-binding metadata. A crash before
 receipt persistence remains ambiguous and requires manual investigation.
 """
+
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -72,10 +73,9 @@ class PostgresRecoveryEvidenceProvider:
             return RecoveryEvidence()
         return RecoveryEvidence(
             ownership_verified=True,
-            credential_verified=bool(
-                self.credentials.verify(tenant, receipt.role, receipt.credential_ref)
-            ),
+            credential_verified=bool(self.credentials.verify(tenant, receipt.role, receipt.credential_ref)),
         )
+
 
 class PsycopgCredentialAuthentication:
     """Fresh password authentication against a trusted database endpoint.
@@ -102,8 +102,7 @@ class PsycopgCredentialAuthentication:
                 return False
             dsn = self.connection_info(tenant)
             # Override credentials supplied by the base DSN, if any.
-            conninfo = make_conninfo(dsn, user=role, password=password,
-                                     connect_timeout=self.connect_timeout)
+            conninfo = make_conninfo(dsn, user=role, password=password, connect_timeout=self.connect_timeout)
             with connect(conninfo) as connection:
                 row = connection.execute("SELECT current_user, current_database()").fetchone()
                 return bool(row and row[0] == role)

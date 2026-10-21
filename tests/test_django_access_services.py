@@ -1,11 +1,14 @@
 """Contract tests that do not require a configured Django registry database."""
+
 from unittest.mock import Mock
+
 import pytest
 from django.core.exceptions import ValidationError
+
+from partitiondb.adapters.django.access_models import TenantAccessMixin
+from partitiondb.adapters.django.access_services import DjangoRoleBindingRecorder
 from partitiondb.core import Tenant
 from partitiondb.postgres_role_manager import RoleBinding
-from partitiondb.adapters.django.access_services import DjangoRoleBindingRecorder
-from partitiondb.adapters.django.access_models import TenantAccessMixin
 
 
 def test_recorder_requires_concrete_access_model():

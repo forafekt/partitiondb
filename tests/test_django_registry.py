@@ -13,9 +13,7 @@ configure()
 from apps.organizations.models import Domain, Organization  # noqa: E402
 
 
-@pytest.mark.parametrize(
-    "method,arg", [("get", "one"), ("resolve_host", "alpha.test"), ("list_tenants", None)]
-)
+@pytest.mark.parametrize("method,arg", [("get", "one"), ("resolve_host", "alpha.test"), ("list_tenants", None)])
 def test_registry_rejects_inherited_scope_before_query(method, arg):
     registry = DjangoRegistry(Organization, domain_model=Domain)
     with (
@@ -28,8 +26,9 @@ def test_registry_rejects_inherited_scope_before_query(method, arg):
 
 
 def test_registry_requires_concrete_shared_models_and_matching_domains():
-    from partitiondb.adapters.django.models import TenantMixin
     from apps.workspaces.models import Workspace
+
+    from partitiondb.adapters.django.models import TenantMixin
 
     with pytest.raises(TypeError):
         DjangoRegistry(Workspace)

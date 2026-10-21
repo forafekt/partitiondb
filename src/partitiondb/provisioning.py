@@ -94,9 +94,7 @@ class Provisioner:
             try:
                 self.observer(event)
             except Exception as error:
-                logging.getLogger(__name__).warning(
-                    "Lifecycle observer failed: %s", type(error).__name__
-                )
+                logging.getLogger(__name__).warning("Lifecycle observer failed: %s", type(error).__name__)
 
     def _invoke(self, record: ProvisioningRecord, callback: Callable[[Tenant], None]) -> None:
         try:
@@ -150,9 +148,7 @@ class Provisioner:
                 record = self._advance(record, Stage.ACTIVE)
             return record
 
-    def reconcile_creation(
-        self, tenant_id: str, *, confirm: Tenant, schema_created: bool
-    ) -> ProvisioningRecord:
+    def reconcile_creation(self, tenant_id: str, *, confirm: Tenant, schema_created: bool) -> ProvisioningRecord:
         """Record an operator's out-of-band inspection; never infer ownership.
 
         schema_created=True requires verifying that the existing schema belongs
@@ -170,9 +166,7 @@ class Provisioner:
                 raise ValueError("Reconciliation requires the exact tenant in CREATING state")
             return self._advance(record, Stage.SCHEMA_READY if schema_created else Stage.NEW)
 
-    def reconcile_access(
-        self, tenant_id: str, *, confirm: Tenant, access_ready: bool
-    ) -> ProvisioningRecord:
+    def reconcile_access(self, tenant_id: str, *, confirm: Tenant, access_ready: bool) -> ProvisioningRecord:
         """Operator-confirmed recovery of ambiguous external role/secret operations.
 
         access_ready=True requires independently verifying the role's ownership,
@@ -188,6 +182,4 @@ class Provisioner:
             record = self._record(tenant_id)
             if record.tenant != confirm or record.stage != Stage.ACCESS_PROVISIONING:
                 raise ValueError("Reconciliation requires the exact tenant in ACCESS_PROVISIONING")
-            return self._advance(
-                record, Stage.ACCESS_READY if access_ready else Stage.MIGRATED
-            )
+            return self._advance(record, Stage.ACCESS_READY if access_ready else Stage.MIGRATED)

@@ -63,9 +63,7 @@ def test_database_and_role_cleanup_still_run_after_other_cleanup_failure(failure
     if failure == "broker":
         channel = app.connection_for_write.return_value.__enter__.return_value.default_channel
         channel.queue_delete.side_effect = error
-    with patch.object(
-        celery_acceptance, "stop_worker", side_effect=error if failure == "worker" else None
-    ):
+    with patch.object(celery_acceptance, "stop_worker", side_effect=error if failure == "worker" else None):
         with pytest.raises(RuntimeError, match="cleanup failure"):
             celery_acceptance.cleanup(admin, worker, app, "owned_queue", "owned_db", "owned_role")
     app.close.assert_called_once()

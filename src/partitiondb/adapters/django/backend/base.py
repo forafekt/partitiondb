@@ -55,11 +55,7 @@ class DatabaseWrapper(PostgreSQLWrapper):
 
     def _cursor(self, name=None):
         tenant = current_tenant(required=False)
-        if (
-            self.connection is not None
-            and not self.autocommit
-            and tenant != getattr(self, "_transaction_tenant", None)
-        ):
+        if self.connection is not None and not self.autocommit and tenant != getattr(self, "_transaction_tenant", None):
             raise ImproperlyConfigured("Tenant changed inside an active transaction")
         if tenant is not None and tenant.database != self.alias:
             raise ImproperlyConfigured("Tenant query attempted through the wrong database alias")
@@ -72,9 +68,7 @@ class DatabaseWrapper(PostgreSQLWrapper):
                     setup.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (tenant.schema,))
                     if setup.fetchone() is None:
                         raise LookupError(f"Tenant schema does not exist: {tenant.schema}")
-                setup.execute(
-                    "SELECT set_config('search_path', %s, false)", (search_path(self.schema_name),)
-                )
+                setup.execute("SELECT set_config('search_path', %s, false)", (search_path(self.schema_name),))
         except BaseException:
             cursor.close()
             raise

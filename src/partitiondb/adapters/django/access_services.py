@@ -3,12 +3,14 @@
 Never call this service from Model.save() or an ordinary admin edit. The
 Provisioner must hold its exclusive tenant lifecycle lock throughout the call.
 """
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from partitiondb.access import AccessPolicy
 from partitiondb.core import Tenant
 from partitiondb.postgres_role_manager import RoleBinding, tenant_role_name
+
 from .access_models import TenantAccessMixin
 
 
@@ -48,9 +50,15 @@ class DjangoRoleBindingRecorder:
                 raise ValidationError("Existing role binding conflicts with provisioning result")
             if record.access_role == binding.role:
                 return
-            updated = self.model._base_manager.using(self.using).filter(
-                pk=record.pk, access_role="", access_policy=AccessPolicy.RESTRICTED.value,
-                credential_ref=binding.credential_ref,
-            ).update(access_role=binding.role)
+            updated = (
+                self.model._base_manager.using(self.using)
+                .filter(
+                    pk=record.pk,
+                    access_role="",
+                    access_policy=AccessPolicy.RESTRICTED.value,
+                    credential_ref=binding.credential_ref,
+                )
+                .update(access_role=binding.role)
+            )
             if updated != 1:
                 raise ValidationError("Concurrent role binding update detected")

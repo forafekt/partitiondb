@@ -2,6 +2,7 @@
 
 Providers are supplied by the deployment. Never store passwords in tenant metadata.
 """
+
 from typing import Protocol
 
 

@@ -21,8 +21,8 @@ class Domain(DomainMixin):
 
     def __str__(self):
         return self.hostname
-    
-    
+
+
 class Membership(models.Model):
     class Role(models.TextChoices):
         ADMIN = "admin", "Administrator"
@@ -56,7 +56,4 @@ class Membership(models.Model):
         ]
 
     def __str__(self):
-        return (
-            f"User {self.user_id} / "
-            f"Organization {self.organization_id} / {self.role}"
-        )
+        return f"User {self.user_id} / Organization {self.organization_id} / {self.role}"

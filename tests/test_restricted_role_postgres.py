@@ -3,6 +3,7 @@
 These use disposable roles and schemas and deliberately authenticate as the
 restricted role. The suite must not mistake search_path for an ACL boundary.
 """
+
 import os
 import uuid
 
@@ -44,13 +45,19 @@ def test_restricted_role_enforced_by_postgresql(partitiondb_admin_connection):
     try:
         for tenant in (own, other):
             conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(tenant.schema)))
-            conn.execute(sql.SQL("CREATE TABLE {}.items (id integer PRIMARY KEY, value text)").format(sql.Identifier(tenant.schema)))
+            conn.execute(
+                sql.SQL("CREATE TABLE {}.items (id integer PRIMARY KEY, value text)").format(
+                    sql.Identifier(tenant.schema)
+                )
+            )
             conn.execute(sql.SQL("INSERT INTO {}.items VALUES (1, 'original')").format(sql.Identifier(tenant.schema)))
         binding = PostgresRoleManager(conn, creds).provision(own, credential_ref=f"test/{suffix}")
         assert binding.role == role
         restricted_dsn = make_conninfo(admin_dsn, user=role, password=creds.get(binding.credential_ref))
         with psycopg.connect(restricted_dsn, autocommit=True) as limited:
-            assert limited.execute(sql.SQL("SELECT value FROM {}.items").format(sql.Identifier(own.schema))).fetchone() == ("original",)
+            assert limited.execute(
+                sql.SQL("SELECT value FROM {}.items").format(sql.Identifier(own.schema))
+            ).fetchone() == ("original",)
             limited.execute(sql.SQL("UPDATE {}.items SET value = 'updated'").format(sql.Identifier(own.schema)))
             for operation in (
                 sql.SQL("SELECT * FROM {}.items").format(sql.Identifier(other.schema)),
@@ -62,7 +69,9 @@ def test_restricted_role_enforced_by_postgresql(partitiondb_admin_connection):
                     limited.execute(operation)
             with pytest.raises(psycopg.Error):
                 limited.execute(sql.SQL("ALTER ROLE {} CREATEDB").format(sql.Identifier(role)))
-        assert conn.execute(sql.SQL("SELECT value FROM {}.items").format(sql.Identifier(other.schema))).fetchone() == ("original",)
+        assert conn.execute(sql.SQL("SELECT value FROM {}.items").format(sql.Identifier(other.schema))).fetchone() == (
+            "original",
+        )
         PostgresRoleManager(conn, creds).disable(own, binding)
         with pytest.raises(psycopg.OperationalError):
             psycopg.connect(restricted_dsn, connect_timeout=3)

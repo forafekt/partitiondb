@@ -113,6 +113,7 @@ def main(postgres=False):
         import django
 
         django.setup()
+        from apps.workspaces.models import Workspace
         from django.contrib.auth import get_user_model
         from django.core.management import call_command
         from django.db import connections
@@ -120,7 +121,6 @@ def main(postgres=False):
 
         from partitiondb import tenant_scope
         from partitiondb.adapters.django.models import TenantAdminAuditMixin
-        from apps.workspaces.models import Workspace
 
         class Audit(TenantAdminAuditMixin):
             class Meta(TenantAdminAuditMixin.Meta):
@@ -199,9 +199,7 @@ def main(postgres=False):
             ContentType.objects.clear_cache()
             form_response = client.get("/admin/workspaces/workspace/add/")
             assert form_response.status_code == 200, form_response.content[:1000]
-            response = client.post(
-                "/admin/workspaces/workspace/add/", {"name": "Alpha only", "_save": "Save"}
-            )
+            response = client.post("/admin/workspaces/workspace/add/", {"name": "Alpha only", "_save": "Save"})
             assert response.status_code == 302, response.content[:1000]
             response = client.get("/admin/workspaces/workspace/")
             assert response.status_code == 200 and b"Alpha only" in response.content
@@ -210,9 +208,7 @@ def main(postgres=False):
             assert form_response.status_code == 200, form_response.content[:1000]
             response = client.get("/admin/workspaces/workspace/1/history/")
             assert response.status_code == 200 and b"operator" in response.content
-            response = client.post(
-                "/admin/workspaces/workspace/1/change/", {"name": "Updated", "_save": "Save"}
-            )
+            response = client.post("/admin/workspaces/workspace/1/change/", {"name": "Updated", "_save": "Save"})
             assert response.status_code == 302, response.content[:1000]
             response = client.post("/admin/workspaces/workspace/1/delete/", {"post": "yes"})
             assert response.status_code == 302, response.content[:1000]
@@ -220,13 +216,9 @@ def main(postgres=False):
             assert client.get("/admin/auth/user/").status_code == 404
         csrf_client = Client(HTTP_HOST="alpha.test", enforce_csrf_checks=True)
         csrf_client.force_login(user)
-        assert (
-            csrf_client.post("/admin/workspaces/workspace/add/", {"name": "blocked"}).status_code == 403
-        )
+        assert csrf_client.post("/admin/workspaces/workspace/add/", {"name": "blocked"}).status_code == 403
         client.raise_request_exception = False
-        failed = client.post(
-            "/admin/workspaces/workspace/add/", {"name": "force rollback", "_save": "Save"}
-        )
+        failed = client.post("/admin/workspaces/workspace/add/", {"name": "force rollback", "_save": "Save"})
         assert failed.status_code == 500
         with tenant_scope(resolve("alpha.test")):
             assert Audit.objects.count() == 3

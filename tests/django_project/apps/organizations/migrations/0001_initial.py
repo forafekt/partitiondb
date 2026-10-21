@@ -7,7 +7,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -16,45 +15,112 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='Organization',
+            name="Organization",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('schema_name', models.CharField(max_length=63)),
-                ('database_alias', models.CharField(default='default', max_length=64)),
-                ('active', models.BooleanField(default=False)),
-                ('name', models.CharField(max_length=200)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("schema_name", models.CharField(max_length=63)),
+                ("database_alias", models.CharField(default="default", max_length=64)),
+                ("active", models.BooleanField(default=False)),
+                ("name", models.CharField(max_length=200)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                'abstract': False,
-                'constraints': [models.UniqueConstraint(fields=('database_alias', 'schema_name'), name='organizations_organization_route_unique')],
+                "abstract": False,
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("database_alias", "schema_name"),
+                        name="organizations_organization_route_unique",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='Membership',
+            name="Membership",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('role', models.CharField(choices=[('admin', 'Administrator'), ('editor', 'Editor'), ('viewer', 'Viewer')], default='viewer', max_length=16)),
-                ('active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='organization_memberships', to=settings.AUTH_USER_MODEL)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='memberships', to='organizations.organization')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[
+                            ("admin", "Administrator"),
+                            ("editor", "Editor"),
+                            ("viewer", "Viewer"),
+                        ],
+                        default="viewer",
+                        max_length=16,
+                    ),
+                ),
+                ("active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="organization_memberships",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="memberships",
+                        to="organizations.organization",
+                    ),
+                ),
             ],
             options={
-                'constraints': [models.UniqueConstraint(fields=('user', 'organization'), name='organizations_membership_user_org_unique')],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("user", "organization"),
+                        name="organizations_membership_user_org_unique",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='Domain',
+            name="Domain",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('hostname', models.CharField(max_length=253, unique=True)),
-                ('is_primary', models.BooleanField(default=False)),
-                ('tenant', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='domains', to='organizations.organization')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("hostname", models.CharField(max_length=253, unique=True)),
+                ("is_primary", models.BooleanField(default=False)),
+                (
+                    "tenant",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="domains",
+                        to="organizations.organization",
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
-                'constraints': [models.UniqueConstraint(django.db.models.functions.text.Lower('hostname'), name='organizations_domain_host_unique'), models.UniqueConstraint(condition=models.Q(('is_primary', True)), fields=('tenant',), name='organizations_domain_primary_unique')],
+                "abstract": False,
+                "constraints": [
+                    models.UniqueConstraint(
+                        django.db.models.functions.text.Lower("hostname"),
+                        name="organizations_domain_host_unique",
+                    ),
+                    models.UniqueConstraint(
+                        condition=models.Q(("is_primary", True)),
+                        fields=("tenant",),
+                        name="organizations_domain_primary_unique",
+                    ),
+                ],
             },
         ),
     ]
