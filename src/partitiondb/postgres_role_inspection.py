@@ -26,6 +26,7 @@ class RoleInspection:
     table_access: bool = False
     memberships: int = 0
     reason: str = ""
+    role_oid: int | None = None
 
 
 class PostgresRoleInspector:
@@ -58,7 +59,7 @@ class PostgresRoleInspector:
         ).fetchone()
         if schema_exists is None:
             return RoleInspection(role, RoleState.CONFLICT, bool(login),
-                                  memberships=int(memberships), reason="Tenant schema missing")
+                                  memberships=int(memberships), reason="Tenant schema missing", role_oid=int(oid))
         usage = bool(self.connection.execute(
             "SELECT has_schema_privilege(%s, %s, 'USAGE')",
             (role, tenant.schema),
@@ -85,4 +86,4 @@ class PostgresRoleInspector:
             state, reason = RoleState.CONFLICT, "Expected schema/table privileges are missing"
         else:
             state, reason = RoleState.CONFIGURED, "Expected local grants and attributes present; ownership unverified"
-        return RoleInspection(role, state, bool(login), usage, table_access, int(memberships), reason)
+        return RoleInspection(role, state, bool(login), usage, table_access, int(memberships), reason, int(oid))
