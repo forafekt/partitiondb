@@ -28,9 +28,7 @@ def source_fingerprint(root):
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
         relative = path.relative_to(root)
-        if EXCLUDED.intersection(relative.parts) or any(
-            p.endswith(".egg-info") for p in relative.parts
-        ):
+        if EXCLUDED.intersection(relative.parts) or any(p.endswith(".egg-info") for p in relative.parts):
             continue
         if path.is_symlink():
             raise ValueError("Release inputs must not contain symlinks")
@@ -76,12 +74,8 @@ def run_gate(name, command, report_dir):
                         "error_type": "MissingWheel",
                         "log": log_path.name,
                     }
-                environment["PARTITIONDB_PACKAGE"] = (
-                    "/package/" + wheel.relative_to(ROOT).as_posix()
-                )
-            result = subprocess.run(
-                command, cwd=ROOT, env=environment, stdout=output, stderr=subprocess.STDOUT
-            )
+                environment["PARTITIONDB_PACKAGE"] = "/package/" + wheel.relative_to(ROOT).as_posix()
+            result = subprocess.run(command, cwd=ROOT, env=environment, stdout=output, stderr=subprocess.STDOUT)
             code = result.returncode
             record = {
                 "gate": name,
@@ -98,9 +92,7 @@ def run_gate(name, command, report_dir):
 def main():
     started = datetime.now(UTC)
     version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
-    report_dir = (
-        ROOT / "release_reports" / (started.strftime("%Y%m%dT%H%M%SZ_") + secrets.token_hex(4))
-    )
+    report_dir = ROOT / "release_reports" / (started.strftime("%Y%m%dT%H%M%SZ_") + secrets.token_hex(4))
     report_dir.mkdir(parents=True)
     report = {
         "schema_version": 1,
@@ -146,11 +138,7 @@ def main():
         destination = report_dir / "report.json"
         destination.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
         print(f"Release evidence: {destination}", flush=True)
-    print(
-        "TECHNICAL RELEASE GATES PASSED"
-        if report["technical_passed"]
-        else "RELEASE GATES INCOMPLETE"
-    )
+    print("TECHNICAL RELEASE GATES PASSED" if report["technical_passed"] else "RELEASE GATES INCOMPLETE")
     print("Publication requires final artifact review and release approval; no upload performed.")
     return 130 if interrupted else 0 if report["technical_passed"] else 1
 

@@ -41,9 +41,7 @@ class ControlPlaneAdminMixin:
         return current_tenant(required=False) is None and super().has_add_permission(request)
 
     def has_change_permission(self, request, obj=None):
-        return current_tenant(required=False) is None and super().has_change_permission(
-            request, obj
-        )
+        return current_tenant(required=False) is None and super().has_change_permission(request, obj)
 
 
 class TenantRegistryAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
@@ -63,10 +61,7 @@ class TenantRegistryAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
 
     def check(self, **kwargs):
         errors = super().check(**kwargs)
-        if (
-            not issubclass(self.model, TenantMixin)
-            or self.model._meta.app_label not in app_sets()[0]
-        ):
+        if not issubclass(self.model, TenantMixin) or self.model._meta.app_label not in app_sets()[0]:
             errors.append(
                 Error(
                     "TenantRegistryAdmin requires a shared TenantMixin model",
@@ -84,16 +79,11 @@ class DomainRegistryAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
     list_select_related = ("tenant",)
 
     def has_delete_permission(self, request, obj=None):
-        return current_tenant(required=False) is None and super().has_delete_permission(
-            request, obj
-        )
+        return current_tenant(required=False) is None and super().has_delete_permission(request, obj)
 
     def check(self, **kwargs):
         errors = super().check(**kwargs)
-        if (
-            not issubclass(self.model, DomainMixin)
-            or self.model._meta.app_label not in app_sets()[0]
-        ):
+        if not issubclass(self.model, DomainMixin) or self.model._meta.app_label not in app_sets()[0]:
             errors.append(
                 Error(
                     "DomainRegistryAdmin requires a shared DomainMixin model",
@@ -116,9 +106,7 @@ class ControlPlaneAdminSite(admin.AdminSite):
     def register(self, model_or_iterable, admin_class=None, **options):
         from django.core.exceptions import ImproperlyConfigured
 
-        models = (
-            [model_or_iterable] if hasattr(model_or_iterable, "_meta") else list(model_or_iterable)
-        )
+        models = [model_or_iterable] if hasattr(model_or_iterable, "_meta") else list(model_or_iterable)
         shared, _ = app_sets()
         if any(model._meta.app_label not in shared for model in models):
             raise ImproperlyConfigured("ControlPlaneAdminSite accepts only shared models")

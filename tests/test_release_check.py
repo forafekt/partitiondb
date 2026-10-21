@@ -92,10 +92,7 @@ def test_container_gate_requires_and_selects_exact_built_wheel(tmp_path, monkeyp
     artifact.write_bytes(b"wheel")
 
     def run(command, **kwargs):
-        assert (
-            kwargs["env"]["PARTITIONDB_PACKAGE"]
-            == "/package/" + artifact.relative_to(root).as_posix()
-        )
+        assert kwargs["env"]["PARTITIONDB_PACKAGE"] == "/package/" + artifact.relative_to(root).as_posix()
         assert kwargs["cwd"] == root
         return SimpleNamespace(returncode=0)
 

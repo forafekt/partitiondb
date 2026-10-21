@@ -37,6 +37,4 @@ class ObservedMigrateCommand(DjangoMigrateCommand):
         try:
             self.observer(event)
         except Exception as error:
-            logging.getLogger(__name__).warning(
-                "Migration progress observer failed: %s", type(error).__name__
-            )
+            logging.getLogger(__name__).warning("Migration progress observer failed: %s", type(error).__name__)

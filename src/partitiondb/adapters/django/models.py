@@ -58,9 +58,7 @@ class TenantMixin(models.Model):
         if self.pk is None or self._state.adding:
             raise ValueError("Persist tenant metadata before building a routing identity")
         self.clean()
-        return Tenant(
-            str(self.pk), self.schema_name, self.database_alias, tenant_type=self.get_tenant_type()
-        )
+        return Tenant(str(self.pk), self.schema_name, self.database_alias, tenant_type=self.get_tenant_type())
 
     def save(self, *args, **kwargs):
         self.full_clean()

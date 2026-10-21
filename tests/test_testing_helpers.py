@@ -19,21 +19,18 @@ def test_temporary_schema_is_removed_after_test_failure(partitiondb_admin_connec
     with pytest.raises(ValueError):
         with temporary_tenant(admin, migrate=False) as tenant:
             raise ValueError("simulated failure")
-    assert (
-        admin.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (tenant.schema,)).fetchone()
-        is None
-    )
+    assert admin.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (tenant.schema,)).fetchone() is None
     assert current_tenant(required=False) is None
 
 
 @pytest.mark.postgres
 def test_tenant_factory_migrates_and_keeps_tenants_separate(tenant_factory):
-    from tests.tenantapp.models import Item
+    from apps.workspaces.models import Workspace
 
     a, b = tenant_factory(), tenant_factory()
     for tenant in (a, b):
         with atomic_tenant(tenant):
-            Item.objects.create(value=tenant.id)
+            Workspace.objects.create(name=tenant.id)
     for tenant in (a, b):
         with atomic_tenant(tenant):
-            assert list(Item.objects.values_list("value", flat=True)) == [tenant.id]
+            assert list(Workspace.objects.values_list("name", flat=True)) == [tenant.id]

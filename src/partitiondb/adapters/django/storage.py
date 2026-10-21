@@ -138,9 +138,7 @@ class TenantStorage(Storage):
         return self._returned(self.backend.generate_filename(self._physical(filename)))
 
     def get_available_name(self, name, max_length=None):
-        return self._returned(
-            self.backend.get_available_name(self._physical(name), max_length=max_length)
-        )
+        return self._returned(self.backend.get_available_name(self._physical(name), max_length=max_length))
 
     def get_accessed_time(self, name):
         return self.backend.get_accessed_time(self._physical(name))

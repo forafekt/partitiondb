@@ -51,13 +51,9 @@ def test_subfolder_context_is_restored_on_denial_in_concurrent_requests():
         downstream.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "path", ["/", "/other/alpha/", "/t//items", "/t/unknown/", "/t/a.b/", "/t/../"]
-)
+@pytest.mark.parametrize("path", ["/", "/other/alpha/", "/t//items", "/t/unknown/", "/t/a.b/", "/t/../"])
 def test_unknown_subfolder_paths_fail_closed(path):
-    with override_settings(
-        PARTITIONDB=dict(settings.PARTITIONDB, SUBFOLDER_RESOLVER="tests.test_subfolder.resolve")
-    ):
+    with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, SUBFOLDER_RESOLVER="tests.test_subfolder.resolve")):
         middleware = TenantSubfolderMiddleware(Mock())
         incoming = RequestFactory().get(path, HTTP_HOST="alpha.test")
         with pytest.raises(Http404):
@@ -66,9 +62,7 @@ def test_unknown_subfolder_paths_fail_closed(path):
 
 
 def test_subfolder_preserves_existing_application_mount():
-    with override_settings(
-        PARTITIONDB=dict(settings.PARTITIONDB, SUBFOLDER_RESOLVER="tests.test_subfolder.resolve")
-    ):
+    with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, SUBFOLDER_RESOLVER="tests.test_subfolder.resolve")):
         middleware = TenantSubfolderMiddleware(Mock())
 
         def deny(request, tenant):
@@ -77,9 +71,7 @@ def test_subfolder_preserves_existing_application_mount():
             return False
 
         middleware.authorize = deny
-        incoming = RequestFactory().get(
-            "/t/alpha/items/", HTTP_HOST="alpha.test", SCRIPT_NAME="/application"
-        )
+        incoming = RequestFactory().get("/t/alpha/items/", HTTP_HOST="alpha.test", SCRIPT_NAME="/application")
         original = get_script_prefix()
         with pytest.raises(PermissionDenied):
             middleware(incoming)
@@ -96,12 +88,8 @@ def test_operational_identity_uses_inventory_for_namespaced_assets():
 
     from partitiondb.adapters.django.inventory import operational_tenant
 
-    with override_settings(
-        PARTITIONDB=dict(settings.PARTITIONDB, TENANTS="tests.test_subfolder.inventory")
-    ):
+    with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, TENANTS="tests.test_subfolder.inventory")):
         assert operational_tenant("alpha", "default") == Tenant("org-alpha", "alpha")
         with pytest.raises(ImproperlyConfigured):
             operational_tenant("unknown", "default")
-        assert operational_tenant("new", "default", "provisioning-id") == Tenant(
-            "provisioning-id", "new"
-        )
+        assert operational_tenant("new", "default", "provisioning-id") == Tenant("provisioning-id", "new")

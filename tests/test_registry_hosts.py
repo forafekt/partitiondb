@@ -21,9 +21,7 @@ def test_registered_hosts_are_allowed_without_settings_mutation():
     with override_settings(PARTITIONDB=config, ALLOWED_HOSTS=["*"], MIDDLEWARE=[GUARD]):
         guard = RegistryHostMiddleware(lambda request: HttpResponse("ok"))
         guard.resolve = Mock(return_value=Tenant("one", "alpha"))
-        assert (
-            guard(RequestFactory().get("/", HTTP_HOST="testorg2.localhost:8080")).status_code == 200
-        )
+        assert guard(RequestFactory().get("/", HTTP_HOST="testorg2.localhost:8080")).status_code == 200
         guard.resolve.assert_called_once_with("testorg2.localhost")
         guard.resolve.reset_mock()
         assert guard(RequestFactory().get("/", HTTP_HOST="localhost:8080")).status_code == 200
@@ -65,7 +63,4 @@ def test_same_origin_tenant_post_needs_no_csrf_trusted_origin():
             assert csrf.process_view(request, lambda request: HttpResponse(), (), {}) is None
             request.csrf_processing_done = False
             request.META["HTTP_ORIGIN"] = "http://untrusted.localhost:8080"
-            assert (
-                csrf.process_view(request, lambda request: HttpResponse(), (), {}).status_code
-                == 403
-            )
+            assert csrf.process_view(request, lambda request: HttpResponse(), (), {}).status_code == 403

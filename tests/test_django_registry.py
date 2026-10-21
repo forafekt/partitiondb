@@ -10,17 +10,15 @@ from partitiondb.adapters.django.registry import DjangoRegistry
 from tests.django_setup import configure
 
 configure()
-from tests.sharedapp.models import DomainRecord, TenantRecord  # noqa: E402
+from apps.organizations.models import Domain, Organization  # noqa: E402
 
 
-@pytest.mark.parametrize(
-    "method,arg", [("get", "one"), ("resolve_host", "alpha.test"), ("list_tenants", None)]
-)
+@pytest.mark.parametrize("method,arg", [("get", "one"), ("resolve_host", "alpha.test"), ("list_tenants", None)])
 def test_registry_rejects_inherited_scope_before_query(method, arg):
-    registry = DjangoRegistry(TenantRecord, domain_model=DomainRecord)
+    registry = DjangoRegistry(Organization, domain_model=Domain)
     with (
         tenant_scope(Tenant("one", "alpha")),
-        patch.object(TenantRecord._base_manager, "using") as query,
+        patch.object(Organization._base_manager, "using") as query,
     ):
         with pytest.raises(ValueError, match="shared context"):
             getattr(registry, method)(*(() if arg is None else (arg,)))
@@ -28,24 +26,28 @@ def test_registry_rejects_inherited_scope_before_query(method, arg):
 
 
 def test_registry_requires_concrete_shared_models_and_matching_domains():
+    from apps.workspaces.models import Workspace
+
     from partitiondb.adapters.django.models import TenantMixin
-    from tests.tenantapp.models import Item
 
     with pytest.raises(TypeError):
-        DjangoRegistry(Item)
+        DjangoRegistry(Workspace)
     with pytest.raises(ValueError, match="concrete"):
         DjangoRegistry(TenantMixin)
     with pytest.raises(TypeError):
-        DjangoRegistry(TenantRecord, domain_model=Item)
+        DjangoRegistry(Organization, domain_model=Workspace)
     with pytest.raises(ValueError, match="domain model"):
-        DjangoRegistry(TenantRecord).resolve_host("alpha.test")
+        DjangoRegistry(Organization).resolve_host("alpha.test")
 
 
-@pytest.mark.parametrize("value", [None, "", 12])
-def test_job_lookup_rejects_non_string_id(value):
-    registry = DjangoRegistry(TenantRecord)
+@pytest.mark.parametrize(
+    "job_id",
+    [None, 123, [], {}],
+)
+def test_job_lookup_rejects_non_string_id(job_id):
+    registry = DjangoRegistry(Organization)
     with pytest.raises(ValueError, match="nonempty string"):
-        registry.get(value)
+        registry.get(job_id)
 
 
 def test_real_registry_queries_in_isolated_sqlite_process():
@@ -61,17 +63,17 @@ from django.core.management import call_command
 from partitiondb import MissingTenant, current_tenant
 from partitiondb.adapters.django.registry import DjangoRegistry
 from partitiondb.jobs import job_scope
-from tests.sharedapp.models import TenantRecord, DomainRecord
+from apps.organizations.models import Organization, Domain
 call_command("migrate", verbosity=0, interactive=False)
-registry=DjangoRegistry(TenantRecord, domain_model=DomainRecord)
-row=TenantRecord.objects.create(schema_name="alpha")
-DomainRecord.objects.create(tenant=row, hostname="ALPHA.TEST", is_primary=True)
-DomainRecord.objects.create(tenant=row, hostname="alias.test")
+registry=DjangoRegistry(Organization, domain_model=Domain)
+row=Organization.objects.create(name="Alpha test organization", schema_name="alpha")
+Domain.objects.create(tenant=row, hostname="ALPHA.TEST", is_primary=True)
+Domain.objects.create(tenant=row, hostname="alias.test")
 identity=row.as_tenant()
 assert registry.get(identity.id) is None
 assert registry.resolve_host("alpha.test") is None
 assert registry.list_tenants() == ()
-TenantRecord.objects.filter(pk=row.pk).update(active=True)
+Organization.objects.filter(pk=row.pk).update(active=True)
 assert registry.get(identity.id) == identity
 assert registry.get("0"+identity.id) is None
 assert registry.get("invalid-pk") is None
@@ -83,7 +85,7 @@ snapshot=registry.list_tenants()
 assert snapshot == (identity,)
 with job_scope(identity.id, registry) as resolved:
     assert resolved == identity
-TenantRecord.objects.filter(pk=row.pk).update(active=False)
+Organization.objects.filter(pk=row.pk).update(active=False)
 assert registry.get(identity.id) is None
 assert registry.resolve_host("alias.test") is None
 assert registry.list_tenants() == ()

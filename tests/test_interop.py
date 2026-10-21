@@ -1,4 +1,5 @@
 import pytest
+
 from partitiondb.core import Tenant
 from partitiondb.interop import CONTRACT_VERSION, export_tenant
 

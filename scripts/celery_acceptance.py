@@ -50,9 +50,7 @@ def cleanup(admin, worker, app, queue, database=None, role=None):
         finally:
             try:
                 if database is not None:
-                    admin.execute(
-                        sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(database))
-                    )
+                    admin.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(database)))
             finally:
                 if role is not None:
                     admin.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
@@ -64,9 +62,7 @@ def main():
         raise ValueError("This acceptance runner requires a RabbitMQ AMQP broker")
     admin_dsn = os.environ["PARTITIONDB_TEST_DSN"]
     suffix = secrets.token_hex(8)
-    database, role, queue = (
-        prefix + suffix for prefix in ("pdb_celery_", "pdb_worker_", "pdb_queue_")
-    )
+    database, role, queue = (prefix + suffix for prefix in ("pdb_celery_", "pdb_worker_", "pdb_queue_"))
     redactions = [broker]
     worker = None
     app = None
@@ -82,9 +78,9 @@ def main():
             password = secrets.token_urlsafe(32)
             redactions.append(password)
             admin.execute(
-                sql.SQL(
-                    "CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
-                ).format(sql.Identifier(role), sql.Literal(password))
+                sql.SQL("CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT").format(
+                    sql.Identifier(role), sql.Literal(password)
+                )
             )
             role_created = True
             owner_dsn = make_conninfo(admin_dsn, dbname=database)
@@ -97,18 +93,10 @@ def main():
                     "(tenant_id text PRIMARY KEY, schema_name text, active bool)"
                 )
                 owner.execute(
-                    sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
-                        sql.Identifier(database), sql.Identifier(role)
-                    )
+                    sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(sql.Identifier(database), sql.Identifier(role))
                 )
-                owner.execute(
-                    sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(role))
-                )
-                owner.execute(
-                    sql.SQL("GRANT SELECT ON public.pdb_celery_registry TO {}").format(
-                        sql.Identifier(role)
-                    )
-                )
+                owner.execute(sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(role)))
+                owner.execute(sql.SQL("GRANT SELECT ON public.pdb_celery_registry TO {}").format(sql.Identifier(role)))
                 for tenant in tenants:
                     SchemaManager(owner).create(tenant.schema)
                     owner.execute(
@@ -132,9 +120,7 @@ def main():
 
                 # Do not publish credentials in task args or headers. The child
                 # receives its dedicated runtime DSN through the environment.
-                environment = dict(
-                    os.environ, PARTITIONDB_CELERY_DSN=runtime_dsn, PARTITIONDB_CELERY_QUEUE=queue
-                )
+                environment = dict(os.environ, PARTITIONDB_CELERY_DSN=runtime_dsn, PARTITIONDB_CELERY_QUEUE=queue)
                 environment["PARTITIONDB_CELERY_RESULT_DIR"] = result_directory
                 environment.pop("PARTITIONDB_TEST_DSN", None)
                 environment.pop("PARTITIONDB_EXAMPLE_DSN", None)
@@ -187,13 +173,9 @@ def main():
                     assert value["role"] == role
                     pids.add(value["pid"])
                 assert len(pids) == 2, "Both prefork children must execute tenant work"
-                retried = tenant_signature(
-                    write, args=("retry",), kwargs={"retry": True}, tenant_id="0"
-                )
+                retried = tenant_signature(write, args=("retry",), kwargs={"retry": True}, tenant_id="0")
                 assert retried.apply_async().get(timeout=30)["retries"] == 1
-                failed = tenant_signature(
-                    write, args=("rollback",), kwargs={"fail": True}, tenant_id="0"
-                ).apply_async()
+                failed = tenant_signature(write, args=("rollback",), kwargs={"fail": True}, tenant_id="0").apply_async()
                 try:
                     failed.get(timeout=30)
                 except ValueError:
@@ -201,9 +183,7 @@ def main():
                 else:
                     raise AssertionError("Failed task did not report failure")
 
-                owner.execute(
-                    "UPDATE public.pdb_celery_registry SET active = false WHERE tenant_id = '1'"
-                )
+                owner.execute("UPDATE public.pdb_celery_registry SET active = false WHERE tenant_id = '1'")
                 for result in (
                     tenant_signature(write, args=("disabled",), tenant_id="1").apply_async(),
                     write.apply_async(args=("missing-header",)),

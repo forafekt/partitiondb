@@ -18,9 +18,7 @@ def load_inventory():
         tenants = tuple(import_string(path)())
     for tenant in tenants:
         if not isinstance(tenant, Tenant) or tenant.database not in connections:
-            raise ImproperlyConfigured(
-                "Inventory must return Tenant values with configured aliases"
-            )
+            raise ImproperlyConfigured("Inventory must return Tenant values with configured aliases")
         tenant_policy(tenant)
     return tenants
 
@@ -31,15 +29,9 @@ def operational_tenant(schema, database, tenant_id=None, tenant_type=None):
         tenant_policy(tenant)
         return tenant
     if settings.PARTITIONDB.get("TENANTS"):
-        matches = [
-            tenant
-            for tenant in load_inventory()
-            if (tenant.schema, tenant.database) == (schema, database)
-        ]
+        matches = [tenant for tenant in load_inventory() if (tenant.schema, tenant.database) == (schema, database)]
         if len(matches) != 1:
-            raise ImproperlyConfigured(
-                "Select an inventoried route or supply an explicit --tenant-id"
-            )
+            raise ImproperlyConfigured("Select an inventoried route or supply an explicit --tenant-id")
         tenant = matches[0]
         if tenant_type is not None and tenant.tenant_type != tenant_type:
             raise ImproperlyConfigured("Explicit tenant type does not match inventory")

@@ -7,22 +7,35 @@ from django.utils.module_loading import import_string
 
 from .tenant_types import type_policies
 
+FULL_PARTITIONDB_DEFAULT_CONFIG = {
+    "SHARED_HOSTS": [],
+    "SHARED_URLCONF": None,
+    "TENANT_APPS": [],
+    "TENANT_TYPES": {},
+    "SHARED_APPS": [],
+    "RESOLVER": None,
+    "TENANTS": None,
+    "PROVISIONER_FACTORY": None,
+    "REGISTRY_LIFECYCLE_FACTORY": None,
+    "OPERATION_OBSERVER": None,
+    "AUTHORIZE": None,
+    "TENANT_ADMIN_PERMISSIONS": None,
+    "TENANT_ADMIN_PATH": "/admin/",
+    "PROVISIONER": None,
+    "REGISTRY_LIFECYCLE": None,
+    "OPERATION_OBSERVER_FACTORY": None,
+}
+
 
 @register()
 def check_configuration(app_configs, **kwargs):
-    config = getattr(settings, "PARTITIONDB", {})
+    config = getattr(settings, "PARTITIONDB", FULL_PARTITIONDB_DEFAULT_CONFIG)
     if not isinstance(config, dict):
         return [Error("PARTITIONDB must be a dictionary", id="partitiondb.E008")]
     errors = []
     hosts = config.get("SHARED_HOSTS", [])
     if not isinstance(hosts, (list, tuple)) or any(
-        not isinstance(h, str)
-        or not h
-        or h != h.lower().rstrip(".")
-        or "/" in h
-        or ":" in h
-        or "*" in h
-        for h in hosts
+        not isinstance(h, str) or not h or h != h.lower().rstrip(".") or "/" in h or ":" in h or "*" in h for h in hosts
     ):
         errors.append(
             Error(
@@ -43,19 +56,12 @@ def check_configuration(app_configs, **kwargs):
                 )
             )
     shared, tenant = config.get("SHARED_APPS", []), config.get("TENANT_APPS", [])
-    if not all(
-        isinstance(v, (list, tuple)) and all(isinstance(x, str) for x in v)
-        for v in (shared, tenant)
-    ):
+    if not all(isinstance(v, (list, tuple)) and all(isinstance(x, str) for x in v) for v in (shared, tenant)):
         return [Error("App lists must be lists of app labels", id="partitiondb.E001")]
     if set(shared) & set(tenant):
         errors.append(Error("Shared and tenant apps overlap", id="partitiondb.E002"))
     installed = {app.label for app in apps.get_app_configs()} - {"partitiondb"}
-    if (
-        installed != (set(shared) | set(tenant))
-        or len(shared) != len(set(shared))
-        or len(tenant) != len(set(tenant))
-    ):
+    if installed != (set(shared) | set(tenant)) or len(shared) != len(set(shared)) or len(tenant) != len(set(tenant)):
         errors.append(
             Error(
                 "Classify every installed app label exactly once",
@@ -69,9 +75,7 @@ def check_configuration(app_configs, **kwargs):
         errors.append(Error("Install TenantRouter in DATABASE_ROUTERS", id="partitiondb.E004"))
     middleware = list(getattr(settings, "MIDDLEWARE", []))
     host_guard = "partitiondb.adapters.django.hosts.RegistryHostMiddleware"
-    if host_guard in middleware and (
-        middleware[0] != host_guard or list(settings.ALLOWED_HOSTS) != ["*"]
-    ):
+    if host_guard in middleware and (middleware[0] != host_guard or list(settings.ALLOWED_HOSTS) != ["*"]):
         errors.append(
             Error(
                 "Install RegistryHostMiddleware first with ALLOWED_HOSTS=['*']",
@@ -90,18 +94,14 @@ def check_configuration(app_configs, **kwargs):
         if not callable(resolved):
             raise ImportError("Resolver must be callable")
     except (ImportError, AttributeError, ValueError):
-        errors.append(
-            Error(f"{resolver_name} must name an importable callable", id="partitiondb.E009")
-        )
+        errors.append(Error(f"{resolver_name} must name an importable callable", id="partitiondb.E009"))
     authorize = config.get("AUTHORIZE")
     if authorize is not None:
         try:
             if not isinstance(authorize, str) or not callable(import_string(authorize)):
                 raise ImportError("Invalid authorization callback")
         except (ImportError, AttributeError, ValueError):
-            errors.append(
-                Error("AUTHORIZE must name an importable callable", id="partitiondb.E010")
-            )
+            errors.append(Error("AUTHORIZE must name an importable callable", id="partitiondb.E010"))
     identity = "partitiondb.adapters.django.identity.SharedIdentityMiddleware"
     if identity in middleware:
         expected = [
@@ -143,8 +143,7 @@ def check_configuration(app_configs, **kwargs):
         except (ImportError, AttributeError, TypeError, ValueError):
             errors.append(
                 Error(
-                    "Tenant admin requires a permissions callable, "
-                    "SharedIdentityMiddleware and AUTHORIZE",
+                    "Tenant admin requires a permissions callable, SharedIdentityMiddleware and AUTHORIZE",
                     id="partitiondb.E024",
                 )
             )
@@ -184,11 +183,7 @@ def check_configuration(app_configs, **kwargs):
                 )
             )
         if settings.SESSION_COOKIE_DOMAIN is not None:
-            errors.append(
-                Error(
-                    "Tenant host login requires SESSION_COOKIE_DOMAIN=None", id="partitiondb.E028"
-                )
-            )
+            errors.append(Error("Tenant host login requires SESSION_COOKIE_DOMAIN=None", id="partitiondb.E028"))
 
     def contains_tenant_loader(value):
         if isinstance(value, str):
@@ -199,26 +194,16 @@ def check_configuration(app_configs, **kwargs):
         if not isinstance(value, (list, tuple)):
             return False
         return (
-            len(value) == 2
-            and value[0] == "django.template.loaders.cached.Loader"
-            and contains_tenant_loader(value[1])
+            len(value) == 2 and value[0] == "django.template.loaders.cached.Loader" and contains_tenant_loader(value[1])
         ) or any(unsafe_cache(v) for v in value)
 
-    if any(
-        unsafe_cache(engine.get("OPTIONS", {}).get("loaders", [])) for engine in settings.TEMPLATES
-    ):
-        errors.append(
-            Error("Use the tenant-aware cached loader for tenant templates", id="partitiondb.E014")
-        )
+    if any(unsafe_cache(engine.get("OPTIONS", {}).get("loaders", [])) for engine in settings.TEMPLATES):
+        errors.append(Error("Use the tenant-aware cached loader for tenant templates", id="partitiondb.E014"))
     for alias, db in settings.DATABASES.items():
         if db["ENGINE"] != "partitiondb.adapters.django.backend":
-            errors.append(
-                Error(f"Database {alias} must use the PartitionDB backend", id="partitiondb.E005")
-            )
+            errors.append(Error(f"Database {alias} must use the PartitionDB backend", id="partitiondb.E005"))
         if db.get("ATOMIC_REQUESTS"):
-            errors.append(
-                Error("ATOMIC_REQUESTS conflicts with atomic_tenant", id="partitiondb.E006")
-            )
+            errors.append(Error("ATOMIC_REQUESTS conflicts with atomic_tenant", id="partitiondb.E006"))
         if db.get("OPTIONS", {}).get("pool"):
             errors.append(Error("Driver pooling is unsupported", id="partitiondb.E007"))
     if "TENANT_TYPES" in config:
@@ -232,7 +217,5 @@ def check_configuration(app_configs, **kwargs):
                     try:
                         _ = get_resolver(policy.urlconf).url_patterns
                     except (ImportError, AttributeError, ImproperlyConfigured):
-                        errors.append(
-                            Error(f"Invalid URLCONF for tenant type {name}", id="partitiondb.E018")
-                        )
+                        errors.append(Error(f"Invalid URLCONF for tenant type {name}", id="partitiondb.E018"))
     return errors

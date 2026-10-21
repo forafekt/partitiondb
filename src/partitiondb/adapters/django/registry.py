@@ -57,8 +57,7 @@ class DjangoRegistry:
         """Return an eager stable snapshot of currently active routing identities."""
         self._shared()
         return tuple(
-            row.as_tenant()
-            for row in self.model._base_manager.using("default").filter(active=True).order_by("pk")
+            row.as_tenant() for row in self.model._base_manager.using("default").filter(active=True).order_by("pk")
         )
 
     def resolve_host(self, hostname):

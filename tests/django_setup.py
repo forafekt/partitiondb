@@ -1,6 +1,12 @@
 import os
+import sys
+from pathlib import Path
 
 from django.conf import settings
+
+_PROJECT = str(Path(__file__).resolve().parent / "django_project")
+if _PROJECT not in sys.path:
+    sys.path.insert(0, _PROJECT)
 
 
 def configure(*, shared_auth=False, admin=False, sqlite_name=None):
@@ -25,17 +31,16 @@ def configure(*, shared_auth=False, admin=False, sqlite_name=None):
     settings.configure(
         SECRET_KEY="test-only",
         ALLOWED_HOSTS=["alpha.test", "unknown.test"],
-        INSTALLED_APPS=["partitiondb.adapters.django", "tests.sharedapp", "tests.tenantapp"]
-        + (
-            ["django.contrib.auth", "django.contrib.contenttypes", "django.contrib.sessions"]
-            if shared_auth
-            else []
-        )
-        + (
-            ["django.contrib.admin", "django.contrib.messages", "django.contrib.staticfiles"]
-            if admin
-            else []
-        ),
+        INSTALLED_APPS=[
+            "partitiondb.adapters.django.apps.PartitionDBConfig",
+            "apps.organizations.apps.OrganizationsConfig",
+            "apps.workspaces.apps.WorkspacesConfig",
+            "django.contrib.auth",
+            "django.contrib.contenttypes",
+            "apps.accounts.apps.AccountsConfig",
+        ]
+        + (["django.contrib.sessions"] if shared_auth else [])
+        + (["django.contrib.admin", "django.contrib.messages", "django.contrib.staticfiles"] if admin else []),
         ROOT_URLCONF="tests.admin_urls",
         MIDDLEWARE=(
             [
@@ -67,12 +72,13 @@ def configure(*, shared_auth=False, admin=False, sqlite_name=None):
         DATABASES={"default": database},
         DATABASE_ROUTERS=["partitiondb.adapters.django.router.TenantRouter"],
         PARTITIONDB={
-            "SHARED_APPS": ["sharedapp"]
-            + (["auth", "contenttypes", "sessions"] if shared_auth else [])
+            "SHARED_APPS": ["organizations", "accounts", "auth", "contenttypes"]
+            + (["sessions"] if shared_auth else [])
             + (["admin", "messages", "staticfiles"] if admin else []),
-            "TENANT_APPS": ["tenantapp"],
+            "TENANT_APPS": ["workspaces"],
             "RESOLVER": "tests.test_django.resolve",
         },
+        AUTH_USER_MODEL="accounts.User",
         DEFAULT_AUTO_FIELD="django.db.models.AutoField",
     )
     import django

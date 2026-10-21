@@ -103,9 +103,7 @@ def test_static_sources_collection_paths_and_urls_are_scoped(tmp_path):
         storage = TenantStaticFilesStorage(location=destination, base_url="/static/")
         for tenant in (A, B):
             with tenant_scope(tenant):
-                assert finder.find("css/site.css") == str(
-                    source / storage_prefix(tenant) / "css/site.css"
-                )
+                assert finder.find("css/site.css") == str(source / storage_prefix(tenant) / "css/site.css")
                 assert len(finder.find("css/site.css", all=True)) == 1
                 assert [name for name, _ in finder.list([])] == ["css/site.css"]
                 saved = storage.save("css/site.css", ContentFile(tenant.id.encode()))
@@ -210,8 +208,6 @@ def test_static_finder_accepts_safe_string_names_without_weakening_validation(tm
     put(tmp_path, A, "css/site.css", "one")
     with override_settings(PARTITIONDB={"STATIC_ROOTS": [tmp_path]}), tenant_scope(A):
         finder = TenantStaticFinder()
-        assert finder.find(SafeString("css/site.css")) == str(
-            tmp_path / storage_prefix(A) / "css/site.css"
-        )
+        assert finder.find(SafeString("css/site.css")) == str(tmp_path / storage_prefix(A) / "css/site.css")
         with pytest.raises(SuspiciousFileOperation):
             finder.find(SafeString("../other.css"))

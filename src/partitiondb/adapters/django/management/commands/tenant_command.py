@@ -13,9 +13,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("schema")
-        parser.add_argument(
-            "--tenant-type", help="Trusted tenant type; inferred from inventory when possible"
-        )
+        parser.add_argument("--tenant-type", help="Trusted tenant type; inferred from inventory when possible")
         parser.add_argument("--database", default="default")
         parser.add_argument("--tenant-id")
         parser.add_argument("command")
@@ -35,9 +33,7 @@ class Command(BaseCommand):
             if any(value in {"--link", "-l"} for value in options["command_args"]):
                 raise CommandError("Tenant static collection requires copied files, not --link")
             if not options.get("tenant_id") and not settings.PARTITIONDB.get("TENANTS"):
-                raise CommandError(
-                    "Static collection requires a stable --tenant-id or TENANTS inventory"
-                )
+                raise CommandError("Static collection requires a stable --tenant-id or TENANTS inventory")
         tenant = operational_tenant(
             options["schema"],
             options["database"],

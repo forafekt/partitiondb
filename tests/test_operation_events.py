@@ -64,9 +64,7 @@ def test_django_operation_signal_bridge_is_explicit():
 
     operation_event.connect(receiver, weak=False)
     try:
-        with observe_operation(
-            OperationEvent("schema_create", "started", "alpha"), publish_operation_event
-        ):
+        with observe_operation(OperationEvent("schema_create", "started", "alpha"), publish_operation_event):
             pass
     finally:
         operation_event.disconnect(receiver)
@@ -93,9 +91,7 @@ def test_migration_events_include_mode_and_run_after_connection_cleanup(fail):
         override_settings(PARTITIONDB=config),
         patch(module + ".connections", {"default": connection}),
         patch(module + ".import_string", return_value=observer),
-        patch(
-            module + ".call_command", side_effect=RuntimeError("migration failed") if fail else None
-        ),
+        patch(module + ".call_command", side_effect=RuntimeError("migration failed") if fail else None),
     ):
         if fail:
             with pytest.raises(RuntimeError):

@@ -35,9 +35,7 @@ def notify(observer: Observer | None, event: OperationEvent) -> None:
         try:
             observer(event)
         except Exception as error:
-            logging.getLogger(__name__).warning(
-                "Operation observer failed: %s", type(error).__name__
-            )
+            logging.getLogger(__name__).warning("Operation observer failed: %s", type(error).__name__)
 
 
 @contextmanager

@@ -22,10 +22,7 @@ class RegistryHostMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         middleware = list(settings.MIDDLEWARE)
-        if (
-            not middleware
-            or middleware[0] != "partitiondb.adapters.django.hosts.RegistryHostMiddleware"
-        ):
+        if not middleware or middleware[0] != "partitiondb.adapters.django.hosts.RegistryHostMiddleware":
             raise ImproperlyConfigured("RegistryHostMiddleware must be the first middleware")
         if list(settings.ALLOWED_HOSTS) != ["*"]:
             raise ImproperlyConfigured("RegistryHostMiddleware requires ALLOWED_HOSTS=['*']")

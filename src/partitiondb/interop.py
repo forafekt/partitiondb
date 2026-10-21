@@ -4,6 +4,7 @@ This is a serialization contract, not an authorization credential.
 """
 
 from typing import TypedDict
+
 from .core import Tenant
 
 CONTRACT_VERSION = "1.0"

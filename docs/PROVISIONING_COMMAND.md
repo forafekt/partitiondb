@@ -9,7 +9,7 @@ PARTITIONDB["PROVISIONER_FACTORY"] = "myapp.provisioning.provisioner_factory"
 The factory takes a stable tenant ID and yields a `Provisioner`. It must resolve
 trusted registry metadata (including inactive tenants), verify the exact route
 against the durable checkpoint record, and own dedicated control-plane connection
-cleanup. See `examples/django_demo/registry/provisioning.py` for a runnable factory.
+cleanup. See `tests/django_project/registry/provisioning.py` for a runnable factory.
 Factory entry, callbacks and cleanup run outside tenant context. Callbacks must
 establish their own database boundaries. Run these administrative commands with
 provisioning credentials, never inside a tenant request or tenant_command wrapper.

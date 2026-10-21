@@ -12,13 +12,14 @@ from partitiondb import Tenant, current_tenant, tenant_scope
 from tests.django_setup import configure
 
 configure()
+from apps.organizations.models import Organization  # noqa: E402
+from apps.workspaces.models import Workspace  # noqa: E402
+
 from partitiondb.adapters.django.admin import (  # noqa: E402
     ControlPlaneAdminSite,
     ProvisioningTenantAdmin,
 )
 from partitiondb.adapters.django.middleware import TenantMiddleware  # noqa: E402
-from tests.sharedapp.models import TenantRecord  # noqa: E402
-from tests.tenantapp.models import Item  # noqa: E402
 
 
 def configuration(**extra):
@@ -72,10 +73,10 @@ def test_shared_streaming_is_rejected():
 def test_shared_admin_rejects_tenant_registration_and_lists_disabled_models():
     site = ControlPlaneAdminSite()
     with pytest.raises(ImproperlyConfigured):
-        site.register(Item)
+        site.register(Workspace)
     request = RequestFactory().get("/admin/")
     request.user = SimpleNamespace(is_superuser=True, is_active=True, is_staff=True)
-    tenant_app = next(app for app in site.get_app_list(request) if app["app_label"] == "tenantapp")
+    tenant_app = next(app for app in site.get_app_list(request) if app["app_label"] == "workspaces")
     assert "disabled" in tenant_app["name"]
     assert all(model["admin_url"] is None for model in tenant_app["models"])
     with tenant_scope(Tenant("one", "alpha")):
@@ -94,7 +95,7 @@ def test_provisioning_form_failure_is_retained_and_permission_checked():
 
     site = ControlPlaneAdminSite()
     site.each_context = lambda request: {}
-    model_admin = ModelAdmin(TenantRecord, site)
+    model_admin = ModelAdmin(Organization, site)
     request = RequestFactory().post("/admin/add/", {"name": "Example"})
     request.user = SimpleNamespace(is_superuser=True, has_perm=lambda permission: True)
     response = model_admin.add_view(request)
@@ -139,10 +140,10 @@ def test_provisioning_success_calls_service_and_audits(monkeypatch):
 
         def provision_tenant(self, request, cleaned_data):
             assert cleaned_data == {"name": "Example"}
-            return TenantRecord(pk=123, schema_name="example")
+            return Organization(pk=123, schema_name="example")
 
     site = ControlPlaneAdminSite(name="registry")
-    model_admin = ModelAdmin(TenantRecord, site)
+    model_admin = ModelAdmin(Organization, site)
     model_admin.log_addition = Mock()
     model_admin.message_user = Mock()
     request = RequestFactory().post("/admin/add/", {"name": "Example"})

@@ -53,9 +53,7 @@ def tenant_job(repository_factory):
     return decorate
 
 
-def tenant_signature(
-    task, args=(), kwargs=None, *, tenant_id=None, headers=None, immutable=False, **options
-):
+def tenant_signature(task, args=(), kwargs=None, *, tenant_id=None, headers=None, immutable=False, **options):
     """Build an explicitly tenant-bound signature without mutating caller headers.
 
     Outside tenant scope an explicit ID is required. Inside scope an explicit
@@ -74,6 +72,4 @@ def tenant_signature(
     if TENANT_HEADER in outgoing and outgoing[TENANT_HEADER] != tenant_id:
         raise ValueError("Conflicting task tenant header")
     outgoing[TENANT_HEADER] = tenant_id
-    return task.signature(
-        args=args, kwargs=kwargs, immutable=immutable, headers=outgoing, **options
-    )
+    return task.signature(args=args, kwargs=kwargs, immutable=immutable, headers=outgoing, **options)

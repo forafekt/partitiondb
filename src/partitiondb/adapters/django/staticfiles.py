@@ -29,10 +29,7 @@ class TenantStaticFinder(BaseFinder):
         tenant = current_tenant(required=False)
         if tenant is None:
             return []
-        return [
-            tenant_path(root, tenant)
-            for root in asset_roots(settings.PARTITIONDB.get("STATIC_ROOTS", []))
-        ]
+        return [tenant_path(root, tenant) for root in asset_roots(settings.PARTITIONDB.get("STATIC_ROOTS", []))]
 
     def find(self, path, find_all=False, **kwargs):
         find_all = kwargs.pop("all", find_all)  # Django 5.2 and 6.0 keyword compatibility.
@@ -56,9 +53,7 @@ class TenantStaticFinder(BaseFinder):
                 continue
             storage = FileSystemStorage(location=directory)
             for current, dirs, files in os.walk(directory, followlinks=False):
-                dirs[:] = [
-                    name for name in dirs if not any(fnmatch(name, p) for p in ignore_patterns)
-                ]
+                dirs[:] = [name for name in dirs if not any(fnmatch(name, p) for p in ignore_patterns)]
                 for name in files:
                     relative = (Path(current) / name).relative_to(directory).as_posix()
                     if any(fnmatch(name, p) or fnmatch(relative, p) for p in ignore_patterns):

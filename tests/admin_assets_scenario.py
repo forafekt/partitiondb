@@ -10,6 +10,7 @@ from tests.django_setup import configure
 
 def main(sqlite_name=None):
     configure(admin=True, sqlite_name=sqlite_name)
+    from apps.organizations.models import Domain, Organization
     from django.contrib.auth import get_user_model
     from django.core.management import call_command
     from django.db import connections
@@ -19,7 +20,6 @@ def main(sqlite_name=None):
     from partitiondb import Tenant, tenant_scope
     from partitiondb.keys import storage_prefix
     from tests.admin_urls import site
-    from tests.sharedapp.models import DomainRecord, TenantRecord
 
     assert not site.check(None)
 
@@ -30,39 +30,51 @@ def main(sqlite_name=None):
     try:
         client = Client(HTTP_HOST="alpha.test")
         client.force_login(user)
-        assert client.get(reverse("registry:sharedapp_tenantrecord_changelist")).status_code == 200
+        assert client.get(reverse("registry:organizations_organization_changelist")).status_code == 200
         dashboard = client.get(reverse("registry:index"))
         assert dashboard.status_code == 200
         assert b"Shared control plane" in dashboard.content
         assert b"Tenant (disabled in shared admin)" in dashboard.content
-        assert b"/admin/tenantapp/item/" not in dashboard.content
+        assert b"/admin/workspaces/workspace/" not in dashboard.content
         schema = "admin_" + uuid.uuid4().hex
         response = client.post(
-            reverse("registry:sharedapp_tenantrecord_add"),
+            reverse("registry:organizations_organization_add"),
             {
+                "name": "Admin test organization",
                 "schema_name": schema,
                 "database_alias": "default",
                 "_save": "Save",
             },
         )
         assert response.status_code == 302, response.content[:1000]
-        record = TenantRecord.objects.get(schema_name=schema)
+        record = Organization.objects.get(schema_name=schema)
         records.append(record.pk)
         assert not record.active
         response = client.post(
-            reverse("registry:sharedapp_tenantrecord_change", args=[record.pk]),
+            reverse("registry:organizations_organization_change", args=[record.pk]),
             {
+                "name": record.name,
                 "schema_name": "forbidden_change",
                 "database_alias": "default",
                 "active": "on",
                 "_save": "Save",
             },
         )
+        print("Status:", response.status_code)
+        print("URL:", response.request["PATH_INFO"])
+
+        if response.context:
+            adminform = response.context.get("adminform")
+
+            if adminform:
+                print("Form errors:", adminform.form.errors.as_json())
+                print("Non-field errors:", list(adminform.form.non_field_errors()))
+                print("Submitted data:", adminform.form.data)
         assert response.status_code == 302
         record.refresh_from_db()
         assert record.schema_name == schema and not record.active
         response = client.post(
-            reverse("registry:sharedapp_domainrecord_add"),
+            reverse("registry:organizations_domain_add"),
             {
                 "hostname": username.replace("_", "-").upper() + ".EXAMPLE",
                 "tenant": record.pk,
@@ -71,10 +83,7 @@ def main(sqlite_name=None):
             },
         )
         assert response.status_code == 302, response.content[:1000]
-        assert (
-            DomainRecord.objects.get(tenant=record).hostname
-            == username.replace("_", "-") + ".example"
-        )
+        assert Domain.objects.get(tenant=record).hostname == username.replace("_", "-") + ".example"
         if connections["default"].vendor == "postgresql":
             with connections["default"].cursor() as cursor:
                 cursor.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (schema,))
@@ -100,9 +109,7 @@ def main(sqlite_name=None):
                 ],
                 STORAGES={
                     "staticfiles": {
-                        "BACKEND": (
-                            "partitiondb.adapters.django.staticfiles.TenantStaticFilesStorage"
-                        ),
+                        "BACKEND": ("partitiondb.adapters.django.staticfiles.TenantStaticFilesStorage"),
                     }
                 },
             ):
@@ -114,13 +121,11 @@ def main(sqlite_name=None):
                 with tenant_scope(tenants[0]):
                     call_command("collectstatic", clear=True, interactive=False, verbosity=0)
                 for tenant in tenants:
-                    assert (
-                        collected / storage_prefix(tenant) / "css/site.css"
-                    ).read_text() == tenant.id
+                    assert (collected / storage_prefix(tenant) / "css/site.css").read_text() == tenant.id
         print("CONTROL-PLANE ADMIN AND COLLECTSTATIC PASSED", flush=True)
     finally:
-        DomainRecord.objects.filter(tenant_id__in=records).delete()
-        TenantRecord.objects.filter(pk__in=records).delete()
+        Domain.objects.filter(tenant_id__in=records).delete()
+        Organization.objects.filter(pk__in=records).delete()
         user.delete()
         connections.close_all()
 

@@ -55,9 +55,7 @@ async def async_transaction(
     with tenant_scope(tenant):
         async with conn.transaction():
             async with conn.cursor() as cursor:
-                await cursor.execute(
-                    "SELECT 1 FROM pg_namespace WHERE nspname = %s", (tenant.schema,)
-                )
+                await cursor.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (tenant.schema,))
                 if await cursor.fetchone() is None:
                     raise LookupError(f"Tenant schema does not exist: {tenant.schema}")
                 await cursor.execute(
@@ -124,7 +122,5 @@ class SchemaManager:
             self._locked(schema, target) as cursor,
         ):
             cursor.execute(
-                sql.SQL("ALTER SCHEMA {} RENAME TO {}").format(
-                    sql.Identifier(schema), sql.Identifier(target)
-                )
+                sql.SQL("ALTER SCHEMA {} RENAME TO {}").format(sql.Identifier(schema), sql.Identifier(target))
             )

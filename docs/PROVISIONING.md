@@ -74,5 +74,5 @@ inventories across a fleet, timeouts, or distributed transaction coordination.
 Restartability depends on the migration engine and application data migrations;
 non-atomic migrations and external side effects require their own reconciliation.
 
-A runnable example is `examples/plain_python/recoverable.py`. See
+A runnable example is `tests/django_project/recoverable.py`. See
 [release validation](RELEASE_VALIDATION.md) for the tested deployment scope.

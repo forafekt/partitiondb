@@ -105,9 +105,7 @@ class TenantModelAdmin(admin.ModelAdmin):
             has_change_permission=self.has_change_permission(request, obj),
             has_delete_permission=self.has_delete_permission(request, obj),
             has_editable_inline_admin_formsets=any(
-                inline.has_add_permission
-                or inline.has_change_permission
-                or inline.has_delete_permission
+                inline.has_add_permission or inline.has_change_permission or inline.has_delete_permission
                 for inline in inlines
             ),
             has_file_field=context["adminform"].form.is_multipart()
@@ -126,9 +124,7 @@ class TenantModelAdmin(admin.ModelAdmin):
             source_model_var="_source_model",
         )
         request.current_app = self.admin_site.name
-        template = (
-            self.add_form_template if add and self.add_form_template else self.change_form_template
-        )
+        template = self.add_form_template if add and self.add_form_template else self.change_form_template
         return TemplateResponse(request, template or "admin/change_form.html", context)
 
     def _log(self, request, obj, action, message):
@@ -164,9 +160,7 @@ class TenantModelAdmin(admin.ModelAdmin):
         if obj is None or not self.has_view_or_change_permission(request, obj):
             raise PermissionDenied
         request.current_app = self.admin_site.name
-        events = audit_model().objects.filter(
-            model_label=self.opts.label_lower, object_id=str(obj.pk)
-        )[:200]
+        events = audit_model().objects.filter(model_label=self.opts.label_lower, object_id=str(obj.pk))[:200]
         return TemplateResponse(
             request,
             "partitiondb/admin/tenant_history.html",
@@ -190,9 +184,7 @@ class TenantAdminSite(admin.AdminSite):
     index_template = "partitiondb/admin/tenant_index.html"
 
     def register(self, model_or_iterable, admin_class=None, **options):
-        models = (
-            [model_or_iterable] if hasattr(model_or_iterable, "_meta") else list(model_or_iterable)
-        )
+        models = [model_or_iterable] if hasattr(model_or_iterable, "_meta") else list(model_or_iterable)
         tenant_apps = set(settings.PARTITIONDB["TENANT_APPS"])
         if any(model._meta.app_label not in tenant_apps for model in models):
             raise ImproperlyConfigured("TenantAdminSite accepts only tenant models")
@@ -220,9 +212,7 @@ class TenantAdminSite(admin.AdminSite):
                 raise PermissionDenied("Tenant staff membership and permissions are required")
             principal = request.principal
             original_user = request.user
-            request.user = TenantAdminUser(
-                principal.id, principal.username, request.tenant_admin_permissions
-            )
+            request.user = TenantAdminUser(principal.id, principal.username, request.tenant_admin_permissions)
             try:
                 response = view(request, *args, **kwargs)
                 if hasattr(response, "render") and not response.is_rendered:
@@ -249,19 +239,14 @@ class TenantAdminSite(admin.AdminSite):
     def get_app_list(self, request, app_label=None):
         allowed = app_sets()[1]
         result = super().get_app_list(request, app_label)
-        return [
-            dict(app, name=f"{app['name']} — Tenant")
-            for app in result
-            if app["app_label"] in allowed
-        ]
+        return [dict(app, name=f"{app['name']} — Tenant") for app in result if app["app_label"] in allowed]
 
     def get_urls(self):
         # Password changes use shared account endpoints, not tenant views.
         return [
             pattern
             for pattern in super().get_urls()
-            if getattr(pattern, "name", None)
-            not in {"password_change", "password_change_done", "view_on_site"}
+            if getattr(pattern, "name", None) not in {"password_change", "password_change_done", "view_on_site"}
         ]
 
     def each_context(self, request):
@@ -277,9 +262,7 @@ class TenantAdminSite(admin.AdminSite):
             raise ImproperlyConfigured("Set an absolute trusted TENANT_ADMIN_LOGIN_URL")
         # The shared login handler must validate next against trusted tenant hosts.
         separator = "&" if "?" in url else "?"
-        return HttpResponseRedirect(
-            url + separator + urlencode({"next": request.build_absolute_uri("../")})
-        )
+        return HttpResponseRedirect(url + separator + urlencode({"next": request.build_absolute_uri("../")}))
 
     def logout(self, request, extra_context=None):
         raise PermissionDenied("Sign out through the shared account endpoint")

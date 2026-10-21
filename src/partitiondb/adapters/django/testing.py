@@ -15,9 +15,7 @@ from .tenant_types import tenant_policy
 
 
 @contextmanager
-def temporary_tenant(
-    admin_connection, *, tenant_id=None, database="default", migrate=True, tenant_type=None
-):
+def temporary_tenant(admin_connection, *, tenant_id=None, database="default", migrate=True, tenant_type=None):
     """Create and drop only a new random test schema, including on test failure.
 
     admin_connection is an exclusively leased provisioning connection. Django's

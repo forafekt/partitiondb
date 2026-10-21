@@ -4,7 +4,7 @@ Explicit PostgreSQL tenant boundaries with a dependency-free Python core and
 optional Django and Celery adapters. Licensed under [MIT](LICENSE), with
 [upstream notices](THIRD_PARTY_NOTICES).
 
-Version 0.2.0a28 is a prerelease and a breaking replacement for the original
+Version 0.2.0a35 is a prerelease and a breaking replacement for the original
 Citivenue extraction. It separates routing identity from database transactions,
 framework integration and application permissions.
 
@@ -70,10 +70,15 @@ fresh admissions through cooperating lookups; it does not revoke running work.
 | Migrations and operations | [Fleet](docs/FLEET.md), [events](docs/OPERATION_EVENTS.md), [operating contract](docs/OPERATIONS.md) |
 | Optional integrations | [Celery](docs/CELERY.md), [tenant types](docs/TENANT_TYPES.md) |
 | Assets and tests | [Storage/testing](docs/STORAGE_TESTING.md), [templates/static/admin/routing](docs/ASSETS_ADMIN_ROUTING.md) |
-| Examples and upgrades | [Examples](examples/README.md), [migration guide](docs/MIGRATION.md) |
+| Examples and upgrades | [Django test project](tests/django_project/), [migration guide](docs/MIGRATION.md) |
 | Release checks | [Validation](docs/RELEASE_VALIDATION.md) |
 
 ## Development
+
+Historical implementation checkpoints are retained in
+[`docs/development/checkpoints/`](docs/development/checkpoints/).
+These are development records, not release guarantees.
+
 
 ```sh
 python -m pip install '.[django,dev]'

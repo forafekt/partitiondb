@@ -20,11 +20,7 @@ class Command(BaseCommand):
                 tenant.schema,
                 f"--database={tenant.database}",
                 f"--tenant-id={tenant.id}",
-                *(
-                    [f"--tenant-type={tenant.tenant_type}"]
-                    if tenant.tenant_type is not None
-                    else []
-                ),
+                *([f"--tenant-type={tenant.tenant_type}"] if tenant.tenant_type is not None else []),
                 options["command"],
                 *options["command_args"],
             ]

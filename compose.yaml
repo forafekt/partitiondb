@@ -28,6 +28,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command:
       - sh
       - -c
@@ -57,6 +59,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command:
       - sh
       - -c
@@ -74,6 +78,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command:
       - sh
       - -c
@@ -92,7 +98,39 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command:
       - sh
       - -c
       - pip install "$${PARTITIONDB_PACKAGE}[postgres]" && python scripts/production_checks.py
+  
+
+  migrate:
+    image: python:3.12-slim
+    init: true
+    working_dir: /package
+
+    volumes:
+      - .:/package:ro
+
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      POSTGRES_DB: partitiondb
+      POSTGRES_USER: partitiondb
+      POSTGRES_PASSWORD: test-only
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONPATH: /package/tests/django_project
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    command:
+      - sh
+      - -ec
+      - |
+        pip install -e ".[django,postgres]"
+        python tests/django_project/manage.py migrate --noinput

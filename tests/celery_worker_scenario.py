@@ -49,23 +49,15 @@ def main():
     task_postrun.connect(after, weak=False)
     try:
         with start_worker(app, pool="solo", perform_ping_check=False, shutdown_timeout=15):
-            assert (
-                tenant_signature(worker_task, tenant_id="one").apply_async().get(timeout=10)
-                == "alpha"
-            )
-            failed = tenant_signature(
-                worker_task, kwargs={"fail": True}, tenant_id="one"
-            ).apply_async()
+            assert tenant_signature(worker_task, tenant_id="one").apply_async().get(timeout=10) == "alpha"
+            failed = tenant_signature(worker_task, kwargs={"fail": True}, tenant_id="one").apply_async()
             try:
                 failed.get(timeout=10)
             except ValueError:
                 pass
             else:
                 raise AssertionError("Expected worker failure was lost")
-            assert (
-                tenant_signature(worker_task, tenant_id="two").apply_async().get(timeout=10)
-                == "beta"
-            )
+            assert tenant_signature(worker_task, tenant_id="two").apply_async().get(timeout=10) == "beta"
     finally:
         task_postrun.disconnect(after)
     assert completed == [None, None, None]

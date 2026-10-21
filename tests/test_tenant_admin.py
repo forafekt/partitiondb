@@ -14,10 +14,10 @@ def test_snapshot_does_not_inherit_global_superuser_permissions():
     configure()
     from partitiondb.adapters.django.tenant_admin import TenantAdminUser
 
-    user = TenantAdminUser("1", "operator", frozenset({"tenantapp.view_item"}))
+    user = TenantAdminUser("1", "operator", frozenset({"workspaces.view_workspace"}))
     assert not user.is_superuser
-    assert user.has_perm("tenantapp.view_item")
-    assert not user.has_perm("tenantapp.delete_item")
+    assert user.has_perm("workspaces.view_workspace")
+    assert not user.has_perm("workspaces.delete_workspace")
     assert not user.has_perm("auth.change_user")
 
 
@@ -44,6 +44,4 @@ def test_postgres_tenant_admin_crud_and_audit():
                 timeout=90,
             )
         finally:
-            connection.execute(
-                sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name))
-            )
+            connection.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))

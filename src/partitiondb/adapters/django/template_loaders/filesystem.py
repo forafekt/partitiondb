@@ -23,9 +23,7 @@ class TenantTemplate(Template):
 class Loader(FilesystemLoader):
     def _check_cache(self):
         def contains(loader):
-            return loader is self or any(
-                contains(child) for child in getattr(loader, "loaders", [])
-            )
+            return loader is self or any(contains(child) for child in getattr(loader, "loaders", []))
 
         def visit(loader):
             if (
@@ -44,9 +42,7 @@ class Loader(FilesystemLoader):
         tenant = current_tenant(required=False)
         if tenant is None:
             return []
-        roots = (
-            self.dirs if self.dirs is not None else settings.PARTITIONDB.get("TEMPLATE_ROOTS", [])
-        )
+        roots = self.dirs if self.dirs is not None else settings.PARTITIONDB.get("TEMPLATE_ROOTS", [])
         return [tenant_path(root, tenant) for root in asset_roots(roots)]
 
     def get_template_sources(self, template_name):
@@ -55,9 +51,7 @@ class Loader(FilesystemLoader):
         tenant = current_tenant(required=False)
         if tenant is None:
             return
-        roots = (
-            self.dirs if self.dirs is not None else settings.PARTITIONDB.get("TEMPLATE_ROOTS", [])
-        )
+        roots = self.dirs if self.dirs is not None else settings.PARTITIONDB.get("TEMPLATE_ROOTS", [])
         for root in asset_roots(roots):
             path = tenant_path(root, tenant, template_name)
             yield Origin(str(path), template_name=template_name, loader=self)
@@ -73,7 +67,5 @@ class Loader(FilesystemLoader):
             except TemplateDoesNotExist:
                 tried.append((origin, "Source does not exist"))
                 continue
-            return TenantTemplate(
-                contents, origin, template_name, self.engine, tenant=current_tenant()
-            )
+            return TenantTemplate(contents, origin, template_name, self.engine, tenant=current_tenant())
         raise TemplateDoesNotExist(template_name, tried=tried)

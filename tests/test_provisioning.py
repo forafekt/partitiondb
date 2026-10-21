@@ -64,9 +64,7 @@ def test_creation_failure_needs_explicit_reconciliation():
     with pytest.raises(AmbiguousCreation):
         provisioner.run(TENANT.id)
     with pytest.raises(ValueError):
-        provisioner.reconcile_creation(
-            TENANT.id, confirm=Tenant("other", "alpha"), schema_created=True
-        )
+        provisioner.reconcile_creation(TENANT.id, confirm=Tenant("other", "alpha"), schema_created=True)
     provisioner.reconcile_creation(TENANT.id, confirm=TENANT, schema_created=True)
     provisioner.run(TENANT.id)
     assert events == ["create", "migrate", "verify"]
@@ -203,9 +201,7 @@ def test_failed_provisioning_callback_emits_sanitized_failure():
     def fail(tenant):
         raise ValueError("private failure")
 
-    provisioner = Provisioner(
-        store, create=fail, migrate=fail, verify=fail, observer=received.append
-    )
+    provisioner = Provisioner(store, create=fail, migrate=fail, verify=fail, observer=received.append)
     with pytest.raises(ValueError):
         provisioner.run(TENANT.id)
     event = received[-1]

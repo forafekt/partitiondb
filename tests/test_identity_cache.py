@@ -34,9 +34,7 @@ def test_identity_snapshot():
 
 def test_anonymous_inactive_and_misordered_identity():
     for authenticated, active in [(False, True), (True, False)]:
-        request = SimpleNamespace(
-            user=SimpleNamespace(is_authenticated=authenticated, is_active=active)
-        )
+        request = SimpleNamespace(user=SimpleNamespace(is_authenticated=authenticated, is_active=active))
         SharedIdentityMiddleware(lambda r: None)(request)
         assert not request.principal.is_authenticated
     with pytest.raises(ImproperlyConfigured):
@@ -100,9 +98,7 @@ def test_restricted_role_django_acceptance():
 
     if not os.environ.get("PARTITIONDB_TEST_DSN"):
         pytest.skip("PARTITIONDB_TEST_DSN required")
-    subprocess.run(
-        [sys.executable, "-m", "tests.restricted_django_scenario"], check=True, timeout=120
-    )
+    subprocess.run([sys.executable, "-m", "tests.restricted_django_scenario"], check=True, timeout=120)
 
 
 def test_shared_identity_cannot_bypass_membership_when_checks_are_skipped():

@@ -21,7 +21,7 @@ configure()
 FULL = Tenant("one", "alpha", tenant_type="full")
 EMPTY = Tenant("two", "beta", tenant_type="empty")
 TYPES = {
-    "full": {"APPS": ["tenantapp"], "URLCONF": "tests.type_urls_full"},
+    "full": {"APPS": ["workspaces"], "URLCONF": "tests.type_urls_full"},
     "empty": {"APPS": [], "URLCONF": "tests.type_urls_empty"},
 }
 
@@ -39,26 +39,21 @@ def test_type_identity_is_canonical(value):
 def test_type_is_part_of_identity_and_namespaces_without_changing_untyped_namespace():
     plain = Tenant("one", "alpha")
     assert plain != FULL
-    assert (
-        len({namespace(plain), namespace(FULL), namespace(replace(FULL, tenant_type="empty"))}) == 3
-    )
+    assert len({namespace(plain), namespace(FULL), namespace(replace(FULL, tenant_type="empty"))}) == 3
     # This is the historical v1 untyped namespace, retained for existing files.
-    assert (
-        namespace(plain)
-        == "pdb:v1:931536bc48402a34b21fc9953c6f8f2ed5eea206b03bd27b61ba561a0995032d"
-    )
+    assert namespace(plain) == "pdb:v1:931536bc48402a34b21fc9953c6f8f2ed5eea206b03bd27b61ba561a0995032d"
 
 
 @pytest.mark.parametrize(
     "definitions",
     [
         [],
-        {"bad-key": {"APPS": ["tenantapp"]}},
-        {"full": {"APPS": ["sharedapp"]}},
+        {"bad-key": {"APPS": ["workspaces"]}},
+        {"full": {"APPS": ["organizations"]}},
         {"full": {"APPS": []}},
-        {"full": {"APPS": ["tenantapp", "tenantapp"]}},
-        {"full": {"APPS": ["tenantapp"], "URLCONF": ""}},
-        {"full": {"APPS": ["tenantapp"], "UNKNOWN": True}},
+        {"full": {"APPS": ["workspaces", "workspaces"]}},
+        {"full": {"APPS": ["workspaces"], "URLCONF": ""}},
+        {"full": {"APPS": ["workspaces"], "UNKNOWN": True}},
     ],
 )
 def test_invalid_static_type_definitions_fail_closed(definitions):
@@ -75,10 +70,10 @@ def test_unknown_missing_or_unconfigured_identity_types_fail_closed():
             with pytest.raises(ImproperlyConfigured):
                 tenant_policy(tenant)
         with tenant_scope(FULL):
-            assert app_sets()[1] == {"tenantapp"}
+            assert app_sets()[1] == {"workspaces"}
         with tenant_scope(EMPTY):
             assert app_sets()[1] == set()
-        assert app_sets()[1] == {"tenantapp"}  # Control-plane classification is the union.
+        assert app_sets()[1] == {"workspaces"}  # Control-plane classification is the union.
     with pytest.raises(ImproperlyConfigured):
         tenant_policy(FULL)
 
@@ -167,12 +162,12 @@ def test_optional_typed_model_and_admin_expose_immutable_type_metadata():
     from partitiondb.adapters.django.admin import TenantRegistryAdmin
     from partitiondb.adapters.django.models import TypedTenantMixin
 
-    with isolate_apps("tests.sharedapp"), override_settings(PARTITIONDB=typed_config()):
+    with isolate_apps("apps.organizations"), override_settings(PARTITIONDB=typed_config()):
 
         class TypedRecord(TypedTenantMixin):
             class Meta(TypedTenantMixin.Meta):
                 abstract = False
-                app_label = "sharedapp"
+                app_label = "organizations"
 
         record = TypedRecord(pk=7, schema_name="alpha", tenant_type="full")
         record._state.adding = False
@@ -188,16 +183,16 @@ def test_optional_typed_model_and_admin_expose_immutable_type_metadata():
 def test_system_checks_reject_invalid_type_configuration_and_urlconf():
     from partitiondb.adapters.django.checks import check_configuration
 
-    with override_settings(PARTITIONDB=typed_config({"full": {"APPS": ["sharedapp"]}})):
+    with override_settings(PARTITIONDB=typed_config({"full": {"APPS": ["organizations"]}})):
         assert "partitiondb.E017" in {error.id for error in check_configuration(None)}
-    config = typed_config({"full": {"APPS": ["tenantapp"], "URLCONF": "does_not_exist.urls"}})
+    config = typed_config({"full": {"APPS": ["workspaces"], "URLCONF": "does_not_exist.urls"}})
     with override_settings(PARTITIONDB=config):
         assert "partitiondb.E018" in {error.id for error in check_configuration(None)}
 
 
 @pytest.mark.parametrize(
     "command,arguments",
-    [("migrate_tenants", ()), ("all_tenants_command", ("dumpdata", "tenantapp"))],
+    [("migrate_tenants", ()), ("all_tenants_command", ("dumpdata", "workspaces"))],
 )
 def test_fleet_children_receive_the_trusted_type(command, arguments):
     from django.core.management import call_command

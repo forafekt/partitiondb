@@ -15,7 +15,7 @@ from tests.django_setup import configure
 from tests.test_provisioning import Store
 
 configure()
-from tests.sharedapp.models import TenantRecord  # noqa: E402
+from apps.organizations.models import Organization  # noqa: E402
 
 TENANT = Tenant("one", "alpha")
 MODULE = "partitiondb.adapters.django.registry_lifecycle"
@@ -25,14 +25,14 @@ MODULE = "partitiondb.adapters.django.registry_lifecycle"
 def test_activation_requires_exact_ready_checkpoint(stage):
     store = Store()
     store.record = ProvisioningRecord(TENANT, stage) if stage else None
-    controller = RegistryLifecycle(TenantRecord, store)
+    controller = RegistryLifecycle(Organization, store)
     row = MagicMock(active=False)
     row.as_tenant.return_value = TENANT
     manager = MagicMock()
     manager.using.return_value.select_for_update.return_value.get.return_value = row
     with (
         patch.object(controller, "_boundary"),
-        patch.object(TenantRecord._base_manager, "using", manager.using),
+        patch.object(Organization._base_manager, "using", manager.using),
         patch(MODULE + ".transaction.atomic", return_value=nullcontext()),
     ):
         if stage == Stage.ACTIVE:
@@ -45,7 +45,7 @@ def test_activation_requires_exact_ready_checkpoint(stage):
 
 
 def test_boundary_rejects_tenant_scope_before_connection_access():
-    controller = RegistryLifecycle(TenantRecord, Store())
+    controller = RegistryLifecycle(Organization, Store())
     with tenant_scope(TENANT), patch(MODULE + ".connections") as connections:
         with pytest.raises(ValueError, match="shared context"):
             controller.set_active(TENANT, active=False)
@@ -57,7 +57,7 @@ def test_boundary_rejects_tenant_scope_before_connection_access():
     [(True, True, "postgresql"), (False, False, "postgresql"), (False, True, "sqlite")],
 )
 def test_boundary_rejects_uncommitted_or_unlocked_registry(atomic, autocommit, vendor):
-    controller = RegistryLifecycle(TenantRecord, Store())
+    controller = RegistryLifecycle(Organization, Store())
     connection = MagicMock(in_atomic_block=atomic, vendor=vendor)
     connection.get_autocommit.return_value = autocommit
     with patch(MODULE + ".connections", {"default": connection}), pytest.raises(ValueError):
@@ -109,27 +109,25 @@ def test_cli_factory_confirmation_cleanup_and_safe_errors():
 
 
 @pytest.mark.postgres
-def test_durable_registry_admission_preserves_tenant_data(
-    tenant_factory, partitiondb_admin_connection
-):
+def test_durable_registry_admission_preserves_tenant_data(tenant_factory, partitiondb_admin_connection):
     from dataclasses import replace
 
+    from apps.workspaces.models import Workspace
     from django.db import transaction
 
     from partitiondb.adapters.django.scope import atomic_tenant
     from partitiondb.provisioning_postgres import PostgresProvisioningStore
-    from tests.tenantapp.models import Item
 
     call_command("migrate", interactive=False, verbosity=0)
     schema = tenant_factory()
-    row = TenantRecord.objects.create(schema_name=schema.schema)
+    row = Organization.objects.create(name="Registry lifecycle test", schema_name=schema.schema)
     tenant = row.as_tenant()
     store = PostgresProvisioningStore(partitiondb_admin_connection, schema=schema.schema)
     store.install()
-    controller = RegistryLifecycle(TenantRecord, store)
+    controller = RegistryLifecycle(Organization, store)
     try:
         with atomic_tenant(tenant):
-            Item.objects.create(value="must survive admission changes")
+            Workspace.objects.create(name="must survive admission changes")
         with pytest.raises(ValueError, match="ACTIVE"):
             controller.set_active(tenant, active=True)
         store.register(tenant)
@@ -138,13 +136,13 @@ def test_durable_registry_admission_preserves_tenant_data(
         wrong = replace(tenant, schema="wrong_identity")
         with pytest.raises(ValueError, match="identity"):
             controller.set_active(wrong, active=False)
-        original_save = TenantRecord.save
+        original_save = Organization.save
 
         def failed_save(instance, *args, **kwargs):
             original_save(instance, *args, **kwargs)
             raise RuntimeError("failure after registry write")
 
-        with patch.object(TenantRecord, "save", failed_save), pytest.raises(RuntimeError):
+        with patch.object(Organization, "save", failed_save), pytest.raises(RuntimeError):
             controller.set_active(tenant, active=True)
         row.refresh_from_db()
         assert not row.active
@@ -157,7 +155,7 @@ def test_durable_registry_admission_preserves_tenant_data(
         row.refresh_from_db()
         assert not row.active
         with atomic_tenant(tenant):
-            assert Item.objects.get().value == "must survive admission changes"
+            assert Workspace.objects.get().name == "must survive admission changes"
         with transaction.atomic(), pytest.raises(ValueError, match="idle"):
             controller.set_active(tenant, active=True)
     finally:
@@ -168,14 +166,14 @@ def test_durable_registry_admission_preserves_tenant_data(
 def test_identity_mismatch_rejects_both_admission_actions(active, checkpoint):
     store = Store()
     store.record = ProvisioningRecord(TENANT, checkpoint) if checkpoint else None
-    controller = RegistryLifecycle(TenantRecord, store)
+    controller = RegistryLifecycle(Organization, store)
     row = MagicMock(active=False)
     row.as_tenant.return_value = Tenant("one", "different")
     query = MagicMock()
     query.select_for_update.return_value.get.return_value = row
     with (
         patch.object(controller, "_boundary"),
-        patch.object(TenantRecord._base_manager, "using", return_value=query),
+        patch.object(Organization._base_manager, "using", return_value=query),
         patch(MODULE + ".transaction.atomic", return_value=nullcontext()),
         pytest.raises(ValueError, match="identity"),
     ):
@@ -186,14 +184,14 @@ def test_identity_mismatch_rejects_both_admission_actions(active, checkpoint):
 def test_deactivation_without_checkpoint_and_idempotency():
     store = Store()
     store.record = None
-    controller = RegistryLifecycle(TenantRecord, store)
+    controller = RegistryLifecycle(Organization, store)
     row = MagicMock(active=True)
     row.as_tenant.return_value = TENANT
     query = MagicMock()
     query.select_for_update.return_value.get.return_value = row
     with (
         patch.object(controller, "_boundary"),
-        patch.object(TenantRecord._base_manager, "using", return_value=query),
+        patch.object(Organization._base_manager, "using", return_value=query),
         patch(MODULE + ".transaction.atomic", return_value=nullcontext()),
     ):
         assert controller.set_active(TENANT, active=False) == RegistryState(TENANT, False)
@@ -202,9 +200,7 @@ def test_deactivation_without_checkpoint_and_idempotency():
 
 
 @pytest.mark.postgres
-def test_admission_rejects_competing_provisioning_session_lock(
-    tenant_factory, partitiondb_admin_connection
-):
+def test_admission_rejects_competing_provisioning_session_lock(tenant_factory, partitiondb_admin_connection):
     import os
 
     import psycopg
@@ -213,7 +209,7 @@ def test_admission_rejects_competing_provisioning_session_lock(
 
     call_command("migrate", interactive=False, verbosity=0)
     schema = tenant_factory(migrate=False)
-    row = TenantRecord.objects.create(schema_name=schema.schema)
+    row = Organization.objects.create(name="Registry lifecycle test", schema_name=schema.schema)
     tenant = row.as_tenant()
     store = PostgresProvisioningStore(partitiondb_admin_connection, schema=schema.schema)
     store.install()
@@ -221,10 +217,10 @@ def test_admission_rejects_competing_provisioning_session_lock(
     try:
         with psycopg.connect(os.environ["PARTITIONDB_TEST_DSN"], autocommit=True) as connection:
             competitor = PostgresProvisioningStore(connection, schema=schema.schema)
-            controller = RegistryLifecycle(TenantRecord, competitor)
+            controller = RegistryLifecycle(Organization, competitor)
             with store.lock(tenant.id):
                 with (
-                    patch.object(TenantRecord._base_manager, "using") as query,
+                    patch.object(Organization._base_manager, "using") as query,
                     pytest.raises(RuntimeError, match="holds this tenant"),
                 ):
                     controller.set_active(tenant, active=False)

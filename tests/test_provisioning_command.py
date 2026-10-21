@@ -95,9 +95,7 @@ def test_uncertain_creation_refuses_resume_and_failure_closes_factory():
 
 def test_typed_reconciliation_requires_type_as_well_as_route():
     service, _ = make_service(Stage.CREATING)
-    service.store.record = ProvisioningRecord(
-        Tenant("one", "alpha", tenant_type="full"), Stage.CREATING
-    )
+    service.store.record = ProvisioningRecord(Tenant("one", "alpha", tenant_type="full"), Stage.CREATING)
     arguments = (
         "--reconcile-created",
         "--confirm-schema",
@@ -112,9 +110,7 @@ def test_typed_reconciliation_requires_type_as_well_as_route():
 
 
 def test_invalid_options_and_tenant_context_fail_before_factory():
-    with patch(
-        "partitiondb.adapters.django.management.commands.provision_tenant.import_string"
-    ) as factory:
+    with patch("partitiondb.adapters.django.management.commands.provision_tenant.import_string") as factory:
         for arguments in [("--reconcile-created",), ("--confirm-schema", "alpha")]:
             with pytest.raises(CommandError):
                 call_command("provision_tenant", "one", *arguments)

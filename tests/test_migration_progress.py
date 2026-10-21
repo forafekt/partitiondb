@@ -110,9 +110,7 @@ def test_invalid_progress_observer_rejects_before_database_cursor():
     connection.get_autocommit.return_value = True
     module = "partitiondb.adapters.django.management.commands.migrate_tenant"
     with (
-        override_settings(
-            PARTITIONDB=dict(settings.PARTITIONDB, MIGRATION_OBSERVER="app.callback")
-        ),
+        override_settings(PARTITIONDB=dict(settings.PARTITIONDB, MIGRATION_OBSERVER="app.callback")),
         patch(module + ".connections", {"default": connection}),
         patch(module + ".import_string", return_value=42),
         pytest.raises(CommandError, match="MIGRATION_OBSERVER"),
