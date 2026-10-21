@@ -66,8 +66,9 @@ class PostgresRoleManager:
             provision_restricted_role(self.connection, tenant, role)
             with self.connection.transaction():
                 self.connection.execute(
-                    sql.SQL("ALTER ROLE {} LOGIN PASSWORD %s").format(sql.Identifier(role)),
-                    (password,),
+                    sql.SQL("ALTER ROLE {} LOGIN PASSWORD {}").format(
+                        sql.Identifier(role), sql.Literal(password)
+                    ),
                 )
         except Exception:
             # Fail closed: a role left behind cannot authenticate.
