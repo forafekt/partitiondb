@@ -144,3 +144,24 @@ recovery, failure before role creation, RETRY after a failed checkpoint, retaine
 history, role replacement rejection, actual tenant browser writes, cross-tenant
 SQL denial, evidence-table denial and connection cleanup. These bounded tests do
 not certify an arbitrary deployment's vault, authentication topology or grants.
+
+
+### Reading access status
+
+The development admin distinguishes role structure, ownership evidence, fresh
+credential authentication and the registry binding. A configured role only means
+its expected local attributes and grants passed inspection. Ownership requires a
+matching journal, immutable receipt and current PostgreSQL role OID. Authentication
+requires a fresh password connection to the expected database. These are
+point-in-time checks, not a comprehensive audit of all PostgreSQL privileges.
+
+A completed operation records successful provisioning; it does not guarantee that
+a password still works. A corrupted or unavailable secret can therefore leave the
+operation completed while authentication shows **Not verified**. Restore the
+correct development secret and check again. READY/RETRY recover interrupted
+provisioning; they do not rotate or repair passwords for active tenants.
+
+Production providers must distinguish confirmed absence from denied access,
+timeouts and service failure. Only an explicit `True` from an authoritative
+`absent(reference)` check permits absence-based recovery. Otherwise return `False`
+or raise an exception. Providers without this capability cannot authorize RETRY.

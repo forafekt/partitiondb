@@ -63,7 +63,7 @@ class PostgresRecoveryEvidenceProvider:
         ):
             return RecoveryEvidence()
         if inspection.state == RoleState.ABSENT:
-            return RecoveryEvidence(absence_verified=self.credentials.absent(receipt.credential_ref))
+            return RecoveryEvidence(absence_verified=self.credentials.absent(receipt.credential_ref) is True)
         if inspection.state != RoleState.CONFIGURED:
             return RecoveryEvidence()
         # Inspection must expose the actual PostgreSQL role OID. Never rely on

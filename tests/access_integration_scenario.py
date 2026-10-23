@@ -117,6 +117,29 @@ def main():
             assert RoleOwnershipReceipt.objects.get(tenant_id=str(normal.pk)).role_name == normal.access_role
             assert not AccessRecoveryAudit.objects.exists()
 
+            # A completed operation is historical; status must still test the current secret.
+            status_url = f"/admin/organizations/organization/{normal.pk}/access-status/"
+            page = client.get(status_url)
+            assert page.status_code == 200
+            assert "Verified — fresh password connection succeeded".encode() in page.content
+            assert "Verified — journal, receipt and current role OID match".encode() in page.content
+            with access_context(str(normal.pk)) as context:
+                secret = context.credentials.get(normal.credential_ref)
+                path = context.credentials._path(normal.credential_ref)
+                try:
+                    path.write_text("deliberately-invalid-password")
+                    page = client.get(status_url)
+                    assert page.status_code == 200
+                    assert "Not verified — credential unavailable".encode() in page.content
+                    assert "Verified — journal, receipt and current role OID match".encode() in page.content
+                    assert secret.encode() not in page.content
+                    assert b"deliberately-invalid-password" not in page.content
+                finally:
+                    path.write_text(secret)
+            assert "Verified — fresh password connection succeeded".encode() in client.get(status_url).content
+            assert AccessOperation.objects.get(tenant_id=str(normal.pk)).state == "completed"
+            assert not AccessRecoveryAudit.objects.exists()
+
             interrupted = register("interrupted")
             tenant = interrupted.as_tenant()
             result = subprocess.run(

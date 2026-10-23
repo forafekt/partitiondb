@@ -3,7 +3,10 @@ from django.core.management import call_command
 
 from partitiondb.adapters.django.access_admin import TenantAccessRegistryAdmin
 from partitiondb.adapters.django.access_control.models import AccessOperation, RoleOwnershipReceipt
-from partitiondb.adapters.django.access_control.services import AuditedDjangoReconciliationService
+from partitiondb.adapters.django.access_control.services import (
+    AuditedDjangoReconciliationService,
+    JournalBoundRecoveryEvidence,
+)
 from partitiondb.adapters.django.access_evidence_store import DjangoOwnershipReceiptStore
 from partitiondb.adapters.django.access_operation_store import DjangoAccessOperationJournal
 from partitiondb.adapters.django.admin import (
@@ -57,11 +60,28 @@ class OrganizationAdmin(TenantAccessRegistryAdmin, ProvisioningTenantAdmin):
         with access_context(tenant.id) as context:
             with context.provisioner.store.lock(tenant.id):
                 record = context.provisioner.store.get(tenant.id)
+                inspection = context.inspector.inspect(tenant)
+                journal = DjangoAccessOperationJournal(AccessOperation)
+                receipts = DjangoOwnershipReceiptStore(RoleOwnershipReceipt)
+                operation = journal.get(tenant)
+                registry = Organization.objects.get(pk=tenant.id)
+                evidence = JournalBoundRecoveryEvidence(journal, receipts, context.authentication)(tenant, inspection)
+                binding_verified = bool(
+                    operation
+                    and operation.state == "completed"
+                    and registry.as_tenant() == tenant
+                    and registry.access_policy == "restricted"
+                    and registry.access_role == operation.role
+                    and registry.credential_ref == operation.credential_ref
+                )
                 return {
+                    "restricted": registry.access_policy == "restricted",
+                    "evidence": evidence,
+                    "binding_verified": binding_verified,
                     "stage": record.stage if record else "missing",
-                    "inspection": context.inspector.inspect(tenant),
-                    "operation": DjangoAccessOperationJournal(AccessOperation).get(tenant),
-                    "receipt": DjangoOwnershipReceiptStore(RoleOwnershipReceipt).get(tenant),
+                    "inspection": inspection,
+                    "operation": operation,
+                    "receipt": receipts.get(tenant),
                     "can_reconcile": record is not None and record.stage == Stage.ACCESS_PROVISIONING,
                 }
 

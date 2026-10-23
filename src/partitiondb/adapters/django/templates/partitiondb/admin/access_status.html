@@ -4,10 +4,16 @@
 <dl>
 <dt>Provisioning stage</dt><dd>{{ status.stage }}</dd>
 <dt>PostgreSQL role</dt><dd>{{ status.inspection.role }}</dd>
-<dt>Observed state</dt><dd>{{ status.inspection.state }}: {{ status.inspection.reason }}</dd>
+<dt>Role structure</dt><dd>{{ status.inspection.state }}: {{ status.inspection.reason }}</dd>
 <dt>Operation</dt><dd>{{ status.operation.operation_id|default:"None" }} — {{ status.operation.state }}</dd>
 <dt>Ownership receipt</dt><dd>{{ status.receipt.operation_id|default:"None" }}{% if status.receipt %} (role OID {{ status.receipt.role_oid }}){% endif %}</dd>
+{% if status.restricted %}
+<dt>Ownership evidence</dt><dd>{% if status.evidence.ownership_verified %}Verified — journal, receipt and current role OID match{% else %}Not verified{% endif %}</dd>
+<dt>Credential authentication</dt><dd>{% if status.evidence.credential_verified %}Verified — fresh password connection succeeded{% else %}Not verified — credential unavailable, authentication failed, or ownership evidence incomplete{% endif %}</dd>
+<dt>Registry binding</dt><dd>{% if status.binding_verified %}Verified — registry matches completed operation{% else %}Not verified{% endif %}</dd>
+{% endif %}
 </dl>
+<p>This is a point-in-time check. Correct role structure alone does not verify ownership or credentials.</p>
 <p>These records describe database credentials, not user memberships. Passwords are never displayed.</p>
 {% if status.can_reconcile %}
 <p>Inspect the evidence before continuing. READY verifies the existing role and completes interrupted bookkeeping.
