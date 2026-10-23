@@ -15,6 +15,7 @@ class AccessOperation(AccessOperationMixin):
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant_id", "database_alias"],
+                condition=~models.Q(state="cleaned"),
                 name="pdb_access_operation_tenant_target_unique",
             )
         ]
@@ -23,12 +24,6 @@ class AccessOperation(AccessOperationMixin):
 class RoleOwnershipReceipt(RoleOwnershipReceiptMixin):
     class Meta:
         db_table = "partitiondb_role_ownership_receipt"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["tenant_id", "database_alias"],
-                name="pdb_receipt_tenant_target_unique",
-            )
-        ]
 
 
 class AccessRecoveryAudit(AccessRecoveryAuditMixin):

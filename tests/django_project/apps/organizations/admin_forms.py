@@ -7,6 +7,11 @@ from .models import Domain, Organization
 
 
 class ProvisionOrganizationForm(forms.Form):
+    access_policy = forms.ChoiceField(
+        choices=[("shared", "Shared runtime role"), ("restricted", "Dedicated PostgreSQL role")],
+        initial="shared",
+        help_text="Dedicated roles are provisioned, verified and used for this organization's tenant requests.",
+    )
     name = forms.CharField(
         max_length=200,
         label="Organization name",

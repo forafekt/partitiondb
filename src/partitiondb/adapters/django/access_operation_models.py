@@ -19,6 +19,7 @@ class AccessOperationMixin(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant_id", "database_alias"],
+                condition=~models.Q(state="cleaned"),
                 name="%(app_label)s_%(class)s_target_unique",
             )
         ]

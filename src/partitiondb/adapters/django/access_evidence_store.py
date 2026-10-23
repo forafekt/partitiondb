@@ -4,11 +4,10 @@ Use a trusted control-plane DB and application-defined concrete model classes.
 These adapters do not grant database privileges or expose credentials.
 """
 
-from django.db import transaction
-
 from partitiondb.access_evidence import RoleOwnershipReceipt
 from partitiondb.core import Tenant
 
+from .access_boundary import durable_control_plane
 from .access_evidence_models import AccessRecoveryAuditMixin, RoleOwnershipReceiptMixin
 
 
@@ -22,11 +21,15 @@ class DjangoOwnershipReceiptStore:
         _check(model, RoleOwnershipReceiptMixin)
         self.model, self.using = model, using
 
-    def get(self, tenant: Tenant):
-        rows = list(
-            self.model._base_manager.using(self.using).filter(tenant_id=tenant.id, database_alias=tenant.database)[:2]
+    def get(self, tenant: Tenant, *, operation_id=None):
+        query = self.model._base_manager.using(self.using).filter(
+            tenant_id=tenant.id,
+            database_alias=tenant.database,
         )
-        if len(rows) != 1:
+        if operation_id is not None:
+            query = query.filter(operation_id=operation_id)
+        rows = list(query.order_by("-pk")[:1])
+        if not rows:
             return None
         r = rows[0]
         return RoleOwnershipReceipt(
@@ -41,7 +44,7 @@ class DjangoOwnershipReceiptStore:
 
     def record(self, receipt: RoleOwnershipReceipt):
         """Insert-only. Duplicate or conflicting receipts must raise."""
-        with transaction.atomic(using=self.using):
+        with durable_control_plane(self.using):
             self.model._base_manager.using(self.using).create(
                 tenant_id=receipt.tenant_id,
                 database_alias=receipt.database_alias,
@@ -73,7 +76,7 @@ class DjangoRecoveryAuditSink:
             observed_role=inspection.role,
             observed_role_oid=inspection.role_oid,
         )
-        with transaction.atomic(using=self.using):
+        with durable_control_plane(self.using):
             row, created = self.model._base_manager.using(self.using).get_or_create(
                 operation_id=operation_id, defaults=data
             )

@@ -28,7 +28,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/dist", "/release_reports"]
+exclude = ["/dist", "/release_reports", "**/.secrets"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/partitiondb"]

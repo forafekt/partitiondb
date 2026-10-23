@@ -8,6 +8,7 @@ Do not use this module from normal request handlers.
 import secrets
 import string
 from dataclasses import dataclass
+from hashlib import sha256
 
 from psycopg import sql
 
@@ -23,11 +24,13 @@ class RoleBinding:
 
 
 def tenant_role_name(tenant: Tenant) -> str:
-    """Stable role name based on tenant schema (must be unique per database)."""
+    """Bounded cluster-wide name, preserving existing short default-alias names."""
     validate_schema(tenant.schema)
-    role = f"pdb_{tenant.schema}"
-    validate_schema(role)
-    return role
+    if tenant.database == "default" and len(tenant.schema) <= 59:
+        return f"pdb_{tenant.schema}"
+    identity = f"{len(tenant.database)}:{tenant.database}{tenant.schema}"
+    suffix = sha256(identity.encode()).hexdigest()[:24]
+    return f"pdb_{tenant.schema[:34]}_{suffix}"
 
 
 def _password() -> str:

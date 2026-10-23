@@ -23,7 +23,7 @@ class RegistryLifecycle:
     Existing tasks/requests are not revoked by changing registry admission.
     """
 
-    def __init__(self, model, store, *, using="default"):
+    def __init__(self, model, store, *, using="default", verify_access=None):
         from .models import TenantMixin
 
         if not isinstance(model, type) or not issubclass(model, TenantMixin):
@@ -33,6 +33,7 @@ class RegistryLifecycle:
         self.model = model
         self.store = store
         self.using = using
+        self.verify_access = verify_access
 
     def _boundary(self):
         if current_tenant(required=False) is not None:
@@ -54,12 +55,17 @@ class RegistryLifecycle:
             raise TypeError("Expected a Tenant confirmation and boolean active")
         self._boundary()
         with self.store.lock(confirm.id):
+            if active and self.verify_access is not None:
+                self.verify_access(confirm)
             with transaction.atomic(using=self.using):
                 row = self.model._base_manager.using(self.using).select_for_update().get(pk=confirm.id)
                 identity = row.as_tenant()
                 if identity != confirm:
                     raise ValueError("Registry identity does not match confirmation")
                 if active:
+                    if getattr(row, "access_policy", "shared") == "restricted":
+                        if not getattr(row, "access_role", "") or self.verify_access is None:
+                            raise ValueError("Restricted activation requires a role binding and access verifier")
                     record = self.store.get(confirm.id)
                     if record is None or record.tenant != identity or record.stage != Stage.ACTIVE:
                         raise ValueError("Activation requires a matching ACTIVE checkpoint")

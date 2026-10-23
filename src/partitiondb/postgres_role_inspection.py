@@ -87,6 +87,14 @@ class PostgresRoleInspector:
             (role, role, role, role, tenant.schema),
         ).fetchone()
         table_access = bool(tables[0] and tables[1])
+        sequences = self.connection.execute(
+            "SELECT COALESCE(bool_and(has_sequence_privilege(%s, c.oid, 'USAGE') AND "
+            "has_sequence_privilege(%s, c.oid, 'SELECT')), true) "
+            "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = %s AND c.relkind = 'S'",
+            (role, role, tenant.schema),
+        ).fetchone()[0]
+        table_access = table_access and bool(sequences)
         dangerous = any((superuser, createdb, createrole, inherit, replication, bypassrls, memberships))
         if dangerous:
             state, reason = RoleState.CONFLICT, "Role has elevated attributes or memberships"

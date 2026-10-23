@@ -1,9 +1,10 @@
 """Transactional Django operation journal with compare-and-set transitions."""
 
-from django.db import transaction
+from django.utils import timezone
 
 from partitiondb.access_operations import OperationState
 
+from .access_boundary import durable_control_plane, require_control_plane
 from .access_operation_models import AccessOperationMixin
 
 
@@ -13,10 +14,13 @@ class DjangoAccessOperationJournal:
             raise TypeError("Expected concrete AccessOperationMixin subclass")
         self.model, self.using = model, using
 
+    def ensure_durable(self):
+        require_control_plane(self.using)
+
     def begin(self, operation):
         if operation.state != OperationState.PENDING:
             raise ValueError("Operation must begin pending")
-        with transaction.atomic(using=self.using):
+        with durable_control_plane(self.using):
             self.model._base_manager.using(self.using).create(
                 operation_id=operation.operation_id,
                 tenant_id=operation.tenant.id,
@@ -35,19 +39,19 @@ class DjangoAccessOperationJournal:
         }
         if transitions.get(expected) != target:
             raise ValueError("Invalid operation transition")
-        with transaction.atomic(using=self.using):
+        with durable_control_plane(self.using):
             updated = (
                 self.model._base_manager.using(self.using)
                 .filter(
                     operation_id=operation_id,
                     state=expected.value,
                 )
-                .update(state=target.value)
+                .update(state=target.value, updated_at=timezone.now())
             )
             if updated != 1:
                 raise ValueError("Operation checkpoint mismatch; reconciliation required")
 
-    def get(self, tenant, *, operation_id=None):
+    def get(self, tenant, *, operation_id=None, include_cleaned=False):
         """Read the durable intent without performing any recovery side effect.
 
         Returns None only if no operation matches. A tenant/database pair is
@@ -61,7 +65,9 @@ class DjangoAccessOperationJournal:
         )
         if operation_id is not None:
             query = query.filter(operation_id=operation_id)
-        row = query.first()
+        if not include_cleaned:
+            query = query.exclude(state=OperationState.CLEANED.value)
+        row = query.order_by("-created_at", "-pk").first()
         if row is None:
             return None
         if row.schema_name != tenant.schema:
@@ -73,3 +79,16 @@ class DjangoAccessOperationJournal:
             role=row.role_name,
             state=OperationState(row.state),
         )
+
+    def finish_retry(self, operation):
+        with durable_control_plane(self.using):
+            updated = (
+                self.model._base_manager.using(self.using)
+                .filter(
+                    operation_id=operation.operation_id,
+                    state=operation.state.value,
+                )
+                .update(state=OperationState.CLEANED.value, updated_at=timezone.now())
+            )
+            if updated != 1:
+                raise ValueError("Operation changed during retry reconciliation")

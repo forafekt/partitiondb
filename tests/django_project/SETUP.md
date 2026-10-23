@@ -39,3 +39,12 @@ The tenant admin manages workspaces in the selected organization's schema.
 See [the settings manager](../../docs/SETTINGS.md) and
 [login integration](../../docs/TENANT_LOGIN.md) to customize an external provider
 in your application. PartitionDB has no built-in provider mode.
+
+## Restricted PostgreSQL access
+
+Run migrations after updating the checkout. Organization creation now offers
+shared or dedicated database access; existing organizations remain shared.
+The dedicated option populates the access journal and receipt, verifies the role,
+and uses that role for tenant requests. Open the organization's access-status
+link for audited recovery of interrupted provisioning. See
+[restricted access](../../docs/ACCESS.md) for secret storage, cleanup and deployment requirements.

@@ -14,6 +14,7 @@ class OperationState(StrEnum):
     ROLE_CREATED = "role_created"
     RECEIPT_RECORDED = "receipt_recorded"
     COMPLETED = "completed"
+    CLEANED = "cleaned"
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,9 @@ class RestrictedAccessCoordinator:
         self.role_oid = role_oid
 
     def __call__(self, tenant):
+        ensure_durable = getattr(self.journal, "ensure_durable", None)
+        if ensure_durable is not None:
+            ensure_durable()
         access = self.resolve_access(tenant)
         if not isinstance(access, TenantAccess) or access.tenant != tenant:
             raise ValueError("Invalid tenant access resolution")

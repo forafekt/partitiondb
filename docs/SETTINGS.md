@@ -168,6 +168,7 @@ arguments, or use them directly in an existing PARTITIONDB dictionary.
 
 | Option | Default | Purpose |
 |---|---|---|
+| `TENANT_DATABASE_ACCESS` | `None` | Trusted tenant → TenantDatabaseCredentials or None for scoped runtime login. |
 | `TENANTS` | `None` | Callable returning trusted tenant inventory. |
 | `PROVISIONER_FACTORY` | `None` | Context-manager factory (tenant_id) yielding Provisioner. |
 | `REGISTRY_LIFECYCLE_FACTORY` | `None` | Context-manager factory (tenant_id) yielding RegistryLifecycle. |

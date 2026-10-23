@@ -47,6 +47,7 @@ Privileged schema creation/migrations are separate from runtime credentials.
 ## Supported scope
 
 - Schema create/drop/rename and recoverable provisioning checkpoints.
+- Opt-in restricted roles, durable access evidence, audited recovery and scoped runtime credentials.
 - Django request/ORM boundaries, shared identity, membership callbacks and domains.
 - Static tenant types, subfolder routing, fresh registry lookup and admission.
 - Single/fleet migrations, tenant commands and best-effort progress events.
@@ -54,7 +55,7 @@ Privileged schema creation/migrations are separate from runtime credentials.
 - Optional Celery 5.6 task boundaries with fresh active-tenant lookup per attempt.
 
 Django requires direct PostgreSQL or session-mode pooling and synchronous request
-boundaries. Dynamic database credentials, schema cloning, automatic retirement or
+boundaries. Automatic credential rotation, schema cloning, automatic retirement or
 draining/deletion, type conversion, manifest staticfiles and application-specific
 users/billing/ownership flows are outside this release scope. Deactivation stops
 fresh admissions through cooperating lookups; it does not revoke running work.

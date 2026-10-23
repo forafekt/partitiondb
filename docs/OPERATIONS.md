@@ -6,7 +6,7 @@ Tenant schema selection is not authorization. Resolve a tenant through trusted m
 
 Use separate provisioning and application credentials. Revoke schema creation from runtime roles. Grant only required USAGE and table/sequence permissions. Public and tenant schemas must not be writable by untrusted database users. PostgreSQL implicitly searches pg_catalog first when it is omitted from search_path; this implementation intentionally relies on that behavior and avoids explicit pg_catalog as the CREATE target. Revoke TEMP where your threat model requires preventing temporary-object shadowing. Application migrations run with elevated credentials during maintenance; runtime app access should not require DDL rights.
 
-One runtime role with access to every schema still has access to every schema through explicit qualification. Dedicated databases/roles are appropriate when stronger isolation is required. The opt-in [role manager](ACCESS.md) generates passwords through a deployment-supplied secret provider; the Django backend does not select per-tenant credentials. Row-level security, encryption and arbitrary SQL confinement are outside this library.
+One runtime role with access to every schema still has access to every schema through explicit qualification. Dedicated databases/roles are appropriate when stronger isolation is required. The opt-in [role manager](ACCESS.md) generates passwords through a deployment-supplied secret provider; the Django backend can use the explicit TENANT_DATABASE_ACCESS callback inside atomic_tenant to select per-tenant credentials without changing settings.DATABASES. Row-level security, encryption and arbitrary SQL confinement are outside this library.
 
 ## Connections
 

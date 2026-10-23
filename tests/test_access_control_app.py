@@ -56,6 +56,19 @@ def test_access_control_app_migrates_without_activelane_models(tmp_path):
         journal = DjangoAccessOperationJournal(AccessOperation)
         journal.begin(Intent('intent-new', tenant, 'secret/new', 'pdb_org_new'))
         assert journal.get(tenant).state == OperationState.PENDING
+        # Nested transactions must fail before writing independently durable evidence.
+        for action in [
+            lambda: journal.advance('intent-new', OperationState.PENDING, OperationState.ROLE_CREATED),
+        ]:
+            try:
+                with transaction.atomic():
+                    action()
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError('Nested control-plane transaction accepted')
+        assert journal.get(tenant).state == OperationState.PENDING
+
         journal.advance('intent-new', OperationState.PENDING, OperationState.ROLE_CREATED)
         assert journal.get(tenant).state == OperationState.ROLE_CREATED
         try:
@@ -65,6 +78,14 @@ def test_access_control_app_migrates_without_activelane_models(tmp_path):
         else:
             raise AssertionError('CAS must reject stale transition')
         receipts = DjangoOwnershipReceiptStore(RoleOwnershipReceipt)
+        try:
+            with transaction.atomic():
+                receipts.record(Receipt('new', 'default', 'org_new', 'pdb_org_new', 456, 'secret/new', 'intent-new'))
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError('Nested receipt transaction accepted')
+        assert receipts.get(tenant) is None
         receipts.record(Receipt('new', 'default', 'org_new', 'pdb_org_new', 456, 'secret/new', 'intent-new'))
         assert receipts.get(tenant).role_oid == 456
         from partitiondb.adapters.django.access_control.services import JournalBoundRecoveryEvidence
@@ -80,6 +101,15 @@ def test_access_control_app_migrates_without_activelane_models(tmp_path):
         assert not replacement.ownership_verified
         audit = DjangoRecoveryAuditSink(AccessRecoveryAudit)
         inspection = RoleInspection('pdb_org_new', RoleState.CONFIGURED, role_oid=456)
+        try:
+            with transaction.atomic():
+                audit.record(operation_id='nested', tenant=tenant, actor_id='42',
+                             decision=RecoveryDecision.READY, inspection=inspection)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError('Nested audit transaction accepted')
+        assert not AccessRecoveryAudit.objects.exists()
         assert audit.record(operation_id='intent-new:ready', tenant=tenant, actor_id='42',
                             decision=RecoveryDecision.READY, inspection=inspection)
         assert not audit.record(operation_id='intent-new:ready', tenant=tenant, actor_id='42',

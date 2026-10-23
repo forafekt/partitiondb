@@ -107,6 +107,7 @@ def check_configuration(app_configs, **kwargs):
         errors.append(Error(str(error), id="partitiondb.E010"))
     for name in (
         "TENANTS",
+        "TENANT_DATABASE_ACCESS",
         "PROVISIONER_FACTORY",
         "REGISTRY_LIFECYCLE_FACTORY",
         "OPERATION_OBSERVER",

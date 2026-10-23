@@ -20,6 +20,7 @@ def test_elevated_role_is_conflict():
         Mock(fetchone=lambda: (1,)),
         Mock(fetchone=lambda: (True,)),
         Mock(fetchone=lambda: (1, True)),
+        Mock(fetchone=lambda: (True,)),
     ]
     assert PostgresRoleInspector(connection).inspect(Tenant("1", "org_demo")).state == RoleState.CONFLICT
 
@@ -32,6 +33,7 @@ def test_matching_grants_do_not_prove_ownership():
         Mock(fetchone=lambda: (1,)),
         Mock(fetchone=lambda: (True,)),
         Mock(fetchone=lambda: (1, True)),
+        Mock(fetchone=lambda: (True,)),
     ]
     result = PostgresRoleInspector(connection).inspect(Tenant("1", "org_demo"))
     assert result.state == RoleState.CONFIGURED
@@ -46,5 +48,6 @@ def test_disabled_role():
         Mock(fetchone=lambda: (1,)),
         Mock(fetchone=lambda: (True,)),
         Mock(fetchone=lambda: (1, True)),
+        Mock(fetchone=lambda: (True,)),
     ]
     assert PostgresRoleInspector(connection).inspect(Tenant("1", "org_demo")).state == RoleState.DISABLED

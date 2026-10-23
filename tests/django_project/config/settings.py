@@ -56,6 +56,7 @@ TENANCY = DjangoSetup(
     TENANT_AUTH_PATHS=["/accounts/", "/api/auth/"],
     TENANT_AUTH_URLCONF="config.urls_auth",
     TENANTS="apps.organizations.tenancy.list_tenants",
+    TENANT_DATABASE_ACCESS="apps.organizations.provisioning.runtime_credentials",
     PROVISIONER_FACTORY="apps.organizations.provisioning.provisioner_factory",
     REGISTRY_LIFECYCLE_FACTORY="apps.organizations.provisioning.registry_lifecycle_factory",
     TENANT_ADMIN_PERMISSIONS="apps.organizations.tenancy.tenant_admin_permissions",
@@ -156,3 +157,6 @@ MAILERS = {
 
 # A localhost platform login does not establish a tenant-host session.
 SESSION_COOKIE_DOMAIN = None
+
+# Local development only; replace the provider in organizations.provisioning for deployment.
+PARTITIONDB_DEMO_CREDENTIALS_DIR = Path(os.getenv("PARTITIONDB_DEMO_CREDENTIALS_DIR", str(BASE_DIR / ".secrets")))

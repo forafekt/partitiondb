@@ -43,6 +43,7 @@ def main(sqlite_name=None):
                 "name": "Admin test organization",
                 "schema_name": schema,
                 "database_alias": "default",
+                "access_policy": "shared",
                 "_save": "Save",
             },
         )
@@ -56,6 +57,7 @@ def main(sqlite_name=None):
                 "name": record.name,
                 "schema_name": "forbidden_change",
                 "database_alias": "default",
+                "access_policy": "shared",
                 "active": "on",
                 "_save": "Save",
             },
