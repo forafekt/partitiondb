@@ -1,11 +1,11 @@
 from threading import RLock
 
-from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.template import TemplateDoesNotExist
 from django.template.loaders.cached import Loader as CachedLoader
 
 from partitiondb import current_tenant
+from partitiondb.adapters.django.configuration import get_config
 from partitiondb.keys import namespace
 
 
@@ -22,7 +22,7 @@ class Loader(CachedLoader):
     def __init__(self, engine, loaders):
         super().__init__(engine, loaders)
         self._lock = RLock()
-        self.max_entries = settings.PARTITIONDB.get("TEMPLATE_CACHE_ENTRIES", 256)
+        self.max_entries = get_config().get("TEMPLATE_CACHE_ENTRIES", 256)
         if type(self.max_entries) is not int or self.max_entries < 1:
             raise ImproperlyConfigured("TEMPLATE_CACHE_ENTRIES must be a positive integer")
 

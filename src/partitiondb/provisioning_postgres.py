@@ -29,26 +29,38 @@ class PostgresProvisioningStore:
             raise RuntimeError("Checkpoint store needs an idle autocommit connection")
 
     def install(self):
+        """Install or atomically upgrade metadata; preserve existing tenant records.
+
+        Replacing the original stage constraint requires a table lock. Run this
+        administrative step before starting provisioners, not during requests.
+        Unknown stored stages abort and roll back the entire upgrade.
+        """
         if self._tenant_id is not None:
             raise RuntimeError("Cannot install while provisioning")
         self._idle()
-        self.connection.execute(
-            sql.SQL(
-                """CREATE TABLE IF NOT EXISTS {} (
-                    tenant_id text PRIMARY KEY,
-                    schema_name text NOT NULL,
-                    database_alias text NOT NULL,
-                    tenant_type text,
-                    stage text NOT NULL CHECK (stage IN
-                        ('new', 'creating', 'schema_ready', 'migrating', 'migrated', 'active')),
-                    UNIQUE (database_alias, schema_name)
-                )"""
-            ).format(self.table)
-        )
-
-        # Explicit administrative upgrade for stores installed before typed identity.
-        # Existing untyped rows retain NULL and keep their identity/namespace.
-        self.connection.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS tenant_type text").format(self.table))
+        stages = sql.SQL(", ").join(sql.Literal(stage.value) for stage in Stage)
+        with self.connection.transaction():
+            self.connection.execute(
+                sql.SQL(
+                    """CREATE TABLE IF NOT EXISTS {} (
+                        tenant_id text PRIMARY KEY,
+                        schema_name text NOT NULL,
+                        database_alias text NOT NULL,
+                        tenant_type text,
+                        stage text NOT NULL,
+                        UNIQUE (database_alias, schema_name)
+                    )"""
+                ).format(self.table)
+            )
+            # PostgreSQL gave the original inline CHECK this same name. Replace
+            # it for both legacy and current stores, keeping Stage authoritative.
+            self.connection.execute(
+                sql.SQL(
+                    "ALTER TABLE {} ADD COLUMN IF NOT EXISTS tenant_type text, "
+                    "DROP CONSTRAINT IF EXISTS partitiondb_provisioning_stage_check, "
+                    "ADD CONSTRAINT partitiondb_provisioning_stage_check CHECK (stage IN ({}))"
+                ).format(self.table, stages)
+            )
 
     @contextmanager
     def lock(self, tenant_id):

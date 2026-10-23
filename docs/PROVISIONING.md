@@ -2,7 +2,8 @@
 
 The framework-independent `partitiondb.provisioning` module separates lifecycle
 checkpoints from physical schema work. A `Provisioner` accepts a metadata store
-and three callbacks: `create`, `migrate`, and `verify`. Callbacks receive a trusted
+and required callbacks `create`, `migrate`, and `verify`, plus an optional
+`provision_access` callback. Callbacks receive a trusted
 `Tenant`; they establish their own database/adapter scopes. Exceptions propagate.
 No automatic schema cleanup or retry loop runs after an error.
 
@@ -12,7 +13,9 @@ No automatic schema cleanup or retry loop runs after an error.
 | CREATING | Refuse to proceed | Operator inspects ownership and reconciles explicitly |
 | SCHEMA_READY | Persist MIGRATING, then run migrations | Partial migration may be resumed by the migration engine |
 | MIGRATING | Rerun restartable migration callback | Callback must understand its own partial progress |
-| MIGRATED | Verify readiness, then persist ACTIVE | Failed verification may be repeated |
+| MIGRATED | Provision access if configured; otherwise verify and persist ACTIVE | Access starts with a durable ACCESS_PROVISIONING checkpoint |
+| ACCESS_PROVISIONING | Refuse to proceed | Inspect role/secret side effects and reconcile explicitly |
+| ACCESS_READY | Verify readiness, then persist ACTIVE | Failed verification may be repeated |
 | ACTIVE | Return the record | No callbacks run |
 
 The ordering matters: a crash after schema creation but before its checkpoint
@@ -37,8 +40,11 @@ only accepts CREATING records. Quiesce external schema-management tools first.
 
 `PostgresProvisioningStore` requires a dedicated, exclusively leased, autocommit
 psycopg connection to a shared control-plane database. `install()` explicitly
-creates its `partitiondb_provisioning` table. `register(tenant)` inserts a NEW
-record and rejects duplicate IDs or alias/schema pairs. Routing is immutable
+creates or upgrades its `partitiondb_provisioning` table in one transaction.
+Run it before starting provisioners: updating the stage constraint takes a table
+lock. Existing records and typed identities are preserved; unknown stored stages
+cause the entire upgrade to roll back. Repeat installation is supported.
+`register(tenant)` inserts a NEW record and rejects duplicate IDs or alias/schema pairs. Routing is immutable
 through the store API. `get` and `save` require the corresponding tenant lock.
 
 Per-tenant session advisory locks exclude participating processes. Contention
@@ -68,11 +74,13 @@ alias. Verification should enter `atomic_tenant` and inspect required tables and
 application readiness. Resolve permissions before invoking provisioning, and
 record tenant ID and stage in your own audit log without logging credentials.
 
-The service does not handle credential creation, dedicated database creation,
+The service delegates optional access provisioning to its callback (see
+[restricted access](ACCESS.md)). It does not handle dedicated database creation,
 schema cloning, backups, schema moves, destructive deprovisioning, migration
 inventories across a fleet, timeouts, or distributed transaction coordination.
 Restartability depends on the migration engine and application data migrations;
 non-atomic migrations and external side effects require their own reconciliation.
 
-A runnable example is `tests/django_project/recoverable.py`. See
+The fixture composition is in
+`tests/django_project/apps/organizations/provisioning.py`. See
 [release validation](RELEASE_VALIDATION.md) for the tested deployment scope.

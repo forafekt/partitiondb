@@ -3,10 +3,10 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
 
-from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.urls import get_urlconf, set_urlconf
 
+from partitiondb.adapters.django.configuration import get_config
 from partitiondb.core import validate_tenant_type
 
 
@@ -17,7 +17,7 @@ class TenantPolicy:
 
 
 def type_policies():
-    config = settings.PARTITIONDB
+    config = get_config()
     definitions = config.get("TENANT_TYPES", {})
     if not isinstance(definitions, dict):
         raise ImproperlyConfigured("TENANT_TYPES must be a mapping")
@@ -49,7 +49,7 @@ def tenant_policy(tenant):
     if not policies:
         if tenant.tenant_type is not None:
             raise ImproperlyConfigured("Typed identities require configured TENANT_TYPES")
-        return TenantPolicy(frozenset(settings.PARTITIONDB["TENANT_APPS"]))
+        return TenantPolicy(frozenset(get_config()["TENANT_APPS"]))
     if tenant.tenant_type not in policies:
         raise ImproperlyConfigured("Tenant identity has a missing or unknown type")
     return policies[tenant.tenant_type]

@@ -3,35 +3,17 @@ from django.conf import settings
 from django.core.checks import Error, register
 from django.core.exceptions import ImproperlyConfigured
 from django.urls import get_resolver
-from django.utils.module_loading import import_string
 
+from .configuration import get_config, middleware_matches, middleware_order, subclass_path
 from .tenant_types import type_policies
-
-FULL_PARTITIONDB_DEFAULT_CONFIG = {
-    "SHARED_HOSTS": [],
-    "SHARED_URLCONF": None,
-    "TENANT_APPS": [],
-    "TENANT_TYPES": {},
-    "SHARED_APPS": [],
-    "RESOLVER": None,
-    "TENANTS": None,
-    "PROVISIONER_FACTORY": None,
-    "REGISTRY_LIFECYCLE_FACTORY": None,
-    "OPERATION_OBSERVER": None,
-    "AUTHORIZE": None,
-    "TENANT_ADMIN_PERMISSIONS": None,
-    "TENANT_ADMIN_PATH": "/admin/",
-    "PROVISIONER": None,
-    "REGISTRY_LIFECYCLE": None,
-    "OPERATION_OBSERVER_FACTORY": None,
-}
 
 
 @register()
 def check_configuration(app_configs, **kwargs):
-    config = getattr(settings, "PARTITIONDB", FULL_PARTITIONDB_DEFAULT_CONFIG)
-    if not isinstance(config, dict):
-        return [Error("PARTITIONDB must be a dictionary", id="partitiondb.E008")]
+    try:
+        config = get_config()
+    except ImproperlyConfigured as error:
+        return [Error(str(error), id="partitiondb.E008")]
     errors = []
     hosts = config.get("SHARED_HOSTS", [])
     if not isinstance(hosts, (list, tuple)) or any(
@@ -55,6 +37,28 @@ def check_configuration(app_configs, **kwargs):
                     id="partitiondb.E023",
                 )
             )
+    from .middleware import tenant_admin_login_url, tenant_auth_routes
+
+    try:
+        paths, auth_urlconf = tenant_auth_routes(config)
+        tenant_admin_login_url(config)
+        if auth_urlconf:
+            _ = get_resolver(auth_urlconf).url_patterns
+        builtin_auth = "partitiondb.adapters.django.admin_auth.TenantAdminAuthMiddleware"
+        admin_path = config.get("TENANT_ADMIN_PATH", "/admin/")
+        if (
+            not isinstance(admin_path, str)
+            or not admin_path.startswith("/")
+            or admin_path.startswith("//")
+            or not admin_path.endswith("/")
+        ):
+            raise ValueError("TENANT_ADMIN_PATH must be an absolute path ending in /")
+        if middleware_matches(settings.MIDDLEWARE, builtin_auth) and any(
+            (admin_path + endpoint).startswith(prefix) for prefix in paths for endpoint in ("login/", "logout/")
+        ):
+            raise ValueError("Choose built-in admin authentication or provider account routes for login/logout")
+    except (ImportError, AttributeError, ImproperlyConfigured, ValueError) as error:
+        errors.append(Error(str(error), id="partitiondb.E029"))
     shared, tenant = config.get("SHARED_APPS", []), config.get("TENANT_APPS", [])
     if not all(isinstance(v, (list, tuple)) and all(isinstance(x, str) for x in v) for v in (shared, tenant)):
         return [Error("App lists must be lists of app labels", id="partitiondb.E001")]
@@ -71,11 +75,15 @@ def check_configuration(app_configs, **kwargs):
                 id="partitiondb.E003",
             )
         )
-    if "partitiondb.adapters.django.router.TenantRouter" not in settings.DATABASE_ROUTERS:
+    if not any(
+        subclass_path(path, "partitiondb.adapters.django.router.TenantRouter") for path in settings.DATABASE_ROUTERS
+    ):
         errors.append(Error("Install TenantRouter in DATABASE_ROUTERS", id="partitiondb.E004"))
     middleware = list(getattr(settings, "MIDDLEWARE", []))
     host_guard = "partitiondb.adapters.django.hosts.RegistryHostMiddleware"
-    if host_guard in middleware and (middleware[0] != host_guard or list(settings.ALLOWED_HOSTS) != ["*"]):
+    if middleware_matches(middleware, host_guard) and (
+        not subclass_path(middleware[0], host_guard) or list(settings.ALLOWED_HOSTS) != ["*"]
+    ):
         errors.append(
             Error(
                 "Install RegistryHostMiddleware first with ALLOWED_HOSTS=['*']",
@@ -84,36 +92,39 @@ def check_configuration(app_configs, **kwargs):
         )
     hostname_boundary = "partitiondb.adapters.django.middleware.TenantMiddleware"
     path_boundary = "partitiondb.adapters.django.subfolder.TenantSubfolderMiddleware"
-    boundary = path_boundary if path_boundary in middleware else hostname_boundary
-    if hostname_boundary in middleware and path_boundary in middleware:
+    boundary = path_boundary if middleware_matches(middleware, path_boundary) else hostname_boundary
+    if len(middleware_matches(middleware, hostname_boundary)) > 1:
         errors.append(Error("Choose one tenant request boundary", id="partitiondb.E015"))
     resolver_name = "SUBFOLDER_RESOLVER" if boundary == path_boundary else "RESOLVER"
-    resolver = config.get(resolver_name)
     try:
-        resolved = import_string(resolver) if isinstance(resolver, str) else None
-        if not callable(resolved):
-            raise ImportError("Resolver must be callable")
-    except (ImportError, AttributeError, ValueError):
-        errors.append(Error(f"{resolver_name} must name an importable callable", id="partitiondb.E009"))
+        config.callback(resolver_name, required=True)
+    except ImproperlyConfigured as error:
+        errors.append(Error(str(error), id="partitiondb.E009"))
     authorize = config.get("AUTHORIZE")
-    if authorize is not None:
+    try:
+        config.callback("AUTHORIZE")
+    except ImproperlyConfigured as error:
+        errors.append(Error(str(error), id="partitiondb.E010"))
+    for name in (
+        "TENANTS",
+        "PROVISIONER_FACTORY",
+        "REGISTRY_LIFECYCLE_FACTORY",
+        "OPERATION_OBSERVER",
+        "MIGRATION_OBSERVER",
+    ):
         try:
-            if not isinstance(authorize, str) or not callable(import_string(authorize)):
-                raise ImportError("Invalid authorization callback")
-        except (ImportError, AttributeError, ValueError):
-            errors.append(Error("AUTHORIZE must name an importable callable", id="partitiondb.E010"))
+            config.callback(name)
+        except ImproperlyConfigured as error:
+            errors.append(Error(str(error), id="partitiondb.E030"))
     identity = "partitiondb.adapters.django.identity.SharedIdentityMiddleware"
-    if identity in middleware:
+    if middleware_matches(middleware, identity):
         expected = [
             "django.contrib.sessions.middleware.SessionMiddleware",
             "django.contrib.auth.middleware.AuthenticationMiddleware",
             identity,
             boundary,
         ]
-        if (
-            not all(name in middleware for name in expected)
-            or [name for name in middleware if name in expected] != expected
-        ):
+        if not middleware_order(middleware, expected):
             errors.append(
                 Error(
                     "Order sessions, auth, shared identity, then tenant middleware",
@@ -137,10 +148,10 @@ def check_configuration(app_configs, **kwargs):
 
     if config.get("TENANT_ADMIN_PERMISSIONS"):
         try:
-            callback = import_string(config["TENANT_ADMIN_PERMISSIONS"])
-            if not callable(callback) or identity not in middleware or authorize is None:
+            callback = config.callback("TENANT_ADMIN_PERMISSIONS", required=True)
+            if not callable(callback) or not middleware_matches(middleware, identity) or authorize is None:
                 raise ValueError("Missing tenant admin identity/authorization")
-        except (ImportError, AttributeError, TypeError, ValueError):
+        except (ImportError, AttributeError, TypeError, ValueError, ImproperlyConfigured):
             errors.append(
                 Error(
                     "Tenant admin requires a permissions callable, SharedIdentityMiddleware and AUTHORIZE",
@@ -162,7 +173,7 @@ def check_configuration(app_configs, **kwargs):
             )
 
     admin_auth = "partitiondb.adapters.django.admin_auth.TenantAdminAuthMiddleware"
-    if admin_auth in middleware:
+    if middleware_matches(middleware, admin_auth):
         expected = [
             "django.contrib.sessions.middleware.SessionMiddleware",
             "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -171,7 +182,7 @@ def check_configuration(app_configs, **kwargs):
             hostname_boundary,
         ]
         if (
-            [name for name in middleware if name in expected] != expected
+            not middleware_order(middleware, expected)
             or not config.get("TENANT_ADMIN_PERMISSIONS")
             or authorize is None
         ):
@@ -200,7 +211,9 @@ def check_configuration(app_configs, **kwargs):
     if any(unsafe_cache(engine.get("OPTIONS", {}).get("loaders", [])) for engine in settings.TEMPLATES):
         errors.append(Error("Use the tenant-aware cached loader for tenant templates", id="partitiondb.E014"))
     for alias, db in settings.DATABASES.items():
-        if db["ENGINE"] != "partitiondb.adapters.django.backend":
+        if not subclass_path(
+            db["ENGINE"] + ".base.DatabaseWrapper", "partitiondb.adapters.django.backend.base.DatabaseWrapper"
+        ):
             errors.append(Error(f"Database {alias} must use the PartitionDB backend", id="partitiondb.E005"))
         if db.get("ATOMIC_REQUESTS"):
             errors.append(Error("ATOMIC_REQUESTS conflicts with atomic_tenant", id="partitiondb.E006"))

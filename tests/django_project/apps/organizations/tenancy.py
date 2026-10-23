@@ -45,7 +45,7 @@ def tenant_admin_permissions(request, tenant):
 
     permissions = {f"workspaces.{action}_workspace" for action in actions}
 
-    if membership.role == "admin":
-        permissions.add("audit.view_adminaudit")
+    # if membership.role == "admin":
+    #     permissions.add("audit.view_adminaudit")
 
     return permissions

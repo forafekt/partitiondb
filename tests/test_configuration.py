@@ -1,0 +1,220 @@
+import json
+import subprocess
+import sys
+from functools import partial
+from io import StringIO
+
+import pytest
+from django.core.exceptions import ImproperlyConfigured
+from django.core.management import call_command
+from django.test import override_settings
+
+from partitiondb.adapters.django.configuration import (
+    DEFAULTS,
+    DjangoComponents,
+    DjangoSetup,
+    PartitionDBSettings,
+    get_config,
+    middleware_order,
+)
+from tests.django_setup import configure
+
+configure()
+
+from partitiondb.adapters.django.admin_auth import TenantAdminAuthMiddleware  # noqa: E402
+from partitiondb.adapters.django.checks import check_configuration  # noqa: E402
+from partitiondb.adapters.django.hosts import RegistryHostMiddleware  # noqa: E402
+from partitiondb.adapters.django.identity import SharedIdentityMiddleware  # noqa: E402
+from partitiondb.adapters.django.middleware import TenantMiddleware  # noqa: E402
+from partitiondb.adapters.django.router import TenantRouter  # noqa: E402
+
+
+class CustomTenantMiddleware(TenantMiddleware):
+    pass
+
+
+class CustomHostGuard(RegistryHostMiddleware):
+    pass
+
+
+class CustomRouter(TenantRouter):
+    pass
+
+
+class CustomIdentity(SharedIdentityMiddleware):
+    pass
+
+
+class CustomAdminAuth(TenantAdminAuthMiddleware):
+    pass
+
+
+def setup(**extra):
+    return DjangoSetup(
+        shared_apps={
+            "auth": "django.contrib.auth",
+            "contenttypes": "django.contrib.contenttypes",
+            "sessions": "django.contrib.sessions",
+            "messages": "django.contrib.messages",
+        },
+        tenant_apps={"workspaces": "apps.workspaces"},
+        resolver=lambda host: None,
+        authorize=lambda request, tenant: False,
+        tenant_urlconf="tests.type_urls_empty",
+        **extra,
+    )
+
+
+def test_manager_is_safe_before_django_settings_and_apps_are_loaded():
+    script = """
+from partitiondb.adapters.django.configuration import DjangoSetup
+setup = DjangoSetup(shared_apps={}, tenant_apps={}, resolver=lambda host: None, tenant_urlconf='example.urls')
+assert setup.partitiondb['TENANT_ADMIN_PATH'] == '/admin/'
+from django.conf import settings
+assert not settings.configured
+"""
+    subprocess.run([sys.executable, "-c", script], check=True, timeout=15)
+
+
+def test_defaults_are_independent_and_unknown_settings_fail_closed():
+    first, second = PartitionDBSettings(), PartitionDBSettings()
+    first["TENANT_TYPES"]["changed"] = {}
+    assert second["TENANT_TYPES"] == DEFAULTS["TENANT_TYPES"] == {}
+    with pytest.raises(ImproperlyConfigured, match="RESOVLER"):
+        PartitionDBSettings({"RESOVLER": "typo"})
+    with override_settings(PARTITIONDB={"RESOVLER": "typo"}):
+        assert {error.id for error in check_configuration(None)} == {"partitiondb.E008"}
+
+
+def test_settings_overrides_do_not_leave_cached_callbacks_or_values():
+    callback = lambda host: "first"  # noqa: E731
+    with override_settings(PARTITIONDB={"RESOLVER": callback}):
+        assert get_config().callback("RESOLVER") is callback
+        assert get_config().as_dict()["RESOLVER"] is callback
+        with override_settings(PARTITIONDB={"RESOLVER": "tests.test_subfolder.resolve", "SUBFOLDER_PREFIX": "org"}):
+            assert get_config().callback("RESOLVER").__name__ == "resolve"
+            assert get_config()["SUBFOLDER_PREFIX"] == "org"
+        assert get_config().callback("RESOLVER") is callback
+
+
+@pytest.mark.parametrize("value", [False, "missing.module.function", "partitiondb.__version__"])
+def test_callbacks_reject_invalid_imports_and_noncallables(value):
+    with pytest.raises(ImproperlyConfigured, match="AUTHORIZE"):
+        PartitionDBSettings({"AUTHORIZE": value}).callback("AUTHORIZE")
+
+
+def test_manager_derives_app_labels_and_safe_middleware_order_once():
+    builder = setup(tenant_admin=True)
+    assert builder.installed_apps.count("apps.workspaces") == 1
+    assert builder.partitiondb["TENANT_APPS"] == ["workspaces"]
+    paths = builder.middleware(after_auth=["project.auth.AccountMiddleware"])
+    assert paths[0] == builder.components.host_guard
+    assert middleware_order(
+        paths,
+        [
+            "django.contrib.sessions.middleware.SessionMiddleware",
+            "django.contrib.auth.middleware.AuthenticationMiddleware",
+            builder.components.admin_auth_middleware,
+            builder.components.identity_middleware,
+            builder.components.tenant_middleware,
+        ],
+    )
+    assert paths.index("project.auth.AccountMiddleware") < paths.index(builder.components.identity_middleware)
+    assert builder.database(NAME="example")["ATOMIC_REQUESTS"] is False
+    assert "project.auth.AccountMiddleware" not in builder.middleware()
+
+
+def test_subfolder_manager_selects_path_boundary_without_host_resolver():
+    builder = setup(routing="subfolder")
+    assert builder.partitiondb["SUBFOLDER_RESOLVER"] is not None
+    assert builder.partitiondb["RESOLVER"] is None
+    assert builder.middleware()[-1].endswith("TenantSubfolderMiddleware")
+    assert builder.components.host_guard not in builder.middleware()
+
+
+def test_subclasses_pass_checks_and_runtime_guard_without_disabling_validation():
+    from django.conf import settings
+
+    components = DjangoComponents(
+        host_guard="tests.test_configuration.CustomHostGuard",
+        tenant_middleware="tests.test_configuration.CustomTenantMiddleware",
+        router="tests.test_configuration.CustomRouter",
+        identity_middleware="tests.test_configuration.CustomIdentity",
+        admin_auth_middleware="tests.test_configuration.CustomAdminAuth",
+    )
+    builder = setup(components=components, tenant_admin=True)
+    config = {
+        **settings.PARTITIONDB,
+        "RESOLVER": lambda host: None,
+        "AUTHORIZE": lambda request, tenant: False,
+        "TENANT_ADMIN_PERMISSIONS": lambda request, tenant: set(),
+    }
+    with override_settings(
+        PARTITIONDB=config,
+        ALLOWED_HOSTS=["*"],
+        MIDDLEWARE=builder.middleware(),
+        DATABASE_ROUTERS=builder.database_routers,
+    ):
+        ids = {error.id for error in check_configuration(None)}
+        assert not ids & {"partitiondb.E004", "partitiondb.E009", "partitiondb.E011", "partitiondb.E026"}
+        CustomHostGuard(lambda request: None)
+        CustomAdminAuth(lambda request: None)
+        wrong = builder.middleware()
+        wrong[-1], wrong[-2] = wrong[-2], wrong[-1]
+        # Moving the tenant boundary ahead of identity must still fail.
+        identity = wrong.index(builder.components.identity_middleware)
+        boundary = wrong.index(components.tenant_middleware)
+        wrong[identity], wrong[boundary] = wrong[boundary], wrong[identity]
+        with override_settings(MIDDLEWARE=wrong):
+            assert "partitiondb.E011" in {error.id for error in check_configuration(None)}
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"SHARED_APP": []},
+        {"components": "project.Components"},
+        {"routing": "automatic"},
+        {"tenant_admin": True, "routing": "subfolder"},
+    ],
+)
+def test_manager_rejects_misconfiguration(extra):
+    with pytest.raises(ImproperlyConfigured):
+        setup(**extra)
+
+
+def test_settings_command_shows_effective_defaults_and_no_database_credentials():
+    stream = StringIO()
+    call_command("partitiondb_settings", stdout=stream)
+    output = json.loads(stream.getvalue())
+    assert output["TENANT_ADMIN_PATH"] == "/admin/"
+    assert "DATABASES" not in output and "PASSWORD" not in output
+
+
+def test_callable_objects_are_inspectable_without_printing_their_arguments():
+    stream = StringIO()
+    with override_settings(PARTITIONDB={"AUTHORIZE": partial(str, "private-value")}):
+        call_command("partitiondb_settings", stdout=stream)
+    assert json.loads(stream.getvalue())["AUTHORIZE"] == "functools.partial"
+    assert "private-value" not in stream.getvalue()
+
+
+def test_backend_subclass_can_replace_introspection_without_opening_a_connection():
+    from django.conf import settings
+
+    from partitiondb.adapters.django.backend.base import DatabaseWrapper, SchemaIntrospection
+
+    class CustomIntrospection(SchemaIntrospection):
+        pass
+
+    class CustomBackend(DatabaseWrapper):
+        introspection_class = CustomIntrospection
+
+    connection = CustomBackend(dict(settings.DATABASES["default"]))
+    assert isinstance(connection.introspection, CustomIntrospection)
+    assert connection.connection is None
+
+
+def test_middleware_slots_reject_a_single_string():
+    with pytest.raises(ImproperlyConfigured, match="after_auth"):
+        setup().middleware(after_auth="project.middleware.Provider")

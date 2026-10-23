@@ -4,7 +4,6 @@ import os
 from fnmatch import fnmatch
 from pathlib import Path
 
-from django.conf import settings
 from django.contrib.staticfiles.finders import BaseFinder
 from django.contrib.staticfiles.storage import StaticFilesStorage
 from django.core.checks import Error
@@ -12,6 +11,7 @@ from django.core.exceptions import ImproperlyConfigured, SuspiciousFileOperation
 from django.core.files.storage import FileSystemStorage
 
 from partitiondb import current_tenant
+from partitiondb.adapters.django.configuration import get_config
 from partitiondb.keys import storage_prefix
 
 from .assets import asset_name, asset_roots, tenant_path
@@ -20,7 +20,7 @@ from .assets import asset_name, asset_roots, tenant_path
 class TenantStaticFinder(BaseFinder):
     def check(self, **kwargs):
         try:
-            asset_roots(settings.PARTITIONDB.get("STATIC_ROOTS", []))
+            asset_roots(get_config().get("STATIC_ROOTS", []))
         except ImproperlyConfigured:
             return [Error("STATIC_ROOTS must be a list of filesystem paths", id="partitiondb.E016")]
         return []
@@ -29,7 +29,7 @@ class TenantStaticFinder(BaseFinder):
         tenant = current_tenant(required=False)
         if tenant is None:
             return []
-        return [tenant_path(root, tenant) for root in asset_roots(settings.PARTITIONDB.get("STATIC_ROOTS", []))]
+        return [tenant_path(root, tenant) for root in asset_roots(get_config().get("STATIC_ROOTS", []))]
 
     def find(self, path, find_all=False, **kwargs):
         find_all = kwargs.pop("all", find_all)  # Django 5.2 and 6.0 keyword compatibility.

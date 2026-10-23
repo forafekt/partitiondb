@@ -34,7 +34,7 @@ def invoke(provisioner, *arguments):
     with (
         override_settings(PARTITIONDB=config),
         patch(
-            "partitiondb.adapters.django.management.commands.provision_tenant.import_string",
+            "partitiondb.adapters.django.configuration.import_string",
             return_value=factory,
         ),
     ):
@@ -110,7 +110,7 @@ def test_typed_reconciliation_requires_type_as_well_as_route():
 
 
 def test_invalid_options_and_tenant_context_fail_before_factory():
-    with patch("partitiondb.adapters.django.management.commands.provision_tenant.import_string") as factory:
+    with patch("partitiondb.adapters.django.configuration.import_string") as factory:
         for arguments in [("--reconcile-created",), ("--confirm-schema", "alpha")]:
             with pytest.raises(CommandError):
                 call_command("provision_tenant", "one", *arguments)

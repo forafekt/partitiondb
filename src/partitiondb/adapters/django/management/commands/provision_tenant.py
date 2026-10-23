@@ -2,11 +2,10 @@
 
 import json
 
-from django.conf import settings
 from django.core.management import BaseCommand, CommandError
-from django.utils.module_loading import import_string
 
 from partitiondb import Tenant, current_tenant, tenant_scope
+from partitiondb.adapters.django.configuration import get_config
 from partitiondb.provisioning import Provisioner
 
 
@@ -36,11 +35,8 @@ class Command(BaseCommand):
         tenant_id = options["tenant_id"]
         if not isinstance(tenant_id, str) or not tenant_id:
             raise CommandError("Tenant ID must be nonempty")
-        path = settings.PARTITIONDB.get("PROVISIONER_FACTORY")
-        if not isinstance(path, str):
-            raise CommandError("Configure PARTITIONDB.PROVISIONER_FACTORY")
         try:
-            factory = import_string(path)
+            factory = get_config().callback("PROVISIONER_FACTORY", required=True)
             if not callable(factory):
                 raise TypeError("Provisioner factory must be callable")
             # Factory owns registry lookup, credentials and connection lifetime.

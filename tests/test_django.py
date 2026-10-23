@@ -514,19 +514,13 @@ def test_tenant_static_collection_rejects_links_and_missing_stable_identity():
 
 @pytest.mark.postgres
 def test_migration_progress_from_real_tenant_executor(schemas):
-    from unittest.mock import patch
-
     from django.conf import settings
     from django.test import override_settings
 
     tenant = schemas[0]
     progress = []
-    config = dict(settings.PARTITIONDB, MIGRATION_OBSERVER="application.progress")
-    module = "partitiondb.adapters.django.management.commands.migrate_tenant"
-    with (
-        override_settings(PARTITIONDB=config),
-        patch(module + ".import_string", return_value=progress.append),
-    ):
+    config = dict(settings.PARTITIONDB, MIGRATION_OBSERVER=progress.append)
+    with override_settings(PARTITIONDB=config):
         call_command("migrate_tenant", tenant.schema, tenant_id=tenant.id, verbosity=0)
     assert any(event.action == "apply_start" for event in progress)
     assert any(event.action == "apply_success" and event.app_label == "workspaces" for event in progress)

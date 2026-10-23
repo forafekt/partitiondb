@@ -1,4 +1,4 @@
-"""Run database tests and examples in fresh, uniquely named disposable databases.
+"""Run database tests in a fresh, uniquely named disposable database.
 
 The configured admin connection must have CREATEDB. Only databases created by
 this invocation are dropped. Never use application/production credentials here.
@@ -35,32 +35,20 @@ def run(arguments, environment):
     subprocess.run([sys.executable, *arguments], cwd=ROOT, env=environment, check=True)
 
 
-def validate(admin_dsn, *, examples_only=False, installed_package=False):
+def validate(admin_dsn, *, installed_package=False):
     created = []
     with psycopg.connect(admin_dsn, autocommit=True) as admin:
         try:
-            databases = {}
-            for purpose in ["tests"]:
-                name = "pdb_validation_" + purpose + "_" + secrets.token_hex(8)
-                admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-                created.append(name)
-                databases[purpose] = make_conninfo(admin_dsn, dbname=name)
+            name = "pdb_validation_tests_" + secrets.token_hex(8)
+            admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+            created.append(name)
             environment = os.environ.copy()
-            if True:
-                environment["PARTITIONDB_TEST_DSN"] = databases["tests"]
-                arguments = ["-m", "pytest", "--require-postgres", "-p", "no:cacheprovider"]
-                if installed_package:
-                    run(
-                        [
-                            "-c",
-                            INSTALLED_PACKAGE_PROBE,
-                        ],
-                        environment,
-                    )
-                    arguments.extend(["--override-ini", "pythonpath=.", "--import-mode=importlib"])
-                run(arguments, environment)
-            # The Django integration fixture now lives in tests/django_project.
-            # Its management commands are exercised by the pytest suite.
+            environment["PARTITIONDB_TEST_DSN"] = make_conninfo(admin_dsn, dbname=name)
+            arguments = ["-m", "pytest", "--require-postgres", "-p", "no:cacheprovider"]
+            if installed_package:
+                run(["-c", INSTALLED_PACKAGE_PROBE], environment)
+                arguments.extend(["--override-ini", "pythonpath=.", "--import-mode=importlib"])
+            run(arguments, environment)
         finally:
             # Cleanup all owned databases, even if one DROP fails. Failed names
             # are safe to report; no DSNs/passwords are included in this message.

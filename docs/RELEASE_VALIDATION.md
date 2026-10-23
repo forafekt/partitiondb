@@ -1,6 +1,6 @@
 # Release validation
 
-## Recorded acceptance
+## Historical acceptance
 
 The supplied 2026-10-20 report for 0.2.0a27 records all eight gates passing:
 Ruff lint, format, core strict typing, build, artifact inspection, seven-entry
@@ -14,11 +14,8 @@ The report was reviewed; individual gate logs were not supplied with it.
 | partitiondb-0.2.0a27-py3-none-any.whl | 7393070e19f0d5d2b7f023b8e4433230a286f5804131e1378ce03a7ef84cbf2e |
 | partitiondb-0.2.0a27.tar.gz | 2b24ba1c700d169ff84eefaa83aac37a63000c68460a445aad36a8baf86cc496 |
 
-The accepted scope is summarized in README.md. MIT was selected by the owner.
-The earlier 0.2.0a28 release removed the legacy archive and obsolete development notes, adds
-license/notices and license metadata, and verifies those files in artifacts.
-Runtime implementation is unchanged; only the package version changes. These
-new artifact hashes are distinct from the a27 acceptance evidence.
+These records apply only to the named historical artifacts, not the current
+checkout. Later runtime changes require fresh acceptance evidence.
 
 ## Repeatable technical run
 
@@ -41,7 +38,7 @@ they may contain test diagnostics. Fingerprints detect accidental source changes
 not malicious tampering or independently signed reproducible builds.
 
 The matrix covers Python 3.11 with Django 5.2, and Python 3.12/3.13/3.14 with Django
-5.2 and 6.0, on PostgreSQL 16. Installed-package validation rejects imports from
+5.2, 6.0 and 6.1, on PostgreSQL 16 (ten combinations). Installed-package validation rejects imports from
 src and version mismatches. Configured CI coverage is not itself a passing run.
 
 ## Individual checks
@@ -55,8 +52,8 @@ python -m build
 python scripts/check_artifacts.py
 ```
 
-The full validator creates fresh random databases, runs required-PostgreSQL tests
-and both framework examples, then removes only its owned databases. The admin
+The full validator creates a fresh random database, runs the required-PostgreSQL
+test suite (including Django scenarios), then removes only its owned database. The admin
 role needs CREATEDB and CREATEROLE. Partial failures retain diagnostic information
 and do not remove pre-existing databases. Use only the disposable Compose test
 project and test credentials. The services are fixtures, not production infrastructure.
@@ -84,9 +81,7 @@ metadata change produces new artifacts and requires affected packaging/import
 checks. Database regressions need repetition when database/runtime behavior or
 relevant dependencies change, not solely because documentation/license text changed.
 
-Final a28 packaging checks passed: MIT metadata and exact license/notice bytes in
-both archives, isolated core wheel imports, documentation links, lint/format and
-core strict typing. The noneditable installed-wheel suite passed 215 tests with
-29 PostgreSQL-dependent skips locally. Runtime Python sources match accepted a27
-except the version string; the a27 database matrix/acceptance evidence remains
-separate from these new artifact hashes.
+Historical a28 packaging checks covered license metadata, isolated core imports,
+documentation links, lint/format and core typing. Its local suite recorded 215
+passes and 29 PostgreSQL-dependent skips. This is separate from the a27 database
+matrix and does not establish acceptance of the current runtime.

@@ -2,11 +2,10 @@
 
 import json
 
-from django.conf import settings
 from django.core.management import BaseCommand, CommandError
-from django.utils.module_loading import import_string
 
 from partitiondb import Tenant, current_tenant
+from partitiondb.adapters.django.configuration import get_config
 from partitiondb.adapters.django.registry_lifecycle import RegistryLifecycle
 
 
@@ -23,9 +22,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if current_tenant(required=False) is not None:
             raise CommandError("Registry lifecycle commands require shared context")
-        path = settings.PARTITIONDB.get("REGISTRY_LIFECYCLE_FACTORY")
-        if not isinstance(path, str) or not path:
-            raise CommandError("Configure PARTITIONDB.REGISTRY_LIFECYCLE_FACTORY")
         try:
             confirm = Tenant(
                 options["tenant_id"],
@@ -33,7 +29,7 @@ class Command(BaseCommand):
                 options["confirm_database"],
                 tenant_type=options["confirm_type"],
             )
-            factory = import_string(path)
+            factory = get_config().callback("REGISTRY_LIFECYCLE_FACTORY", required=True)
             with factory(confirm.id) as controller:
                 if not isinstance(controller, RegistryLifecycle):
                     raise TypeError("Factory must yield RegistryLifecycle")

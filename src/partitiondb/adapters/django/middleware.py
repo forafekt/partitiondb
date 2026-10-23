@@ -2,15 +2,58 @@
 
 from urllib.parse import urlsplit
 
-from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.http import Http404
-from django.utils.module_loading import import_string
 
+from partitiondb.adapters.django.configuration import get_config
 from partitiondb.core import Tenant, tenant_scope
 
 from .scope import atomic_tenant
 from .tenant_types import request_urlconf, tenant_policy
+
+
+def tenant_auth_routes(config):
+    """Explicit shared account routes on registered tenant hosts only."""
+    paths, urlconf = config.get("TENANT_AUTH_PATHS", []), config.get("TENANT_AUTH_URLCONF")
+    if not paths and urlconf is None:
+        return (), None
+    if (
+        not isinstance(paths, (list, tuple))
+        or not paths
+        or not isinstance(urlconf, str)
+        or not urlconf
+        or any(
+            not isinstance(path, str)
+            or not path.startswith("/")
+            or path.startswith("//")
+            or path == "/"
+            or not path.endswith("/")
+            or any(c in path for c in ("?", "#", "\\", "%"))
+            or any(c.isspace() for c in path)
+            or any(part in (".", "..") for part in path.split("/"))
+            for path in paths
+        )
+    ):
+        raise ImproperlyConfigured(
+            "Configure TENANT_AUTH_PATHS as non-root absolute path prefixes ending in / "
+            "and TENANT_AUTH_URLCONF as a dedicated account URLconf"
+        )
+    return tuple(paths), urlconf
+
+
+def tenant_admin_login_url(config):
+    url = config.get("TENANT_ADMIN_LOGIN_URL")
+    if url is None:
+        return None
+    if not isinstance(url, str) or not url or "\\" in url or any(c.isspace() for c in url):
+        raise ImproperlyConfigured("TENANT_ADMIN_LOGIN_URL must be a local path or an absolute HTTP(S) URL")
+    parsed = urlsplit(url)
+    if not (
+        (url.startswith("/") and not url.startswith("//"))
+        or (parsed.scheme in ("http", "https") and parsed.netloc and not parsed.username)
+    ):
+        raise ImproperlyConfigured("TENANT_ADMIN_LOGIN_URL must be a local path or an absolute HTTP(S) URL")
+    return url
 
 
 class TenantMiddleware:
@@ -28,12 +71,13 @@ class TenantMiddleware:
 
     def __init__(self, get_response):
         self.get_response = get_response
-        self.resolve = import_string(settings.PARTITIONDB[self.resolver_setting])
-        authorize = settings.PARTITIONDB.get("AUTHORIZE")
-        self.authorize = import_string(authorize) if authorize else None
+        self.resolve = get_config().callback(self.resolver_setting, required=True)
+        self.authorize = get_config().callback("AUTHORIZE")
+        self.auth_paths, self.auth_urlconf = tenant_auth_routes(get_config())
+        self.admin_login_url = tenant_admin_login_url(get_config())
 
     def shared_response(self, request):
-        config = settings.PARTITIONDB
+        config = get_config()
         hosts = config.get("SHARED_HOSTS", [])
         if not hosts:
             return None
@@ -43,6 +87,9 @@ class TenantMiddleware:
         urlconf = config.get("SHARED_URLCONF")
         if not urlconf:
             raise ImproperlyConfigured("SHARED_HOSTS requires SHARED_URLCONF")
+        return self.shared_urlconf_response(request, urlconf)
+
+    def shared_urlconf_response(self, request, urlconf):
         with tenant_scope(None), request_urlconf(request, urlconf):
             had_tenant = hasattr(request, "tenant")
             previous_tenant = getattr(request, "tenant", None)
@@ -80,18 +127,31 @@ class TenantMiddleware:
             raise Http404("Unknown tenant")
         if not isinstance(tenant, Tenant):
             raise TypeError("PARTITIONDB resolver must return Tenant or None")
+        if any(request.path_info.startswith(prefix) for prefix in self.auth_paths):
+            return self.shared_urlconf_response(request, self.auth_urlconf)
+        admin_path = get_config().get("TENANT_ADMIN_PATH", "/admin/")
+        if (
+            self.admin_login_url
+            and (request.path_info == admin_path.rstrip("/") or request.path_info.startswith(admin_path))
+            and hasattr(request, "principal")
+            and not request.principal.is_authenticated
+        ):
+            from django.contrib.auth.views import redirect_to_login
+
+            target = request.build_absolute_uri() if urlsplit(self.admin_login_url).netloc else request.get_full_path()
+            return redirect_to_login(target, self.admin_login_url)
         policy = tenant_policy(tenant)
         request.tenant = tenant
         if self.authorize is not None:
             with tenant_scope(None):
                 if self.authorize(request, tenant) is not True:
                     raise PermissionDenied("Tenant access denied")
-        permissions_path = settings.PARTITIONDB.get("TENANT_ADMIN_PERMISSIONS")
+        permissions_path = get_config().get("TENANT_ADMIN_PERMISSIONS")
         if permissions_path:
             if self.authorize is None or not hasattr(request, "principal"):
                 raise ImproperlyConfigured("Tenant admin requires SharedIdentityMiddleware and AUTHORIZE")
             with tenant_scope(None):
-                permissions = import_string(permissions_path)(request, tenant)
+                permissions = get_config().callback("TENANT_ADMIN_PERMISSIONS", required=True)(request, tenant)
             if not isinstance(permissions, (set, frozenset, list, tuple)) or any(
                 not isinstance(value, str) for value in permissions
             ):

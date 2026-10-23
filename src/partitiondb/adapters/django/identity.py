@@ -32,6 +32,8 @@ class SharedIdentityMiddleware:
     endpoints outside TenantMiddleware. Views should consume request.principal.
     """
 
+    principal_class = Principal
+
     sync_capable = True
     async_capable = False
 
@@ -45,7 +47,7 @@ class SharedIdentityMiddleware:
             raise ImproperlyConfigured("Install AuthenticationMiddleware before shared identity")
         user = request.user
         if user.is_authenticated and user.is_active:
-            request.principal = Principal(
+            request.principal = self.principal_class(
                 id=str(user.pk),
                 username=user.get_username(),
                 permissions=frozenset(user.get_all_permissions()),
@@ -53,5 +55,5 @@ class SharedIdentityMiddleware:
                 is_superuser=bool(user.is_superuser),
             )
         else:
-            request.principal = Principal(None, "", frozenset())
+            request.principal = self.principal_class(None, "", frozenset())
         return self.get_response(request)

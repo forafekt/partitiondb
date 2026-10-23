@@ -1,9 +1,9 @@
-from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.core.management import BaseCommand, CommandError, call_command
 from django.db import connections
-from django.utils.module_loading import import_string
 
 from partitiondb import tenant_scope
+from partitiondb.adapters.django.configuration import get_config
 from partitiondb.adapters.django.inventory import operational_tenant
 from partitiondb.adapters.django.migration_progress import ObservedMigrateCommand
 from partitiondb.operation_events import OperationEvent, observe_operation
@@ -34,14 +34,11 @@ class Command(BaseCommand):
         connection = connections[tenant.database]
         if connection.in_atomic_block or not connection.get_autocommit():
             raise CommandError("Migrations require an idle connection")
-        observer_path = settings.PARTITIONDB.get("OPERATION_OBSERVER")
-        observer = import_string(observer_path) if observer_path else None
-        if observer is not None and not callable(observer):
-            raise CommandError("OPERATION_OBSERVER must name a callable")
-        progress_path = settings.PARTITIONDB.get("MIGRATION_OBSERVER")
-        progress_observer = import_string(progress_path) if progress_path else None
-        if progress_observer is not None and not callable(progress_observer):
-            raise CommandError("MIGRATION_OBSERVER must name a callable")
+        try:
+            observer = get_config().callback("OPERATION_OBSERVER")
+            progress_observer = get_config().callback("MIGRATION_OBSERVER")
+        except ImproperlyConfigured as error:
+            raise CommandError(str(error)) from error
         with observe_operation(
             OperationEvent(
                 "migrate",

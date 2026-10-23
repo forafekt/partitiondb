@@ -1,5 +1,8 @@
 # Django adapter setup
 
+For new projects, start with [the configuration manager](SETTINGS.md). The manual
+settings below remain supported for existing projects.
+
 This adapter targets Django 5.2, 6.0 and 6.1, subject to the configured CI matrix passing. Django 6.x requires Python 3.12+. PostgreSQL 16 is the initial integration target.
 
 ## Settings

@@ -1,7 +1,7 @@
 """Explicit, opt-in PostgreSQL restricted role lifecycle.
 
 Requires a separate administrative connection with CREATEROLE and grant rights.
-Call after migrations; provision() is safe to repeat for the same owned role.
+Call after migrations; provision() rejects existing roles and must not be blindly retried.
 Do not use this module from normal request handlers.
 """
 

@@ -112,7 +112,7 @@ def test_invalid_progress_observer_rejects_before_database_cursor():
     with (
         override_settings(PARTITIONDB=dict(settings.PARTITIONDB, MIGRATION_OBSERVER="app.callback")),
         patch(module + ".connections", {"default": connection}),
-        patch(module + ".import_string", return_value=42),
+        patch("partitiondb.adapters.django.configuration.import_string", return_value=42),
         pytest.raises(CommandError, match="MIGRATION_OBSERVER"),
     ):
         call_command("migrate_tenant", "alpha")

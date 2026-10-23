@@ -1,10 +1,10 @@
 import argparse
 
-from django.conf import settings
 from django.core.management import BaseCommand, CommandError, call_command
 from django.db import connections
 
 from partitiondb import tenant_scope
+from partitiondb.adapters.django.configuration import get_config
 from partitiondb.adapters.django.inventory import operational_tenant
 
 
@@ -32,7 +32,7 @@ class Command(BaseCommand):
         if name == "collectstatic":
             if any(value in {"--link", "-l"} for value in options["command_args"]):
                 raise CommandError("Tenant static collection requires copied files, not --link")
-            if not options.get("tenant_id") and not settings.PARTITIONDB.get("TENANTS"):
+            if not options.get("tenant_id") and not get_config().get("TENANTS"):
                 raise CommandError("Static collection requires a stable --tenant-id or TENANTS inventory")
         tenant = operational_tenant(
             options["schema"],

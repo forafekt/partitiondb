@@ -37,6 +37,8 @@ class DatabaseWrapper(PostgreSQLWrapper):
     Raw cursor reuse across scope changes is prohibited by the public contract.
     """
 
+    introspection_class = SchemaIntrospection
+
     @property
     def schema_name(self):
         tenant = current_tenant(required=False)
@@ -44,7 +46,6 @@ class DatabaseWrapper(PostgreSQLWrapper):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.introspection = SchemaIntrospection(self)
         if self.settings_dict.get("OPTIONS", {}).get("pool"):
             raise ImproperlyConfigured("PartitionDB Django backend does not support driver pooling")
 
