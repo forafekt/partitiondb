@@ -5,7 +5,7 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import psycopg
 from psycopg import sql
@@ -50,9 +50,9 @@ def main():
         from apps.organizations.provisioning import access_context, registry_lifecycle_factory
         from apps.workspaces.models import Workspace
         from django.contrib.auth import get_user_model
-        from django.core.management import call_command
+        from django.core.management import CommandError, call_command
         from django.db import connections, transaction
-        from django.test import Client, RequestFactory
+        from django.test import Client, RequestFactory, override_settings
 
         from partitiondb.adapters.django.access_control.models import (
             AccessOperation,
@@ -139,6 +139,191 @@ def main():
             assert "Verified — fresh password connection succeeded".encode() in client.get(status_url).content
             assert AccessOperation.objects.get(tenant_id=str(normal.pk)).state == "completed"
             assert not AccessRecoveryAudit.objects.exists()
+
+            # A real atomic migration fails after DDL and data writes. Earlier migrations
+            # remain applied, the failed migration rolls back, and provisioning stays inactive.
+            migrating = register("migrationfailure")
+            migration_tenant = migrating.as_tenant()
+            module = Path(directory) / "failure_migrations"
+            module.mkdir()
+            (module / "__init__.py").write_text("")
+            (module / "0001_initial.py").write_text(
+                "from importlib import import_module\n"
+                "Migration = import_module('apps.workspaces.migrations.0001_initial').Migration\n"
+            )
+            (module / "0002_failure.py").write_text(
+                "import os\nfrom django.db import migrations\n"
+                "def fail(apps, schema_editor):\n"
+                "    apps.get_model('workspaces', 'Workspace').objects.using(\n"
+                "        schema_editor.connection.alias).create(name='migration-seed', slug='migration-seed')\n"
+                "    if os.environ.get('PARTITIONDB_TEST_MIGRATION_FAILURE'):\n"
+                "        raise RuntimeError('injected migration failure')\n"
+                "class Migration(migrations.Migration):\n"
+                "    dependencies = [('workspaces', '0001_initial')]\n"
+                "    operations = [migrations.RunSQL('CREATE TABLE migration_rollback_marker (id integer)'),\n"
+                "                  migrations.RunPython(fail, migrations.RunPython.noop)]\n"
+            )
+            sys.path.insert(0, directory)
+            try:
+                with override_settings(MIGRATION_MODULES={"workspaces": "failure_migrations"}):
+                    with access_context(migration_tenant.id) as context:
+                        with patch.dict(os.environ, {"PARTITIONDB_TEST_MIGRATION_FAILURE": "1"}):
+                            try:
+                                context.provisioner.run(migration_tenant.id)
+                            except RuntimeError as error:
+                                assert str(error) == "injected migration failure"
+                            else:
+                                raise AssertionError("Expected actual migration failure")
+                        with context.provisioner.store.lock(migration_tenant.id):
+                            assert context.provisioner.store.get(migration_tenant.id).stage == Stage.MIGRATING
+                        migrating.refresh_from_db()
+                        assert not migrating.active and not migrating.access_role
+                        assert client.get("/admin/", HTTP_HOST="migrationfailure.localhost").status_code == 400
+                        assert not AccessOperation.objects.filter(tenant_id=migration_tenant.id).exists()
+                        with atomic_tenant(migration_tenant, privileged=True):
+                            assert not Workspace.objects.exists()
+                            with connections["default"].cursor() as cursor:
+                                cursor.execute("SELECT to_regclass('migration_rollback_marker')")
+                                assert cursor.fetchone()[0] is None
+                                cursor.execute(
+                                    "SELECT name FROM django_migrations WHERE app='workspaces' ORDER BY name"
+                                )
+                                assert cursor.fetchall() == [("0001_initial",)]
+                        assert connections["default"].connection is None
+                        # Successful retry also proves the failed executor released its migration lock.
+                        assert context.provisioner.run(migration_tenant.id).stage == Stage.ACTIVE
+                    with registry_lifecycle_factory(migration_tenant.id) as lifecycle:
+                        lifecycle.set_active(migration_tenant, active=True)
+                    with atomic_tenant(migration_tenant):
+                        assert Workspace.objects.filter(slug="migration-seed").count() == 1
+                        with connections["default"].cursor() as cursor:
+                            cursor.execute("SELECT count(*) FROM migration_rollback_marker")
+                            assert cursor.fetchone()[0] == 0
+                    # Later upgrades create objects after the original role was provisioned.
+                    (module / "0003_upgrade.py").write_text(
+                        "from django.db import migrations\n"
+                        "class Migration(migrations.Migration):\n"
+                        "    dependencies = [('workspaces', '0002_failure')]\n"
+                        "    operations = [migrations.RunSQL('CREATE TABLE upgrade_item "
+                        "(id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, body text)')]\n"
+                    )
+                    import importlib
+
+                    importlib.invalidate_caches()
+                    # Active restricted admission must be disabled before an upgrade.
+                    try:
+                        call_command(
+                            "migrate_tenant", migration_tenant.schema, tenant_id=migration_tenant.id, verbosity=0
+                        )
+                    except CommandError:
+                        pass
+                    else:
+                        raise AssertionError("Upgrade accepted active restricted admission")
+                    with registry_lifecycle_factory(migration_tenant.id) as lifecycle:
+                        lifecycle.set_active(migration_tenant, active=False)
+                    with access_context(migration_tenant.id) as context:
+                        secret_path = context.credentials._path(migrating.credential_ref)
+                        password = secret_path.read_text()
+                        try:
+                            secret_path.write_text("invalid-upgrade-password")
+                            with patch(
+                                "partitiondb.adapters.django.access_control.migration_access.provision_restricted_role"
+                            ) as grant:
+                                try:
+                                    call_command(
+                                        "migrate_tenant",
+                                        migration_tenant.schema,
+                                        tenant_id=migration_tenant.id,
+                                        verbosity=0,
+                                    )
+                                except CommandError:
+                                    pass
+                                else:
+                                    raise AssertionError("Migration accepted invalid credentials")
+                                grant.assert_not_called()
+                        finally:
+                            secret_path.write_text(password)
+                        with context.provisioner.store.lock(migration_tenant.id):
+                            try:
+                                call_command(
+                                    "migrate_tenant",
+                                    migration_tenant.schema,
+                                    tenant_id=migration_tenant.id,
+                                    verbosity=0,
+                                )
+                            except CommandError:
+                                pass
+                            else:
+                                raise AssertionError("Upgrade bypassed lifecycle lock")
+                    from partitiondb.adapters.django.access_control.migration_access import DjangoMigrationAccess
+
+                    with access_context(migration_tenant.id) as context:
+                        service_boundary = DjangoMigrationAccess(
+                            Organization,
+                            context.provisioner.store,
+                            admin_connection=context.admin_connection,
+                            credential_authentication=context.authentication,
+                        )
+                        with context.admin_connection.transaction():
+                            try:
+                                with service_boundary(migration_tenant):
+                                    pass
+                            except ValueError:
+                                pass
+                            else:
+                                raise AssertionError("Grant finalization accepted an outer admin transaction")
+                    # Neither plan nor check enters the mutating lifecycle context.
+                    from django.conf import settings
+
+                    forbidden = Mock(side_effect=AssertionError("Read-only context invoked"))
+                    with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, MIGRATION_CONTEXT=forbidden)):
+                        call_command(
+                            "migrate_tenant",
+                            migration_tenant.schema,
+                            tenant_id=migration_tenant.id,
+                            verbosity=0,
+                            plan=True,
+                        )
+                        call_command(
+                            "migrate_tenant",
+                            migration_tenant.schema,
+                            "workspaces",
+                            "0002",
+                            tenant_id=migration_tenant.id,
+                            verbosity=0,
+                            check=True,
+                        )
+                    forbidden.assert_not_called()
+                    # Committed DDL plus failed finalization remains visible and safely retryable.
+                    with patch(
+                        "partitiondb.adapters.django.access_control.migration_access.provision_restricted_role",
+                        side_effect=RuntimeError("password=never-display-this"),
+                    ):
+                        try:
+                            call_command(
+                                "migrate_tenant", migration_tenant.schema, tenant_id=migration_tenant.id, verbosity=0
+                            )
+                        except CommandError as error:
+                            assert "finalization failed" in str(error)
+                            assert "never-display-this" not in str(error)
+                        else:
+                            raise AssertionError("Finalization failure reported success")
+                    with registry_lifecycle_factory(migration_tenant.id) as lifecycle:
+                        try:
+                            lifecycle.set_active(migration_tenant, active=True)
+                        except ValueError:
+                            pass
+                        else:
+                            raise AssertionError("Activation accepted missing upgrade grants")
+                    call_command("migrate_tenant", migration_tenant.schema, tenant_id=migration_tenant.id, verbosity=0)
+                    with registry_lifecycle_factory(migration_tenant.id) as lifecycle:
+                        lifecycle.set_active(migration_tenant, active=True)
+                    with atomic_tenant(migration_tenant):
+                        with connections["default"].cursor() as cursor:
+                            cursor.execute("INSERT INTO upgrade_item (body) VALUES ('upgraded') RETURNING id")
+                            assert cursor.fetchone()[0] == 1
+            finally:
+                sys.path.remove(directory)
 
             interrupted = register("interrupted")
             tenant = interrupted.as_tenant()
@@ -227,6 +412,58 @@ def main():
                 == 302
             )
 
+            # Admission changes preserve credentials and data; they are not PostgreSQL revocation.
+            counts = (
+                AccessOperation.objects.count(),
+                RoleOwnershipReceipt.objects.count(),
+                AccessRecoveryAudit.objects.count(),
+            )
+            with access_context(tenant.id) as context:
+                secret = context.credentials.get(interrupted.credential_ref)
+                secret_path = context.credentials._path(interrupted.credential_ref)
+                try:
+                    secret_path.write_text("broken-during-deactivation")
+                    with registry_lifecycle_factory(tenant.id) as lifecycle:
+                        assert not lifecycle.set_active(tenant, active=False).active
+                        assert not lifecycle.set_active(tenant, active=False).active
+                        try:
+                            lifecycle.set_active(tenant, active=True)
+                        except ValueError:
+                            pass
+                        else:
+                            raise AssertionError("Activation accepted broken credentials")
+                    interrupted.refresh_from_db()
+                    assert not interrupted.active
+                    assert tenant_client.get("/api/workspaces/").status_code == 400
+                finally:
+                    secret_path.write_text(secret)
+                # The unchanged role can still authenticate directly while routing is disabled.
+                from psycopg.conninfo import make_conninfo
+
+                with psycopg.connect(
+                    make_conninfo(context.admin_connection.info.dsn, user=interrupted.access_role, password=secret)
+                ) as direct:
+                    assert direct.execute("SELECT current_user").fetchone()[0] == interrupted.access_role
+            call_command(
+                "tenant_admission",
+                tenant.id,
+                "activate",
+                confirm_schema=tenant.schema,
+                confirm_database=tenant.database,
+                verbosity=0,
+            )
+            with registry_lifecycle_factory(tenant.id) as lifecycle:
+                assert lifecycle.set_active(tenant, active=True).active
+            assert tenant_client.get("/api/workspaces/").status_code == 200
+            with atomic_tenant(tenant):
+                assert Workspace.objects.filter(name="browser-write").count() == 1
+                assert Workspace.objects.filter(name="restricted-runtime").count() == 1
+            assert counts == (
+                AccessOperation.objects.count(),
+                RoleOwnershipReceipt.objects.count(),
+                AccessRecoveryAudit.objects.count(),
+            )
+
             # A failure before role creation has no receipt, but can be explicitly retried after absence proof.
             retry = register("retry")
             retry_tenant = retry.as_tenant()
@@ -273,6 +510,17 @@ def main():
                 from partitiondb.postgres_roles import provision_restricted_role
 
                 provision_restricted_role(context.admin_connection, normal.as_tenant(), role)
+            # The migration path also rejects replacement roles before refreshing grants.
+            with patch(
+                "partitiondb.adapters.django.access_control.migration_access.provision_restricted_role"
+            ) as grant:
+                try:
+                    call_command("migrate_tenant", normal.schema_name, tenant_id=str(normal.pk), verbosity=0)
+                except CommandError:
+                    pass
+                else:
+                    raise AssertionError("Migration adopted a replacement role")
+                grant.assert_not_called()
             with registry_lifecycle_factory(str(normal.pk)) as lifecycle:
                 try:
                     lifecycle.set_active(normal.as_tenant(), active=True)

@@ -75,7 +75,7 @@ fresh admissions through cooperating lookups; it does not revoke running work.
 | Optional integrations | [Celery](docs/CELERY.md), [tenant types](docs/TENANT_TYPES.md) |
 | Assets and tests | [Storage/testing](docs/STORAGE_TESTING.md), [templates/static/admin/routing](docs/ASSETS_ADMIN_ROUTING.md) |
 | Examples and upgrades | [Django test project](tests/django_project/), [migration guide](docs/MIGRATION.md) |
-| Release checks | [Validation](docs/RELEASE_VALIDATION.md) |
+| Completion and release checks | [Current gaps and plan](docs/COMPLETION.md), [validation](docs/RELEASE_VALIDATION.md) |
 
 ## Development
 

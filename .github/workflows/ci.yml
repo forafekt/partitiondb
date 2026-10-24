@@ -58,11 +58,9 @@ jobs:
       - run: python -m pip install '.[django,dev]' 'Django${{ matrix.django }}'
 
       - name: Ruff lint
-        continue-on-error: true
         run: python -m ruff check .
 
       - name: Ruff formatting
-        continue-on-error: true
         run: python -m ruff format --check .
 
       - run: python -m mypy

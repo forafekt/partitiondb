@@ -112,6 +112,7 @@ def check_configuration(app_configs, **kwargs):
         "REGISTRY_LIFECYCLE_FACTORY",
         "OPERATION_OBSERVER",
         "MIGRATION_OBSERVER",
+        "MIGRATION_CONTEXT",
     ):
         try:
             config.callback(name)

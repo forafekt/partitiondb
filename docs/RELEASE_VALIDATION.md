@@ -1,21 +1,8 @@
 # Release validation
 
-## Historical acceptance
-
-The supplied 2026-10-20 report for 0.2.0a27 records all eight gates passing:
-Ruff lint, format, core strict typing, build, artifact inspection, seven-entry
-installed-wheel matrix, PostgreSQL restricted-role concurrency/backup/restore,
-and RabbitMQ/two-prefork-worker acceptance. The before/after source fingerprint
-matched: `096bc2d09061f0a012ea4ed2c5febedb4f07b89850af747d43deb850ac9dd728`.
-The report was reviewed; individual gate logs were not supplied with it.
-
-| Accepted a27 artifact | SHA-256 |
-|---|---|
-| partitiondb-0.2.0a27-py3-none-any.whl | 7393070e19f0d5d2b7f023b8e4433230a286f5804131e1378ce03a7ef84cbf2e |
-| partitiondb-0.2.0a27.tar.gz | 2b24ba1c700d169ff84eefaa83aac37a63000c68460a445aad36a8baf86cc496 |
-
-These records apply only to the named historical artifacts, not the current
-checkout. Later runtime changes require fresh acceptance evidence.
+Current evidence and remaining release work are recorded in
+[the completion report](COMPLETION.md). Old artifact results do not certify the
+current checkout; rerun the required gates against the artifacts being released.
 
 ## Repeatable technical run
 
@@ -80,8 +67,3 @@ Publish only reviewed artifacts and preserve their hashes. A final version or
 metadata change produces new artifacts and requires affected packaging/import
 checks. Database regressions need repetition when database/runtime behavior or
 relevant dependencies change, not solely because documentation/license text changed.
-
-Historical a28 packaging checks covered license metadata, isolated core imports,
-documentation links, lint/format and core typing. Its local suite recorded 215
-passes and 29 PostgreSQL-dependent skips. This is separate from the a27 database
-matrix and does not establish acceptance of the current runtime.

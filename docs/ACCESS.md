@@ -165,3 +165,21 @@ Production providers must distinguish confirmed absence from denied access,
 timeouts and service failure. Only an explicit `True` from an authoritative
 `absent(reference)` check permits absence-based recovery. Otherwise return `False`
 or raise an exception. Providers without this capability cannot authorize RETRY.
+
+
+## Grants after later migrations
+
+The optional `MIGRATION_CONTEXT` integration refreshes grants after successful
+apply runs. `DjangoMigrationAccess` requires an inactive exact registry identity,
+ACTIVE initial provisioning checkpoint, completed journal, matching receipt/OID,
+non-elevated login role and fresh password authentication. Missing grants on newly
+created objects are expected during an upgrade; missing ownership or unsafe role
+attributes never authorize a grant. Full readiness is verified afterwards.
+
+The context acquires the lifecycle lock before the migration lock and rechecks
+evidence after Django returns. Plan/check and failed migrations perform no grant
+refresh. A finalization error fails the command; existing DDL can remain committed,
+so retain inactive admission and retry after investigation. See the
+[deployment procedure](OPERATIONS.md#restricted-tenants-after-later-migrations).
+This is a repeatable explicit grant operation, not credential rotation, automatic
+role adoption or an upgrade-version registry.

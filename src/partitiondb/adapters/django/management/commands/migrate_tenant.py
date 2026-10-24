@@ -1,3 +1,5 @@
+from contextlib import contextmanager, nullcontext
+
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import BaseCommand, CommandError, call_command
 from django.db import connections
@@ -7,6 +9,34 @@ from partitiondb.adapters.django.configuration import get_config
 from partitiondb.adapters.django.inventory import operational_tenant
 from partitiondb.adapters.django.migration_progress import ObservedMigrateCommand
 from partitiondb.operation_events import OperationEvent, observe_operation
+
+
+@contextmanager
+def migration_context(factory, tenant):
+    # Application context errors can contain secret-store/connection details.
+    try:
+        context = factory(tenant)
+        finalizer = context.__enter__()
+    except Exception as error:
+        raise CommandError(f"Migration access setup failed ({type(error).__name__})") from error
+    try:
+        if finalizer is not None and not callable(finalizer):
+            raise CommandError("Migration context must yield a callable or None")
+        yield finalizer
+    except BaseException:
+        import sys
+
+        # Contexts own cleanup, but must not suppress migration/finalization errors.
+        try:
+            context.__exit__(*sys.exc_info())
+        except Exception as error:
+            raise CommandError(f"Migration access cleanup failed ({type(error).__name__})") from error
+        raise
+    else:
+        try:
+            context.__exit__(None, None, None)
+        except Exception as error:
+            raise CommandError(f"Migration access cleanup failed ({type(error).__name__})") from error
 
 
 class Command(BaseCommand):
@@ -37,6 +67,7 @@ class Command(BaseCommand):
         try:
             observer = get_config().callback("OPERATION_OBSERVER")
             progress_observer = get_config().callback("MIGRATION_OBSERVER")
+            context_factory = get_config().callback("MIGRATION_CONTEXT")
         except ImproperlyConfigured as error:
             raise CommandError(str(error)) from error
         with observe_operation(
@@ -49,31 +80,47 @@ class Command(BaseCommand):
             ),
             observer,
         ):
-            # Django migration atomicity stays under the migration executor's control.
-            # A dedicated connection keeps migration state out of request execution.
+            # Lifecycle context precedes the migration session lock. The context is
+            # never entered for read-only plan/check invocations.
+            context = (
+                migration_context(context_factory, tenant)
+                if context_factory is not None and not (options.get("plan") or options.get("check"))
+                else nullcontext(None)
+            )
             try:
-                with tenant_scope(tenant), connection.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT pg_try_advisory_lock(hashtextextended(%s, 0))",
-                        ("partitiondb:migrate:" + tenant.schema,),
-                    )
-                    if not cursor.fetchone()[0]:
-                        raise CommandError("Another process is migrating this tenant")
-                    try:
-                        call_command(
-                            ObservedMigrateCommand(tenant, progress_observer, stdout=self.stdout, stderr=self.stderr),
-                            database=tenant.database,
-                            interactive=False,
-                            verbosity=options["verbosity"],
-                            app_label=options.get("app_label"),
-                            migration_name=options.get("migration_name"),
-                            plan=options.get("plan", False),
-                            check_unapplied=options.get("check", False),
-                        )
-                    finally:
+                with tenant_scope(None), context as finalize:
+                    with tenant_scope(tenant), connection.cursor() as cursor:
                         cursor.execute(
-                            "SELECT pg_advisory_unlock(hashtextextended(%s, 0))",
+                            "SELECT pg_try_advisory_lock(hashtextextended(%s, 0))",
                             ("partitiondb:migrate:" + tenant.schema,),
                         )
+                        if not cursor.fetchone()[0]:
+                            raise CommandError("Another process is migrating this tenant")
+                        try:
+                            call_command(
+                                ObservedMigrateCommand(
+                                    tenant, progress_observer, stdout=self.stdout, stderr=self.stderr
+                                ),
+                                database=tenant.database,
+                                interactive=False,
+                                verbosity=options["verbosity"],
+                                app_label=options.get("app_label"),
+                                migration_name=options.get("migration_name"),
+                                plan=options.get("plan", False),
+                                check_unapplied=options.get("check", False),
+                            )
+                            if finalize is not None:
+                                try:
+                                    with tenant_scope(None):
+                                        finalize()
+                                except Exception as error:
+                                    raise CommandError(
+                                        f"Migration access finalization failed ({type(error).__name__})"
+                                    ) from error
+                        finally:
+                            cursor.execute(
+                                "SELECT pg_advisory_unlock(hashtextextended(%s, 0))",
+                                ("partitiondb:migrate:" + tenant.schema,),
+                            )
             finally:
                 connection.close()

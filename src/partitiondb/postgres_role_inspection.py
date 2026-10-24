@@ -28,6 +28,8 @@ class RoleInspection:
     memberships: int = 0
     reason: str = ""
     role_oid: int | None = None
+    # Safe local login attributes/memberships only; not ownership or object grants.
+    attributes_verified: bool = False
 
 
 class PostgresRoleInspector:
@@ -107,4 +109,14 @@ class PostgresRoleInspector:
                 RoleState.CONFIGURED,
                 "Expected local grants and attributes present; ownership unverified",
             )
-        return RoleInspection(role, state, bool(login), usage, table_access, int(memberships), reason, int(oid))
+        return RoleInspection(
+            role,
+            state,
+            bool(login),
+            usage,
+            table_access,
+            int(memberships),
+            reason,
+            int(oid),
+            attributes_verified=bool(login) and not dangerous,
+        )

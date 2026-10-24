@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from contextvars import ContextVar
 from types import SimpleNamespace
 
 import psycopg
@@ -23,6 +24,8 @@ from .credentials import DevelopmentCredentials
 from .database import provisioning_connection_params
 from .models import Organization
 
+_initial_migration = ContextVar("partitiondb_example_initial_migration", default=None)
+
 
 @contextmanager
 def access_context(tenant_id):
@@ -35,14 +38,18 @@ def access_context(tenant_id):
             SchemaManager(connection).create(identity.schema)
 
     def migrate(identity):
-        call_command(
-            "migrate_tenant",
-            identity.schema,
-            tenant_id=identity.id,
-            database=identity.database,
-            tenant_type=identity.tenant_type,
-            verbosity=1,
-        )
+        token = _initial_migration.set(identity)
+        try:
+            call_command(
+                "migrate_tenant",
+                identity.schema,
+                tenant_id=identity.id,
+                database=identity.database,
+                tenant_type=identity.tenant_type,
+                verbosity=1,
+            )
+        finally:
+            _initial_migration.reset(token)
 
         # Restartable seed operation.
         with atomic_tenant(identity, privileged=True):
@@ -132,3 +139,22 @@ def runtime_credentials(tenant):
         raise ValueError("Restricted runtime role binding is missing or mismatched")
     provider = DevelopmentCredentials(settings.PARTITIONDB_DEMO_CREDENTIALS_DIR)
     return TenantDatabaseCredentials(organization.access_role, provider.get(organization.credential_ref))
+
+
+@contextmanager
+def migration_context(tenant):
+    """Application-owned composition; initial provisioning already owns its lock."""
+    from partitiondb.adapters.django.access_control.migration_access import DjangoMigrationAccess
+
+    if _initial_migration.get() == tenant:
+        yield None
+        return
+    with access_context(tenant.id) as context:
+        service = DjangoMigrationAccess(
+            Organization,
+            context.provisioner.store,
+            admin_connection=context.admin_connection,
+            credential_authentication=context.authentication,
+        )
+        with service(tenant) as finalize:
+            yield finalize

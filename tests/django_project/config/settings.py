@@ -58,6 +58,7 @@ TENANCY = DjangoSetup(
     TENANTS="apps.organizations.tenancy.list_tenants",
     TENANT_DATABASE_ACCESS="apps.organizations.provisioning.runtime_credentials",
     PROVISIONER_FACTORY="apps.organizations.provisioning.provisioner_factory",
+    MIGRATION_CONTEXT="apps.organizations.provisioning.migration_context",
     REGISTRY_LIFECYCLE_FACTORY="apps.organizations.provisioning.registry_lifecycle_factory",
     TENANT_ADMIN_PERMISSIONS="apps.organizations.tenancy.tenant_admin_permissions",
     TENANT_ADMIN_LOG_MODEL="audit.AdminAudit",

@@ -38,3 +38,34 @@ Record tenant ID, schema, alias, request/job correlation ID, migration version a
 - PostgreSQL schema/search-path security: https://www.postgresql.org/docs/17/ddl-schemas.html
 
 See [release validation](RELEASE_VALIDATION.md) for executed acceptance and deployment limits.
+
+
+## Restricted tenants after later migrations
+
+Configure `MIGRATION_CONTEXT` to finalize restricted-role access after successful
+Django migrations. The example wires a lifecycle-locked `DjangoMigrationAccess`:
+it verifies the inactive exact registry identity, completed operation and receipt,
+current role OID/attributes and fresh password authentication before granting
+existing tenant tables and sequences, then verifies full access readiness. It
+never creates roles, rotates passwords or activates admission. See
+[settings](SETTINGS.md#migration-access-context).
+
+Without this optional context, `migrate_tenant` remains schema-only and the
+operator must arrange equivalent verified grant refresh or reviewed default
+privileges for every object-creating migration role. `Provisioner.run()` on an
+ACTIVE record is still a no-op, not an upgrade mechanism.
+
+For a controlled deployment, disable new admission, drain existing work, apply
+migrations, refresh grants, check access readiness and application migration
+version, then reactivate. A failure leaves admission disabled for investigation.
+Atomic Django migrations roll back their own DDL/data on failure, while earlier
+successful migrations remain applied. Non-atomic migrations and external effects
+require restartable application operations and separate recovery procedures.
+
+Django migrations may already have committed when grant finalization fails. The
+command reports failure and leaves admission disabled; rerun the same migration
+command after addressing the cause to retry the idempotent grant step. Do not
+manually mark the original access operation incomplete or use recovery READY/RETRY
+for this upgrade failure. Quiescence and the application's expected migration
+version remain deployment responsibilities. Locks coordinate participating tools;
+external DDL or direct registry writes can bypass them.

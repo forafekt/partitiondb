@@ -174,6 +174,7 @@ arguments, or use them directly in an existing PARTITIONDB dictionary.
 | `REGISTRY_LIFECYCLE_FACTORY` | `None` | Context-manager factory (tenant_id) yielding RegistryLifecycle. |
 | `OPERATION_OBSERVER` | `None` | Best-effort operation-event callable. |
 | `MIGRATION_OBSERVER` | `None` | Best-effort migration-progress callable. |
+| `MIGRATION_CONTEXT` | `None` | Factory accepting a Tenant and yielding a context manager whose value is a finalizer callable or `None`; entered only for apply runs. |
 
 ### Admin and account routes
 
@@ -194,3 +195,29 @@ arguments, or use them directly in an existing PARTITIONDB dictionary.
 | `TEMPLATE_CACHE_ENTRIES` | `256` | Positive bound on tenant template cache entries. |
 | `STATIC_ROOTS` | `[]` | Tenant static source filesystem roots. |
 
+
+
+### Migration access context
+
+`MIGRATION_CONTEXT` is a required-operation hook when configured, unlike
+best-effort observers. The command enters the context in shared scope **before**
+taking the migration session lock, runs Django migrations, then invokes its yielded
+zero-argument finalizer in shared scope while both locks are still held. The
+context owns its resources and lifecycle lock. It must not commit deferred work
+or suppress failures. Failures in setup/finalization/cleanup fail the command;
+finalization is skipped when Django fails. Plan/check runs do not enter it.
+
+For restricted-role upgrades, compose
+`partitiondb.adapters.django.access_control.migration_access.DjangoMigrationAccess`
+with a concrete registry model, dedicated provisioning store, administrative
+idle autocommit connection for the tenant's database, and credential authenticator. The example
+wires `apps.organizations.provisioning.migration_context` through central settings.
+The helper requires inactive admission and a completed initial provisioning
+checkpoint; it never activates tenants automatically. First provisioning runs
+migrations before a role exists and already owns the lifecycle lock, so its
+application callback explicitly delegates that initial migration path without
+re-entering the lock. Do not expose this trusted bypass as a request parameter.
+
+The setting defaults to `None` for compatibility with schema-only deployments.
+For fleet upgrades, provide an application inventory of explicitly selected,
+quiesced tenants; the example's normal active-only inventory is for routing.
