@@ -31,7 +31,7 @@ def configure():
 
 def crash_worker():
     configure()
-    from apps.organizations.provisioning import access_context
+    from partitiondb.adapters.django.workflow import access_context
 
     with access_context(os.environ["PARTITIONDB_CRASH_TENANT"]) as context:
         # The role, secret and receipt must survive abrupt process termination.
@@ -47,7 +47,6 @@ def main():
         os.environ["PARTITIONDB_DEMO_CREDENTIALS_DIR"] = str(Path(directory) / "secrets")
         configure()
         from apps.organizations.models import Domain, Membership, Organization
-        from apps.organizations.provisioning import access_context, registry_lifecycle_factory
         from apps.workspaces.models import Workspace
         from django.contrib.auth import get_user_model
         from django.core.management import CommandError, call_command
@@ -61,6 +60,7 @@ def main():
         )
         from partitiondb.adapters.django.access_control.services import AuditedDjangoReconciliationService
         from partitiondb.adapters.django.scope import atomic_tenant
+        from partitiondb.adapters.django.workflow import access_context, registry_lifecycle_factory
         from partitiondb.postgres_role_manager import tenant_role_name
         from partitiondb.provisioning import Stage
         from partitiondb.provisioning_postgres import PostgresProvisioningStore
@@ -103,7 +103,7 @@ def main():
         try:
             # The public create command now creates the journal and receipt automatically.
             call_command(
-                "create_organization",
+                "create_tenant",
                 name="Normal",
                 schema="normal_" + suffix,
                 hostname="normal.localhost",

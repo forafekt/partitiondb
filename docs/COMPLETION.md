@@ -1,6 +1,6 @@
 # PartitionDB completion status
 
-Reviewed 2026-10-24 against the working tree based on `7ace85a` (0.2.0a35).
+Reviewed 2026-10-24 against the working tree based on `872415a` (released 0.2.0a36).
 This is a development readiness report, not a production certification. The
 library supports application-owned integration; the bundled organizations project
 is a runnable example, not an installed production application.
@@ -24,17 +24,47 @@ The access scenario creates its own random database and private secret directory
 No running development tenant or credential is changed by these checks. See
 [release validation](RELEASE_VALIDATION.md) for reproducible commands and limits.
 
+## Database-per-tenant milestone
+
+The example now integrates an optional preconfigured dedicated database, including
+an independent server/admin connection. Central reservations, lifecycle locks and
+evidence remain on `default`; schema DDL, migrations, grants and runtime queries
+use the tenant alias. Shared and dedicated tenants coexist, including identical
+schema names. See [dedicated database setup and limits](DEDICATED_DATABASES.md).
+
+Database creation/ownership recovery, dynamic aliases/pools and moving existing
+tenant data between layouts are not implemented. Version 0.2.0a36 remains the
+released baseline; this next milestone stays in development while acceptance is
+reviewed. A new alpha is appropriate when the next database lifecycle slice is
+ready; version promotion is not required for every example/test change.
+
+## Library-owned management defaults
+
+The complete workflow now belongs to the Django adapter: abstract `TenantModel`,
+optional concrete `registry_app.Tenant`/`Domain`, configured `TENANT_MODEL` and
+`DOMAIN_MODEL` lookups, `TenantProvisionForm`, managed `TenantAdmin`,
+`TenantWorkflow`, development credential provider and `create_tenant` command.
+Model selection supplies the standard callbacks while preserving explicit
+application overrides. The example now subclasses models/admin and supplies only
+workspace setup hooks and membership policy. Duplicate example infrastructure
+has been removed. See [managed tenants](MANAGED_TENANTS.md).
+
+The change is not yet tagged as a new release. It adds public APIs and concrete
+model migrations, so it belongs in a future alpha rather than modifying the
+existing a36 Git tag. Built-in/custom model selection is a deployment choice;
+changing it after data exists requires an explicit migration plan.
+
 ## Prioritized remaining work and PR plan
 
-### PR 1 — Explicit post-migration access finalization (implemented locally)
+### PR 1 — Explicit post-migration access finalization (released in a36)
 
 `MIGRATION_CONTEXT` provides a required-operation context around apply runs.
 `DjangoMigrationAccess` takes the lifecycle lock before the migration session
 lock, requires inactive exact registry admission and completed initial access,
 checks receipt/current OID, safe role attributes and fresh credentials, refreshes
 grants after successful Django execution, then verifies full readiness. Initial
-provisioning retains its pre-role migration flow through an application-owned
-context marker. The example configures this service; the library default is None.
+provisioning retains its pre-role migration flow through a library-owned context
+marker. The example configures this service; the library default is None.
 
 Acceptance covered locally:
 - Later table and identity-sequence creation is writable by the original role.
@@ -80,9 +110,12 @@ existing sessions survive and which control can terminate them.
 Dependencies: PR 2's provider version/idempotency semantics and an agreed recovery
 strategy. No unsupported promise of atomic updates across systems.
 
-### PR 4 — Exact-artifact release acceptance and public API review (P1 before release)
+### PR 4 — Repeat affected release acceptance for the next version
 
-Run the installed-wheel Python/Django matrix, PostgreSQL concurrency/backup/restore
+The a36 release completed all eight gates: its ten installed-wheel combinations
+passed 381 tests each, and concurrency/backup/restore and RabbitMQ/prefork acceptance
+passed. GitHub push CI also passed. For future releases, run the affected
+installed-wheel Python/Django matrix, PostgreSQL concurrency/backup/restore
 acceptance and RabbitMQ/prefork acceptance against the exact new artifacts.
 Review public imports, declared optional dependencies, migration compatibility,
 upgrade instructions and artifact hashes together.
@@ -116,10 +149,17 @@ No speculative deletion of migrations, supported APIs or security tests was made
 
 ## Latest local verification
 
-Full source suite: **381 passed in 52.29s**, Python **3.14.8**, Django **6.1.2**,
-PostgreSQL **16**, password authentication and a freshly owned validation database.
-After adding the final administrative transaction guard, all **11 affected tests**
-passed again in 9.84s, including the real migration/credential/ownership scenario.
-Ruff lint/format, configured strict typing, final build, artifact inspection and
-documentation-link checks passed. This does not claim that the entire installed
-CI matrix, external secret store, broker acceptance or production topology passed.
+Library-owned management refactor: **391 passed in 68.51s**, Python **3.14.8**,
+Django **6.1.2**, PostgreSQL **16**. Coverage includes built-in concrete models
+without application provisioning code, custom model resolution/overrides, the
+example workspace subclass, shared/dedicated databases, real process interruption,
+audited recovery, target outage with central-only deactivation, grants after
+migration, and secret-safe admin errors.
+
+The installed wheel also passed **391 tests in 102.32s** on Python **3.12.15** /
+Django **5.2.18**, with independent control/tenant PostgreSQL containers.
+
+Lint/format, configured strict typing, migration drift checks, build and artifact
+inspection passed. The artifact check now requires the new public modules,
+command and built-in registry migration. This working tree is unreleased; a36's
+prior full release acceptance remains evidence for that immutable tagged version.

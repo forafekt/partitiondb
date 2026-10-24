@@ -81,6 +81,6 @@ inventories across a fleet, timeouts, or distributed transaction coordination.
 Restartability depends on the migration engine and application data migrations;
 non-atomic migrations and external side effects require their own reconciliation.
 
-The fixture composition is in
-`tests/django_project/apps/organizations/provisioning.py`. See
+The built-in managed composition is in
+`src/partitiondb/adapters/django/workflow.py`. See
 [release validation](RELEASE_VALIDATION.md) for the tested deployment scope.

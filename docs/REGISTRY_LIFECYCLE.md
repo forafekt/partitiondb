@@ -43,11 +43,10 @@ provisioning verification, not continuous health or current migration status.
 ## Operator command
 
 Configure a context-manager factory accepting tenant_id and yielding a
-RegistryLifecycle with resources owned by that context. The demo provides an
-implementation in `tests/django_project/apps/organizations/provisioning.py`.
+RegistryLifecycle with resources owned by that context. Managed tenants use the library default in `src/partitiondb/adapters/django/workflow.py`.
 
 ```python
-PARTITIONDB["REGISTRY_LIFECYCLE_FACTORY"] = "registry.provisioning.registry_lifecycle_factory"
+PARTITIONDB["REGISTRY_LIFECYCLE_FACTORY"] = "partitiondb.adapters.django.workflow.registry_lifecycle_factory"
 ```
 
 ```sh

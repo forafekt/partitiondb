@@ -1,14 +1,4 @@
-from partitiondb.adapters.django.registry import DjangoRegistry
-
-from .models import Domain, Membership, Organization
-
-tenant_directory = DjangoRegistry(
-    Organization,
-    domain_model=Domain,
-)
-
-resolve_host = tenant_directory.resolve_host
-list_tenants = tenant_directory.list_tenants
+from .models import Membership
 
 
 def authorize_tenant(request, tenant):
