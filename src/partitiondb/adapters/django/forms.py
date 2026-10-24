@@ -12,7 +12,7 @@ class TenantProvisionForm(forms.Form):
         required=False,
         initial="default",
         label="Database",
-        help_text="Dedicated targets must be preconfigured and can belong to only one organization.",
+        help_text="Dedicated targets must be preconfigured and can belong to only one tenant.",
     )
 
     def __init__(self, *args, **kwargs):
@@ -69,7 +69,8 @@ class TenantProvisionForm(forms.Form):
 
         if (
             get_tenant_model()
-            ._default_manager.filter(
+            ._base_manager.using("default")
+            .filter(
                 database_alias=self.cleaned_data.get("database_alias", "default"),
                 schema_name=schema,
             )
@@ -77,7 +78,7 @@ class TenantProvisionForm(forms.Form):
         ):
             raise forms.ValidationError(
                 "This schema is already registered. Inspect the existing "
-                "organization instead of submitting another creation request."
+                "tenant instead of submitting another creation request."
             )
 
         return schema

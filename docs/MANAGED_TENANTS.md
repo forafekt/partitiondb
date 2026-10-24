@@ -98,7 +98,9 @@ PARTITIONDB.update(
 
 The private file provider is shipped by PartitionDB; no application copy is
 needed. It is not a production vault. Factory construction should be lazy and
-side-effect-free; store operations report real errors rather than absence.
+side-effect-free; store operations report real errors rather than absence. Shared
+access workflows do not construct the credential provider; restricted workflows
+fail closed when the provider cannot be initialized.
 
 `PROVISIONING_CONNECTION_PARAMS` is an optional `(alias) -> psycopg kwargs`
 callback. Its default copies that alias's configured connection parameters.

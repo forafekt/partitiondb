@@ -1,6 +1,7 @@
 # PartitionDB completion status
 
-Reviewed 2026-10-24 against the working tree based on `872415a` (released 0.2.0a36).
+Reviewed 2026-10-24 against the managed-workflow baseline `42b6293`;
+`872415a` remains the released 0.2.0a36 baseline.
 This is a development readiness report, not a production certification. The
 library supports application-owned integration; the bundled organizations project
 is a runnable example, not an installed production application.
@@ -163,3 +164,13 @@ Lint/format, configured strict typing, migration drift checks, build and artifac
 inspection passed. The artifact check now requires the new public modules,
 command and built-in registry migration. This working tree is unreleased; a36's
 prior full release acceptance remains evidence for that immutable tagged version.
+
+
+## Pending manual validation
+
+Post-baseline hardening avoids constructing credential providers for shared
+access workflows and makes the provisioning form inspect the complete central
+registry for existing schema reservations, even with a filtered application
+manager. Focused regressions were added but have not been run. The user now runs
+validation manually; the 391-test results above describe the preceding baseline
+and do not validate these later changes.

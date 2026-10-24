@@ -181,7 +181,7 @@ class TenantWorkflow:
                 ).fetchone()
                 if any(control_tables):
                     raise ValueError("Dedicated target contains control-plane tables")
-            credentials = self.credentials()
+            credentials = self.credentials() if organization.access_policy == "restricted" else None
             if organization.access_policy == "restricted" and credentials is None:
                 raise ImproperlyConfigured("Restricted tenants require PARTITIONDB.CREDENTIAL_PROVIDER")
             inspector = PostgresRoleInspector(admin_connection)

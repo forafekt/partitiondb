@@ -1,4 +1,6 @@
-from unittest.mock import patch
+from contextlib import ExitStack, contextmanager
+from types import SimpleNamespace
+from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
 from django.conf import settings
@@ -80,3 +82,58 @@ def test_unclassified_tenant_model_is_rejected():
     ):
         with pytest.raises(ImproperlyConfigured, match="shared app"):
             get_tenant_model()
+
+
+@pytest.mark.parametrize("policy", ["shared", "restricted"])
+def test_shared_access_does_not_depend_on_credential_provider(policy):
+    from partitiondb import Tenant
+
+    identity = Tenant("one", "example")
+    record = SimpleNamespace(as_tenant=lambda: identity, access_policy=policy)
+    model = Mock()
+    model._base_manager.using.return_value.get.return_value = record
+    workflow = TenantWorkflow()
+    provider = Mock(side_effect=RuntimeError("Provider unavailable"))
+    workflow.credentials = provider
+
+    @contextmanager
+    def connection(alias):
+        yield Mock()
+
+    workflow.open_connection = connection
+    module = "partitiondb.adapters.django.workflow"
+    with ExitStack() as stack:
+        stack.enter_context(patch(f"{module}.require_control_plane"))
+        stack.enter_context(patch.object(TenantWorkflow, "model", new_callable=PropertyMock, return_value=model))
+        stack.enter_context(patch(f"{module}.DjangoAccessReadiness"))
+        stack.enter_context(patch(f"{module}.PostgresProvisioningStore"))
+        stack.enter_context(patch(f"{module}.Provisioner"))
+        if policy == "restricted":
+            with pytest.raises(RuntimeError, match="Provider unavailable"):
+                with workflow._access_resources(identity.id):
+                    pytest.fail("Restricted provisioning must fail closed")
+            provider.assert_called_once_with()
+        else:
+            with workflow._access_resources(identity.id) as context:
+                assert context.tenant == identity
+                assert context.credentials is None
+            provider.assert_not_called()
+
+
+def test_schema_reservation_check_uses_complete_central_registry():
+    from partitiondb.adapters.django.forms import TenantProvisionForm
+
+    model = Mock()
+    model._base_manager.using.return_value.filter.return_value.exists.return_value = True
+    form = TenantProvisionForm()
+    form.cleaned_data = {"schema": "example", "database_alias": "default"}
+    with patch("partitiondb.adapters.django.forms.get_tenant_model", return_value=model):
+        from django import forms
+
+        with pytest.raises(forms.ValidationError, match="already registered"):
+            form.clean_schema()
+    model._base_manager.using.assert_called_once_with("default")
+    model._base_manager.using.return_value.filter.assert_called_once_with(
+        database_alias="default", schema_name="example"
+    )
+    model._default_manager.filter.assert_not_called()
