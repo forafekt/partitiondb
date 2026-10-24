@@ -1,11 +1,48 @@
-# Tenant-host login without shared domain cookies
+# Tenant login and account providers
+
+Start with [the settings manager](SETTINGS.md) for one configuration declaration.
+
+## Three independent choices
+
+| Choice | Controls | Example |
+|---|---|---|
+| `SHARED_APPS` / `TENANT_APPS` | Where model tables live | Accounts, domains and memberships in public; workspaces and tenant audit in tenant schemas |
+| `SHARED_HOSTS` / `SHARED_URLCONF` | Which hosts show platform routes | `localhost` uses platform administration; `demo.localhost` uses tenant routes |
+| Authentication provider and account paths | How a browser establishes identity | Built-in tenant admin login or allauth on each tenant host |
+
+A tenant hostname is never added to `SHARED_HOSTS` just to make login work.
+Shared account data can be accessed through explicitly selected account routes on
+that hostname, while its business views remain tenant-scoped.
+
+The runnable fixture defaults to Django admin login on each tenant host. In the
+platform admin, create an active staff account, provision an organization/domain,
+and add an active membership. Its role controls tenant permissions: viewer reads,
+editor adds/changes, administrator also deletes. Staff status alone grants no
+organization access; a global superuser does not bypass membership.
+
+Visit `http://demo.localhost:8000/admin/` and log in there. Logging in at
+`http://localhost:8000/admin/` does not establish a session on `demo.localhost`.
+The tenant site registers workspaces only. Platform users, organizations, domains
+and memberships remain on the platform site.
+
+If a login POST returns 200, inspect the form error: it has not logged in.
+In platform admin, confirm that the intended account is active and has **Staff
+status** checked, and that its membership targets the organization resolved by
+the tenant domain. Membership administrator and Django staff status are separate.
+A platform superuser also needs membership to enter tenant admin.
+
+In the Django fixture profile, `/accounts/login/` redirects to `/admin/login/`.
+A customized provider can serve its own account login instead. Configure it
+in your application settings and restart after changing the login flow.
+
+## Built-in tenant admin login
 
 This opt-in flow authenticates a shared account on the tenant's own hostname and sets a
 host-only session cookie there. No .test domain, shared parent cookie or per-tenant host/CSRF
 setting is needed. It is not automatic cross-domain SSO: each hostname has its own login
 session. All identity mutations run before tenant transactions.
 
-## Core settings
+## Manual middleware settings (existing projects)
 
 ```python
 ALLOWED_HOSTS = ["*"]
@@ -83,3 +120,61 @@ The configured Django authentication backend may be replaced by the application.
 The same test scenario covers SQLite and PostgreSQL: anonymous redirect, actual login POST,
 host-only cookie, rejected cross-host redirect, rejected membership, CRUD, audit, CSRF,
 rollback and logout. PostgreSQL execution remains a CI/release validation requirement.
+
+## Django-allauth or another account provider
+
+PartitionDB does not authenticate users or implement MFA. A provider's login,
+verification, reset, callback and logout views must run against shared tables,
+outside `atomic_tenant`. Explicit tenant-host account prefixes provide that
+boundary:
+
+```python
+PARTITIONDB.update(
+    TENANT_AUTH_PATHS=["/accounts/", "/api/auth/", "/admin/login/", "/admin/logout/"],
+    TENANT_AUTH_URLCONF="config.urls_auth",
+    TENANT_ADMIN_LOGIN_URL="/accounts/login/",
+)
+```
+
+Remove `TenantAdminAuthMiddleware` in this mode so Django's password form cannot
+bypass provider verification/MFA. Keep sessions, authentication, the provider's
+middleware, shared identity and `TenantMiddleware`, in that order. Classification,
+membership and tenant permission callbacks still apply to business/admin views.
+
+Use a dedicated `config.urls_auth` containing the provider's routes, not the
+platform admin site. For allauth, include `path("accounts/", include("allauth.urls"))`.
+Redirect `/admin/login/` to that provider and `/admin/logout/` to its logout view.
+The provider's logout mutation must retain POST and CSRF protection. Do not expose
+Django's password login/password change routes as an alternate account flow.
+Allauth apps and their migrations belong in `SHARED_APPS`; install/configure them
+according to the [official quickstart](https://docs.allauth.org/en/latest/installation/quickstart.html).
+
+Paths are explicit absolute prefixes ending in `/`; `/` is rejected. The resolver
+must first confirm an active registered tenant, so unknown hosts cannot reach
+these endpoints. Selected routes receive `request.tenant = None` and their own
+URLconf; other paths retain normal tenant authorization. Keep the account URLconf
+small. Streaming account responses are rejected and scope/URLconf are restored.
+
+The fixture uses Django admin authentication by default. There is no built-in
+provider flag or allauth-specific branch. Configure your application's provider
+using [the settings manager and middleware extension points](SETTINGS.md).
+Changing authentication providers is a project deployment change: install its
+apps, run its migrations, replace the login routes and restart the application.
+
+Do not treat Django's `user_logged_in` signal or an arbitrary session marker as
+proof of provider-specific verification or MFA. If the application requires extra
+assurance, use the provider's completed-login contract; an authentication step is
+not necessarily a completed login. See [allauth's signals](https://docs.allauth.org/en/latest/account/signals.html).
+
+## Login on a separate shared host
+
+`TENANT_ADMIN_LOGIN_URL` also accepts a trusted absolute HTTP(S) URL. Anonymous
+admin requests redirect there with the absolute tenant return URL in `next`.
+Authenticated users without membership still receive 403 rather than a login
+loop. The identity provider must validate permitted tenant return hosts.
+
+A redirect is not SSO: a host-only cookie from `login.example.com` is not sent to
+`customer.example.net`. Cross-host login requires an explicit provider-supported
+OIDC/session handoff that creates a session on the tenant host. Do not broaden
+cookie domains as a substitute, especially for unrelated customer domains.
+PartitionDB provides routing and identity boundaries, not that handoff protocol.

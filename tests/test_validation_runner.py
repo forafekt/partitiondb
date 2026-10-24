@@ -6,9 +6,9 @@ from scripts import validate
 
 
 class Admin:
-    def __init__(self, fail_second_create=False):
+    def __init__(self, fail_create=False):
         self.statements = []
-        self.fail_second_create = fail_second_create
+        self.fail_create = fail_create
 
     def __enter__(self):
         return self
@@ -19,7 +19,7 @@ class Admin:
     def execute(self, statement):
         query = statement.as_string()
         self.statements.append(query)
-        if self.fail_second_create and query.startswith('CREATE DATABASE "pdb_validation_tests'):
+        if self.fail_create and query.startswith('CREATE DATABASE "pdb_validation_tests'):
             raise validate.psycopg.OperationalError("simulated creation failure")
 
 
@@ -40,8 +40,8 @@ def test_failed_child_cleans_only_owned_databases(monkeypatch):
     assert not any('"original"' in query for query in admin.statements)
 
 
-def test_partial_creation_cleans_only_successful_creations(monkeypatch):
-    admin = Admin(fail_second_create=True)
+def test_failed_database_creation_does_not_drop_any_database(monkeypatch):
+    admin = Admin(fail_create=True)
     monkeypatch.setattr(validate.psycopg, "connect", lambda *a, **kw: admin)
     monkeypatch.setattr(validate.secrets, "token_hex", lambda n: "fixed")
     with pytest.raises(validate.psycopg.OperationalError):

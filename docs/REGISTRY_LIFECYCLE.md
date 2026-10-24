@@ -24,8 +24,12 @@ cooperating provisioner/registry writer must use that order and the same store
 lock domain. It compares ID, schema, database alias and optional type under the
 row lock. Activation requires an exact ACTIVE checkpoint. Deactivation does not
 require a checkpoint, so missing provisioning metadata cannot prevent disabling
-an otherwise valid registry identity. Normal policy/model validation still
-applies; recovery of corrupt registry metadata is a separate maintenance task.
+an otherwise valid registry identity. Restricted activation additionally requires
+`verify_access=DjangoAccessReadiness(...)`, a completed access journal, a matching
+registry binding and receipt/OID, valid local grants, and fresh password
+authentication. See [access integration](ACCESS.md). Deactivation does not fetch
+the password, so an unavailable or broken secret cannot prevent disabling routing.
+Normal policy/model validation still applies; recovery of corrupt registry metadata is a separate maintenance task.
 
 The registry transaction commits before success returns, then the provisioning
 lock is released. Failure rolls back the registry transaction; no schema DDL,
@@ -40,7 +44,7 @@ provisioning verification, not continuous health or current migration status.
 
 Configure a context-manager factory accepting tenant_id and yielding a
 RegistryLifecycle with resources owned by that context. The demo provides an
-implementation in registry/provisioning.py.
+implementation in `tests/django_project/apps/organizations/provisioning.py`.
 
 ```python
 PARTITIONDB["REGISTRY_LIFECYCLE_FACTORY"] = "registry.provisioning.registry_lifecycle_factory"
@@ -75,3 +79,12 @@ bypass this helper, so cooperating administrative code must use it consistently.
 There is no distributed transaction between registry and checkpoint databases.
 Locking protects cooperating writers, not arbitrary external SQL. No concurrent
 registry-writer stress or network-partition acceptance is claimed by the tests.
+
+## Verified lifecycle cases
+
+The PostgreSQL integration scenario exercises a restricted tenant through a real
+Django client: disable admission with a broken secret, reject reactivation until
+the secret is restored, then reactivate with the same role, evidence and data.
+The example host guard rejects inactive hosts with HTTP 400 before URL routing.
+A direct PostgreSQL connection still works with the correct password while the
+registry is inactive; admission is deliberately not database credential revocation.

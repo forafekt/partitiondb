@@ -28,6 +28,8 @@ class RoleInspection:
     memberships: int = 0
     reason: str = ""
     role_oid: int | None = None
+    # Safe local login attributes/memberships only; not ownership or object grants.
+    attributes_verified: bool = False
 
 
 class PostgresRoleInspector:
@@ -87,6 +89,14 @@ class PostgresRoleInspector:
             (role, role, role, role, tenant.schema),
         ).fetchone()
         table_access = bool(tables[0] and tables[1])
+        sequences = self.connection.execute(
+            "SELECT COALESCE(bool_and(has_sequence_privilege(%s, c.oid, 'USAGE') AND "
+            "has_sequence_privilege(%s, c.oid, 'SELECT')), true) "
+            "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = %s AND c.relkind = 'S'",
+            (role, role, tenant.schema),
+        ).fetchone()[0]
+        table_access = table_access and bool(sequences)
         dangerous = any((superuser, createdb, createrole, inherit, replication, bypassrls, memberships))
         if dangerous:
             state, reason = RoleState.CONFLICT, "Role has elevated attributes or memberships"
@@ -99,4 +109,14 @@ class PostgresRoleInspector:
                 RoleState.CONFIGURED,
                 "Expected local grants and attributes present; ownership unverified",
             )
-        return RoleInspection(role, state, bool(login), usage, table_access, int(memberships), reason, int(oid))
+        return RoleInspection(
+            role,
+            state,
+            bool(login),
+            usage,
+            table_access,
+            int(memberships),
+            reason,
+            int(oid),
+            attributes_verified=bool(login) and not dangerous,
+        )

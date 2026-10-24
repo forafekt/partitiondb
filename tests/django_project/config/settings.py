@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 import os
 from pathlib import Path
 
+from partitiondb.adapters.django.configuration import DjangoSetup
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -29,67 +31,44 @@ DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
 
-# (Django app label, installation path)
-SHARED_APP_DEFINITIONS = [
-    ("accounts", "apps.accounts.apps.AccountsConfig"),
-    ("organizations", "apps.organizations.apps.OrganizationsConfig"),
-    (
-        "partitiondb_access_control",
-        "partitiondb.adapters.django.access_control.apps.PartitionDBAccessControlConfig",
-    ),
-    # ("admin", "partitiondb.adapters.django.admin_apps.PartitionDBAdminConfig"),
-    ("admin", "django.contrib.admin"),
-    ("auth", "django.contrib.auth"),
-    ("contenttypes", "django.contrib.contenttypes"),
-    ("sessions", "django.contrib.sessions"),
-    ("messages", "django.contrib.messages"),
-    ("staticfiles", "django.contrib.staticfiles"),
-]
-
-TENANT_APP_DEFINITIONS = [
-    ("workspaces", "apps.workspaces.apps.WorkspacesConfig"),
-    ("audit", "apps.audit.apps.AuditConfig"),
-]
-
-INSTALLED_APPS = [
-    # PartitionDB integration
-    "partitiondb.adapters.django.apps.PartitionDBConfig",
-    # PartitionDB control-plane persistence
-    *[path for _, path in SHARED_APP_DEFINITIONS],
-    *[path for _, path in TENANT_APP_DEFINITIONS],
-]
-
-PARTITIONDB = {
-    "SHARED_APPS": [label for label, _ in SHARED_APP_DEFINITIONS],
-    "TENANT_APPS": [label for label, _ in TENANT_APP_DEFINITIONS],
-    "SHARED_HOSTS": ["localhost", "127.0.0.1"],
-    "SHARED_URLCONF": "config.urls",
-    "RESOLVER": "apps.organizations.tenancy.resolve_host",
-    "TENANTS": "apps.organizations.tenancy.list_tenants",
-    "PROVISIONER_FACTORY": ("apps.organizations.provisioning.provisioner_factory"),
-    "REGISTRY_LIFECYCLE_FACTORY": ("apps.organizations.provisioning.registry_lifecycle_factory"),
-    "AUTHORIZE": "apps.organizations.tenancy.authorize_tenant",
-    "TENANT_ADMIN_PERMISSIONS": "apps.organizations.tenancy.tenant_admin_permissions",
-    "TENANT_ADMIN_LOG_MODEL": "audit.AdminAudit",
-}
-
-
-MIDDLEWARE = [
-    "partitiondb.adapters.django.hosts.RegistryHostMiddleware",
-    "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "partitiondb.adapters.django.identity.SharedIdentityMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "partitiondb.adapters.django.middleware.TenantMiddleware",
-]
-
+TENANCY = DjangoSetup(
+    shared_apps={
+        "accounts": "apps.accounts.apps.AccountsConfig",
+        "organizations": "apps.organizations.apps.OrganizationsConfig",
+        "partitiondb_access_control": "partitiondb.adapters.django.access_control.apps.PartitionDBAccessControlConfig",
+        "admin": "partitiondb.adapters.django.admin_apps.PartitionDBAdminConfig",
+        "auth": "django.contrib.auth",
+        "contenttypes": "django.contrib.contenttypes",
+        "sessions": "django.contrib.sessions",
+        "messages": "django.contrib.messages",
+        "staticfiles": "django.contrib.staticfiles",
+    },
+    tenant_apps={
+        "workspaces": "apps.workspaces.apps.WorkspacesConfig",
+        "audit": "apps.audit.apps.AuditConfig",
+    },
+    resolver="apps.organizations.tenancy.resolve_host",
+    authorize="apps.organizations.tenancy.authorize_tenant",
+    tenant_urlconf="config.urls",
+    shared_hosts=["localhost", "127.0.0.1", "192.168.1.15"],
+    shared_urlconf="config.urls_platform",
+    tenant_admin=True,
+    TENANT_AUTH_PATHS=["/accounts/", "/api/auth/"],
+    TENANT_AUTH_URLCONF="config.urls_auth",
+    TENANTS="apps.organizations.tenancy.list_tenants",
+    TENANT_DATABASE_ACCESS="apps.organizations.provisioning.runtime_credentials",
+    PROVISIONER_FACTORY="apps.organizations.provisioning.provisioner_factory",
+    MIGRATION_CONTEXT="apps.organizations.provisioning.migration_context",
+    REGISTRY_LIFECYCLE_FACTORY="apps.organizations.provisioning.registry_lifecycle_factory",
+    TENANT_ADMIN_PERMISSIONS="apps.organizations.tenancy.tenant_admin_permissions",
+    TENANT_ADMIN_LOG_MODEL="audit.AdminAudit",
+)
+INSTALLED_APPS = TENANCY.installed_apps
+PARTITIONDB = TENANCY.partitiondb
+MIDDLEWARE = TENANCY.middleware()
+DATABASE_ROUTERS = TENANCY.database_routers
+ROOT_URLCONF = TENANCY.tenant_urlconf
 AUTH_USER_MODEL = "accounts.User"
-
-ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
     {
@@ -120,21 +99,15 @@ WSGI_APPLICATION = "config.wsgi.application"
 # }
 
 DATABASES = {
-    "default": {
-        "ENGINE": "partitiondb.adapters.django.backend",
-        "NAME": os.getenv("POSTGRES_DB", "partitiondb"),
-        "USER": os.getenv("POSTGRES_USER", "partitiondb"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "test-only"),
-        "HOST": os.getenv("POSTGRES_HOST", "127.0.0.1"),
-        "PORT": os.getenv("POSTGRES_PORT", "55432"),
-        "CONN_MAX_AGE": 0,
-        "CONN_HEALTH_CHECKS": True,
-    }
+    "default": TENANCY.database(
+        NAME=os.getenv("POSTGRES_DB", "partitiondb"),
+        USER=os.getenv("POSTGRES_USER", "partitiondb"),
+        PASSWORD=os.getenv("POSTGRES_PASSWORD", "test-only"),
+        HOST=os.getenv("POSTGRES_HOST", "127.0.0.1"),
+        PORT=os.getenv("POSTGRES_PORT", "55432"),
+        CONN_HEALTH_CHECKS=True,
+    )
 }
-
-DATABASE_ROUTERS = [
-    "partitiondb.adapters.django.router.TenantRouter",
-]
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
@@ -171,6 +144,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
 # Email
@@ -181,3 +155,9 @@ MAILERS = {
         "BACKEND": "django.core.mail.backends.console.EmailBackend",
     },
 }
+
+# A localhost platform login does not establish a tenant-host session.
+SESSION_COOKIE_DOMAIN = None
+
+# Local development only; replace the provider in organizations.provisioning for deployment.
+PARTITIONDB_DEMO_CREDENTIALS_DIR = Path(os.getenv("PARTITIONDB_DEMO_CREDENTIALS_DIR", str(BASE_DIR / ".secrets")))

@@ -22,7 +22,8 @@ def test_snapshot_does_not_inherit_global_superuser_permissions():
 
 
 @pytest.mark.postgres
-def test_postgres_tenant_admin_crud_and_audit():
+@pytest.mark.parametrize("scenario", ["tests.tenant_admin_scenario", "tests.fixture_admin_scenario"])
+def test_postgres_tenant_admin_crud_and_audit(scenario):
     import os
     import uuid
 
@@ -38,7 +39,7 @@ def test_postgres_tenant_admin_crud_and_audit():
         connection.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
         try:
             subprocess.run(
-                [sys.executable, "-m", "tests.tenant_admin_scenario", "--postgres"],
+                [sys.executable, "-m", scenario, "--postgres"],
                 env=dict(os.environ, PARTITIONDB_TEST_DSN=make_conninfo(dsn, dbname=name)),
                 check=True,
                 timeout=90,

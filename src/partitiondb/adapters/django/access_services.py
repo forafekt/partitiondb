@@ -5,12 +5,12 @@ Provisioner must hold its exclusive tenant lifecycle lock throughout the call.
 """
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
 
 from partitiondb.access import AccessPolicy
 from partitiondb.core import Tenant
 from partitiondb.postgres_role_manager import RoleBinding, tenant_role_name
 
+from .access_boundary import durable_control_plane
 from .access_models import TenantAccessMixin
 
 
@@ -38,7 +38,7 @@ class DjangoRoleBindingRecorder:
             raise ValidationError("Role binding does not match tenant identity")
         if not binding.credential_ref:
             raise ValidationError("Credential reference is required")
-        with transaction.atomic(using=self.using):
+        with durable_control_plane(self.using):
             record = self.model._base_manager.using(self.using).select_for_update().get(pk=tenant.id)
             if record.as_tenant() != tenant:
                 raise ValidationError("Registry tenant identity changed during provisioning")

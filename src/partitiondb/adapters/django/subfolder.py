@@ -2,12 +2,12 @@
 
 import re
 
-from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.http import Http404
 from django.urls import get_script_prefix, set_script_prefix
 
 from partitiondb import Tenant
+from partitiondb.adapters.django.configuration import get_config
 
 from .middleware import TenantMiddleware
 
@@ -19,7 +19,7 @@ class TenantSubfolderMiddleware(TenantMiddleware):
 
     def __init__(self, get_response):
         super().__init__(get_response)
-        self.prefix = settings.PARTITIONDB.get("SUBFOLDER_PREFIX", "t")
+        self.prefix = get_config().get("SUBFOLDER_PREFIX", "t")
         if not isinstance(self.prefix, str) or not _SEGMENT.fullmatch(self.prefix):
             raise ImproperlyConfigured("SUBFOLDER_PREFIX must be one canonical path segment")
 

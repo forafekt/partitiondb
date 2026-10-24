@@ -78,11 +78,10 @@ def test_cli_factory_confirmation_cleanup_and_safe_errors():
         finally:
             events.append("close")
 
-    module = "partitiondb.adapters.django.management.commands.tenant_admission"
     config = dict(settings.PARTITIONDB, REGISTRY_LIFECYCLE_FACTORY="application.factory")
     with (
         override_settings(PARTITIONDB=config),
-        patch(module + ".import_string", return_value=factory),
+        patch("partitiondb.adapters.django.configuration.import_string", return_value=factory),
     ):
         output = io.StringIO()
         call_command(

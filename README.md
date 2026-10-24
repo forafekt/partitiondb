@@ -47,6 +47,7 @@ Privileged schema creation/migrations are separate from runtime credentials.
 ## Supported scope
 
 - Schema create/drop/rename and recoverable provisioning checkpoints.
+- Opt-in restricted roles, durable access evidence, audited recovery and scoped runtime credentials.
 - Django request/ORM boundaries, shared identity, membership callbacks and domains.
 - Static tenant types, subfolder routing, fresh registry lookup and admission.
 - Single/fleet migrations, tenant commands and best-effort progress events.
@@ -54,7 +55,7 @@ Privileged schema creation/migrations are separate from runtime credentials.
 - Optional Celery 5.6 task boundaries with fresh active-tenant lookup per attempt.
 
 Django requires direct PostgreSQL or session-mode pooling and synchronous request
-boundaries. Dynamic database credentials, schema cloning, automatic retirement or
+boundaries. Automatic credential rotation, schema cloning, automatic retirement or
 draining/deletion, type conversion, manifest staticfiles and application-specific
 users/billing/ownership flows are outside this release scope. Deactivation stops
 fresh admissions through cooperating lookups; it does not revoke running work.
@@ -63,22 +64,20 @@ fresh admissions through cooperating lookups; it does not revoke running work.
 
 | Topic | Guide |
 |---|---|
+| Configuration manager and extensions | [Settings suite](docs/SETTINGS.md) |
 | Setup and ORM boundaries | [Django](docs/DJANGO.md) |
 | Identity and cache | [Identity/cache](docs/IDENTITY_CACHE.md) |
 | Registry models and lookup | [Models/events](docs/MODELS_EVENTS.md), [registry](docs/DJANGO_REGISTRY.md) |
+| Shared/tenant admin and login | [Scope and login routing](docs/TENANT_LOGIN.md), [shared admin](docs/SHARED_ADMIN.md) |
+| Restricted database access | [Integration and limitations](docs/ACCESS.md) |
 | Provisioning and admission | [Recovery](docs/PROVISIONING.md), [CLI](docs/PROVISIONING_COMMAND.md), [admission](docs/REGISTRY_LIFECYCLE.md) |
 | Migrations and operations | [Fleet](docs/FLEET.md), [events](docs/OPERATION_EVENTS.md), [operating contract](docs/OPERATIONS.md) |
 | Optional integrations | [Celery](docs/CELERY.md), [tenant types](docs/TENANT_TYPES.md) |
 | Assets and tests | [Storage/testing](docs/STORAGE_TESTING.md), [templates/static/admin/routing](docs/ASSETS_ADMIN_ROUTING.md) |
 | Examples and upgrades | [Django test project](tests/django_project/), [migration guide](docs/MIGRATION.md) |
-| Release checks | [Validation](docs/RELEASE_VALIDATION.md) |
+| Completion and release checks | [Current gaps and plan](docs/COMPLETION.md), [validation](docs/RELEASE_VALIDATION.md) |
 
 ## Development
-
-Historical implementation checkpoints are retained in
-[`docs/development/checkpoints/`](docs/development/checkpoints/).
-These are development records, not release guarantees.
-
 
 ```sh
 python -m pip install '.[django,dev]'

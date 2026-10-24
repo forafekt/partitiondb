@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import psycopg
 from apps.organizations.database import provisioning_connection_params
 from apps.organizations.models import Domain, Organization
@@ -14,6 +16,7 @@ class Command(BaseCommand):
         parser.add_argument("--name", required=True)
         parser.add_argument("--schema", required=True)
         parser.add_argument("--hostname", required=True)
+        parser.add_argument("--access-policy", choices=["shared", "restricted"], default="shared")
 
     def handle(self, *args, **options):
         name = options["name"].strip()
@@ -37,6 +40,8 @@ class Command(BaseCommand):
                 name=name,
                 schema_name=schema,
                 database_alias="default",
+                access_policy=options["access_policy"],
+                credential_ref="development/" + uuid4().hex if options["access_policy"] == "restricted" else "",
             )
 
             Domain.objects.create(
@@ -75,7 +80,7 @@ class Command(BaseCommand):
             raise CommandError(
                 f"Organization {tenant_id} setup failed. "
                 "Metadata and any created schema were preserved for inspection. "
-                f"Cause: {error}"
+                f"Cause: {type(error).__name__}"
             ) from error
 
         self.stdout.write(self.style.SUCCESS(f"Ready: http://{hostname}:8000/api/workspaces/"))

@@ -4,7 +4,7 @@ requires = ["hatchling>=1.27,<2"]
 
 [project]
 name = "partitiondb"
-version = "0.2.0a35"
+version = "0.2.0a36"
 description = "Explicit PostgreSQL tenant scopes with optional framework adapters"
 readme = "README.md"
 license = "MIT"
@@ -28,7 +28,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/dist", "/release_reports"]
+exclude = ["/dist", "/release_reports", "**/.secrets"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/partitiondb"]

@@ -3,10 +3,12 @@
 from django.core.exceptions import ImproperlyConfigured
 from django.db.backends.postgresql.base import DatabaseWrapper as PostgreSQLWrapper
 from django.db.backends.postgresql.introspection import DatabaseIntrospection
+from psycopg.pq import TransactionStatus
 
 from partitiondb.core import current_tenant
 from partitiondb.postgres import search_path
 
+from ..runtime_access import current_database_credentials
 from ..tenant_types import tenant_policy
 
 
@@ -37,6 +39,8 @@ class DatabaseWrapper(PostgreSQLWrapper):
     Raw cursor reuse across scope changes is prohibited by the public contract.
     """
 
+    introspection_class = SchemaIntrospection
+
     @property
     def schema_name(self):
         tenant = current_tenant(required=False)
@@ -44,9 +48,19 @@ class DatabaseWrapper(PostgreSQLWrapper):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.introspection = SchemaIntrospection(self)
         if self.settings_dict.get("OPTIONS", {}).get("pool"):
             raise ImproperlyConfigured("PartitionDB Django backend does not support driver pooling")
+
+    def get_connection_params(self):
+        params = super().get_connection_params()
+        tenant = current_tenant(required=False)
+        if tenant is not None:
+            credentials = current_database_credentials(tenant)
+            if credentials is not None:
+                if tenant.database != self.alias:
+                    raise ImproperlyConfigured("Runtime credentials requested through the wrong database alias")
+                params.update(user=credentials.role, password=credentials.password)
+        return params
 
     def set_autocommit(self, autocommit, *args, **kwargs):
         result = super().set_autocommit(autocommit, *args, **kwargs)
@@ -62,6 +76,10 @@ class DatabaseWrapper(PostgreSQLWrapper):
         if tenant is not None:
             tenant_policy(tenant)
         cursor = super()._cursor(name=name)
+        # Django must obtain a cursor to issue ROLLBACK TO SAVEPOINT after SQL
+        # errors. Setup queries cannot run until PostgreSQL exits INERROR.
+        if self.connection.info.transaction_status == TransactionStatus.INERROR:
+            return cursor
         try:
             with self.connection.cursor() as setup:
                 if tenant is not None:

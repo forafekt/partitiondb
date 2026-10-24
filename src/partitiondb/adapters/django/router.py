@@ -1,18 +1,16 @@
 """Fail-closed app routing. Lists contain Django app labels, not dotted paths."""
 
-from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
+from partitiondb.adapters.django.configuration import get_config
 from partitiondb.core import MissingTenant, current_tenant
 
 from .tenant_types import tenant_policy
 
 
 def app_sets():
-    config = settings.PARTITIONDB
-    SHARED_APPS = [] if "SHARED_APPS" not in config else config["SHARED_APPS"]
-    TENANT_APPS = [] if "TENANT_APPS" not in config else config["TENANT_APPS"]
-    shared, tenant = set(SHARED_APPS), set(TENANT_APPS)
+    config = get_config()
+    shared, tenant = set(config["SHARED_APPS"]), set(config["TENANT_APPS"])
     if shared & tenant:
         raise ImproperlyConfigured("SHARED_APPS and TENANT_APPS must be disjoint")
     identity = current_tenant(required=False)

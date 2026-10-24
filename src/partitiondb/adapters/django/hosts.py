@@ -4,9 +4,9 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.exceptions import DisallowedHost, ImproperlyConfigured
-from django.utils.module_loading import import_string
 
 from partitiondb import Tenant, current_tenant
+from partitiondb.adapters.django.configuration import get_config, subclass_path
 
 
 class RegistryHostMiddleware:
@@ -22,12 +22,14 @@ class RegistryHostMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         middleware = list(settings.MIDDLEWARE)
-        if not middleware or middleware[0] != "partitiondb.adapters.django.hosts.RegistryHostMiddleware":
+        if not middleware or not subclass_path(
+            middleware[0], "partitiondb.adapters.django.hosts.RegistryHostMiddleware"
+        ):
             raise ImproperlyConfigured("RegistryHostMiddleware must be the first middleware")
         if list(settings.ALLOWED_HOSTS) != ["*"]:
             raise ImproperlyConfigured("RegistryHostMiddleware requires ALLOWED_HOSTS=['*']")
-        self.resolve = import_string(settings.PARTITIONDB["RESOLVER"])
-        self.shared = frozenset(settings.PARTITIONDB.get("SHARED_HOSTS", []))
+        self.resolve = get_config().callback("RESOLVER", required=True)
+        self.shared = frozenset(get_config().get("SHARED_HOSTS", []))
 
     def __call__(self, request):
         if current_tenant(required=False) is not None:

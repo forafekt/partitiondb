@@ -6,7 +6,7 @@ Tenant schema selection is not authorization. Resolve a tenant through trusted m
 
 Use separate provisioning and application credentials. Revoke schema creation from runtime roles. Grant only required USAGE and table/sequence permissions. Public and tenant schemas must not be writable by untrusted database users. PostgreSQL implicitly searches pg_catalog first when it is omitted from search_path; this implementation intentionally relies on that behavior and avoids explicit pg_catalog as the CREATE target. Revoke TEMP where your threat model requires preventing temporary-object shadowing. Application migrations run with elevated credentials during maintenance; runtime app access should not require DDL rights.
 
-One runtime role with access to every schema still has access to every schema through explicit qualification. Dedicated databases/roles are appropriate when stronger isolation is required. This library does not implement credential minting, row-level security, encryption, or arbitrary SQL confinement.
+One runtime role with access to every schema still has access to every schema through explicit qualification. Dedicated databases/roles are appropriate when stronger isolation is required. The opt-in [role manager](ACCESS.md) generates passwords through a deployment-supplied secret provider; the Django backend can use the explicit TENANT_DATABASE_ACCESS callback inside atomic_tenant to select per-tenant credentials without changing settings.DATABASES. Row-level security, encryption and arbitrary SQL confinement are outside this library.
 
 ## Connections
 
@@ -38,3 +38,34 @@ Record tenant ID, schema, alias, request/job correlation ID, migration version a
 - PostgreSQL schema/search-path security: https://www.postgresql.org/docs/17/ddl-schemas.html
 
 See [release validation](RELEASE_VALIDATION.md) for executed acceptance and deployment limits.
+
+
+## Restricted tenants after later migrations
+
+Configure `MIGRATION_CONTEXT` to finalize restricted-role access after successful
+Django migrations. The example wires a lifecycle-locked `DjangoMigrationAccess`:
+it verifies the inactive exact registry identity, completed operation and receipt,
+current role OID/attributes and fresh password authentication before granting
+existing tenant tables and sequences, then verifies full access readiness. It
+never creates roles, rotates passwords or activates admission. See
+[settings](SETTINGS.md#migration-access-context).
+
+Without this optional context, `migrate_tenant` remains schema-only and the
+operator must arrange equivalent verified grant refresh or reviewed default
+privileges for every object-creating migration role. `Provisioner.run()` on an
+ACTIVE record is still a no-op, not an upgrade mechanism.
+
+For a controlled deployment, disable new admission, drain existing work, apply
+migrations, refresh grants, check access readiness and application migration
+version, then reactivate. A failure leaves admission disabled for investigation.
+Atomic Django migrations roll back their own DDL/data on failure, while earlier
+successful migrations remain applied. Non-atomic migrations and external effects
+require restartable application operations and separate recovery procedures.
+
+Django migrations may already have committed when grant finalization fails. The
+command reports failure and leaves admission disabled; rerun the same migration
+command after addressing the cause to retry the idempotent grant step. Do not
+manually mark the original access operation incomplete or use recovery READY/RETRY
+for this upgrade failure. Quiescence and the application's expected migration
+version remain deployment responsibilities. Locks coordinate participating tools;
+external DDL or direct registry writes can bypass them.

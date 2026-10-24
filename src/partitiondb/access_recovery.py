@@ -49,11 +49,13 @@ class AccessRecoveryService:
         inspect: Callable[[Tenant], RoleInspection],
         evidence: Callable[[Tenant, RoleInspection], RecoveryEvidence],
         audit: Callable[[Tenant, RecoveryDecision, RoleInspection], None] | None = None,
+        finalize: Callable[[Tenant, RecoveryDecision, RoleInspection], None] | None = None,
     ):
         self.provisioner = provisioner
         self.inspect = inspect
         self.evidence = evidence
         self.audit = audit
+        self.finalize = finalize
 
     def reconcile(self, tenant_id: str, *, confirm: Tenant, decision: RecoveryDecision):
         if not isinstance(decision, RecoveryDecision):
@@ -85,4 +87,6 @@ class AccessRecoveryService:
             # failures after audit can result in a repeated attempt.
             if self.audit is not None:
                 self.audit(record.tenant, decision, inspection)
+            if self.finalize is not None:
+                self.finalize(record.tenant, decision, inspection)
             return self.provisioner._advance(record, target)

@@ -1,5 +1,8 @@
 # Django adapter setup
 
+For new projects, start with [the configuration manager](SETTINGS.md). The manual
+settings below remain supported for existing projects.
+
 This adapter targets Django 5.2, 6.0 and 6.1, subject to the configured CI matrix passing. Django 6.x requires Python 3.12+. PostgreSQL 16 is the initial integration target.
 
 ## Settings
@@ -82,7 +85,7 @@ For async application code, wrap this entire synchronous service in `sync_to_asy
 
 ## Dedicated databases
 
-Preconfigure each trusted database alias with the PartitionDB backend. The immutable tenant identity selects an alias; the router directs tenant models there. The backend rejects queries on another alias. A tenant schema is still required inside that database. The library never changes `settings.DATABASES` at request time, creates credentials, or invents aliases. Dynamic database fleets need a dedicated pool/credential adapter and are not implemented.
+Preconfigure each trusted database alias with the PartitionDB backend. The immutable tenant identity selects an alias; the router directs tenant models there. The backend rejects queries on another alias. A tenant schema is still required inside that database. The library never changes `settings.DATABASES` at request time or invents aliases. Optional [restricted access](ACCESS.md) can select a verified role/password for the lifetime of atomic_tenant. Dynamic database fleets need a dedicated pool/credential adapter and are not implemented.
 
 ## Strict shared/tenant separation
 

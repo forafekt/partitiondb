@@ -18,6 +18,8 @@ def make_admin():
     admin._require_control_plane = Mock()
     admin.get_object = Mock(return_value=Mock(pk="tenant-1"))
     admin.has_reconcile_permission = Mock(return_value=True)
+    admin.admin_site = Mock()
+    admin.admin_site.each_context.return_value = {}
     admin.log_change = Mock()
     admin.message_user = Mock()
     return admin
@@ -52,7 +54,7 @@ def test_reconcile_requires_permission():
 def test_reconcile_failure_does_not_log_success():
     admin = make_admin()
     admin.access_reconciliation_service.side_effect = RuntimeError("inspection failed")
-    with pytest.raises(RuntimeError, match="inspection failed"):
-        admin.reconcile_access_view(request(), "tenant-1")
+    response = admin.reconcile_access_view(request(), "tenant-1")
+    assert response.status_code == 409
     admin.log_change.assert_not_called()
     admin.message_user.assert_not_called()

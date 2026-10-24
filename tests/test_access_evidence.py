@@ -1,4 +1,10 @@
-from partitiondb.access_evidence import PostgresRecoveryEvidenceProvider, RoleOwnershipReceipt
+import pytest
+
+from partitiondb.access_evidence import (
+    PostgresRecoveryEvidenceProvider,
+    PsycopgCredentialAuthentication,
+    RoleOwnershipReceipt,
+)
 from partitiondb.core import Tenant
 from partitiondb.postgres_role_inspection import RoleInspection, RoleState
 
@@ -60,3 +66,28 @@ def test_absence_requires_secret_absence():
 def test_conflicting_receipt_rejected():
     receipt = RoleOwnershipReceipt("other", "default", "org_one", "pdb_org_one", 123, "secret/one", "op-1")
     assert not check(receipt=receipt).ownership_verified
+
+
+@pytest.mark.parametrize("answer", [None, False, 1, "missing"])
+def test_absence_requires_explicit_true(answer):
+    assert not check(state=RoleState.ABSENT, auth=Auth(absent=answer)).absence_verified
+
+
+@pytest.mark.parametrize("failure", [PermissionError, TimeoutError, ConnectionError])
+def test_provider_failure_cannot_authorize_recovery(failure):
+    class Unavailable:
+        def get(self, reference):
+            raise failure("sensitive provider details")
+
+        def absent(self, reference):
+            raise failure("sensitive provider details")
+
+    authentication = PsycopgCredentialAuthentication(Unavailable(), lambda tenant: "dbname=test")
+    assert not authentication.verify(TENANT, "pdb_org_one", "secret/one")
+    with pytest.raises(failure):
+        authentication.absent("secret/one")
+
+
+def test_provider_without_authoritative_absence_cannot_authorize_retry():
+    authentication = PsycopgCredentialAuthentication(object(), lambda tenant: "dbname=test")
+    assert authentication.absent("secret/one") is False

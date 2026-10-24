@@ -2,16 +2,15 @@
 
 from dataclasses import dataclass
 from functools import wraps
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlsplit
 
 from django.apps import apps
-from django.conf import settings
 from django.contrib import admin
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
-from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 
 from partitiondb import current_tenant
+from partitiondb.adapters.django.configuration import get_config
 
 from .models import TenantAdminAuditMixin
 from .router import app_sets
@@ -57,7 +56,7 @@ class TenantAdminUser:
 
 
 def audit_model():
-    path = settings.PARTITIONDB.get("TENANT_ADMIN_LOG_MODEL")
+    path = get_config().get("TENANT_ADMIN_LOG_MODEL")
     if not isinstance(path, str):
         raise ImproperlyConfigured("Set TENANT_ADMIN_LOG_MODEL to a tenant audit model")
     model = apps.get_model(path)
@@ -178,6 +177,7 @@ class TenantModelAdmin(admin.ModelAdmin):
 class TenantAdminSite(admin.AdminSite):
     """Only explicitly registered tenant models, never shared users/groups."""
 
+    user_class = TenantAdminUser
     site_header = "Tenant administration"
     site_title = "Tenant admin"
     site_url = None
@@ -185,7 +185,7 @@ class TenantAdminSite(admin.AdminSite):
 
     def register(self, model_or_iterable, admin_class=None, **options):
         models = [model_or_iterable] if hasattr(model_or_iterable, "_meta") else list(model_or_iterable)
-        tenant_apps = set(settings.PARTITIONDB["TENANT_APPS"])
+        tenant_apps = set(get_config()["TENANT_APPS"])
         if any(model._meta.app_label not in tenant_apps for model in models):
             raise ImproperlyConfigured("TenantAdminSite accepts only tenant models")
         admin_class = admin_class or TenantModelAdmin
@@ -212,7 +212,7 @@ class TenantAdminSite(admin.AdminSite):
                 raise PermissionDenied("Tenant staff membership and permissions are required")
             principal = request.principal
             original_user = request.user
-            request.user = TenantAdminUser(principal.id, principal.username, request.tenant_admin_permissions)
+            request.user = self.user_class(principal.id, principal.username, request.tenant_admin_permissions)
             try:
                 response = view(request, *args, **kwargs)
                 if hasattr(response, "render") and not response.is_rendered:
@@ -256,13 +256,19 @@ class TenantAdminSite(admin.AdminSite):
 
     def login(self, request, extra_context=None):
         if current_tenant(required=False) is None:
-            raise PermissionDenied
-        url = settings.PARTITIONDB.get("TENANT_ADMIN_LOGIN_URL")
-        if not isinstance(url, str) or urlsplit(url).scheme not in {"http", "https"}:
-            raise ImproperlyConfigured("Set an absolute trusted TENANT_ADMIN_LOGIN_URL")
-        # The shared login handler must validate next against trusted tenant hosts.
-        separator = "&" if "?" in url else "?"
-        return HttpResponseRedirect(url + separator + urlencode({"next": request.build_absolute_uri("../")}))
+            raise PermissionDenied("Sign in through the shared account endpoint")
+        from django.contrib.auth.views import redirect_to_login
+
+        from .middleware import tenant_admin_login_url
+
+        url = tenant_admin_login_url(get_config())
+        if url is None:
+            raise ImproperlyConfigured("Configure TENANT_ADMIN_LOGIN_URL or TenantAdminAuthMiddleware")
+        # The provider validates return URLs. Cross-host login also needs an
+        # explicit session handoff; redirecting does not share host-only cookies.
+        admin_path = get_config().get("TENANT_ADMIN_PATH", "/admin/")
+        target = request.build_absolute_uri(admin_path) if urlsplit(url).netloc else admin_path
+        return redirect_to_login(target, url)
 
     def logout(self, request, extra_context=None):
         raise PermissionDenied("Sign out through the shared account endpoint")

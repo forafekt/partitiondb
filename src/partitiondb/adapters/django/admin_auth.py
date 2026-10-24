@@ -7,9 +7,9 @@ from django.contrib.admin.forms import AdminAuthenticationForm
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import ImproperlyConfigured
 from django.http import Http404, HttpResponseRedirect
-from django.utils.module_loading import import_string
 
 from partitiondb import Tenant, current_tenant
+from partitiondb.adapters.django.configuration import get_config, middleware_order
 
 from .identity import Principal
 
@@ -22,19 +22,24 @@ class TenantAdminAuthMiddleware:
     Use host-only cookies (SESSION_COOKIE_DOMAIN=None).
     """
 
+    authentication_form_class = AdminAuthenticationForm
+    login_view_class = LoginView
+    logout_view_class = LogoutView
+    principal_class = Principal
+
     sync_capable = True
     async_capable = False
 
     def __init__(self, get_response):
         self.get_response = get_response
-        config = settings.PARTITIONDB
+        config = get_config()
         if settings.SESSION_COOKIE_DOMAIN is not None:
             raise ImproperlyConfigured("Tenant host login requires SESSION_COOKIE_DOMAIN=None")
-        self.resolve = import_string(config["RESOLVER"])
+        self.resolve = config.callback("RESOLVER", required=True)
         if not config.get("AUTHORIZE") or not config.get("TENANT_ADMIN_PERMISSIONS"):
             raise ImproperlyConfigured("Tenant admin authentication requires membership and permissions callbacks")
-        self.authorize = import_string(config["AUTHORIZE"])
-        self.permissions = import_string(config["TENANT_ADMIN_PERMISSIONS"])
+        self.authorize = config.callback("AUTHORIZE", required=True)
+        self.permissions = config.callback("TENANT_ADMIN_PERMISSIONS", required=True)
         self.shared = frozenset(config.get("SHARED_HOSTS", []))
         self.path = config.get("TENANT_ADMIN_PATH", "/admin/")
         if (
@@ -52,7 +57,7 @@ class TenantAdminAuthMiddleware:
             "partitiondb.adapters.django.identity.SharedIdentityMiddleware",
             "partitiondb.adapters.django.middleware.TenantMiddleware",
         ]
-        if [name for name in order if name in expected] != expected:
+        if not middleware_order(order, expected):
             raise ImproperlyConfigured("Order sessions, auth, tenant admin auth, shared identity, tenant boundary")
 
     def __call__(self, request):
@@ -73,11 +78,11 @@ class TenantAdminAuthMiddleware:
         if path == login_path:
             boundary = self
 
-            class TenantAuthenticationForm(AdminAuthenticationForm):
+            class TenantAuthenticationForm(boundary.authentication_form_class):
                 def clean(self):
                     data = super().clean()
                     user = self.get_user()
-                    principal = Principal(
+                    principal = boundary.principal_class(
                         str(user.pk),
                         user.get_username(),
                         frozenset(user.get_all_permissions()),
@@ -104,7 +109,7 @@ class TenantAdminAuthMiddleware:
                             del self.request.principal
                     return data
 
-            class TenantLoginView(LoginView):
+            class TenantLoginView(boundary.login_view_class):
                 def get_default_redirect_url(self):
                     return boundary.path
 
@@ -125,7 +130,7 @@ class TenantAdminAuthMiddleware:
                 response.render()
             return response
         if path == logout_path:
-            return LogoutView.as_view(next_page=login_path)(request)
+            return self.logout_view_class.as_view(next_page=login_path)(request)
         if not request.user.is_authenticated:
             return HttpResponseRedirect(login_path + "?" + urlencode({"next": request.get_full_path()}))
         return self.get_response(request)

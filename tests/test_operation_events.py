@@ -90,7 +90,7 @@ def test_migration_events_include_mode_and_run_after_connection_cleanup(fail):
     with (
         override_settings(PARTITIONDB=config),
         patch(module + ".connections", {"default": connection}),
-        patch(module + ".import_string", return_value=observer),
+        patch("partitiondb.adapters.django.configuration.import_string", return_value=observer),
         patch(module + ".call_command", side_effect=RuntimeError("migration failed") if fail else None),
     ):
         if fail:

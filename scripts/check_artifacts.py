@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def check_names(names):
-    forbidden = {"legacy", "__pycache__", ".git", ".venv", ".env"}
+    forbidden = {"legacy", "__pycache__", ".git", ".venv", ".env", ".secrets"}
     for name in names:
         path = PurePosixPath(name)
         if path.is_absolute() or ".." in path.parts or forbidden.intersection(path.parts):
@@ -41,6 +41,8 @@ def main():
             "provision.html",
             "tenant_index.html",
             "tenant_history.html",
+            "access_status.html",
+            "access_error.html",
         ):
             archive.getinfo("partitiondb/adapters/django/templates/partitiondb/admin/" + template)
         metadata = email.message_from_bytes(archive.read(f"partitiondb-{version}.dist-info/METADATA"))
