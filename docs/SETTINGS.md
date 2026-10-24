@@ -237,3 +237,13 @@ the lock. Do not expose this trusted bypass as a request parameter.
 The setting defaults to `None` for compatibility with schema-only deployments.
 For fleet upgrades, provide an application inventory of explicitly selected,
 quiesced tenants; the example's normal active-only inventory is for routing.
+
+
+## Automatic database targets
+
+`DATABASE_PROVISIONING` defaults to `{}`. Opt in new non-default aliases with
+`{"dedicated": {"maintenance_database": "postgres"}}`. Names/endpoints still come
+from static DATABASES; no credentials belong in this mapping. Install shared
+migrations and run `install_provisioning_store` before using the new stages. See
+[database creation and recovery](AUTOMATIC_DATABASES.md) for permissions, extension
+points, commands and the no-adoption boundary.

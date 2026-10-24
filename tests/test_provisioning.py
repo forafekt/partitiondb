@@ -207,3 +207,34 @@ def test_failed_provisioning_callback_emits_sanitized_failure():
     event = received[-1]
     assert (event.kind, event.stage, event.error_type) == ("failed", Stage.CREATING, "ValueError")
     assert "private failure" not in repr(event)
+
+
+def test_database_preparation_precedes_schema_and_resumes_its_own_checkpoint():
+    store, events = Store(), []
+    provisioner = service(store, events)
+
+    def prepare(tenant):
+        events.append("database")
+        assert store.record.stage == Stage.DATABASE_PROVISIONING
+        if events.count("database") == 1:
+            raise RuntimeError("Database preparation interrupted")
+
+    provisioner.prepare_database = prepare
+    with pytest.raises(RuntimeError):
+        provisioner.run(TENANT.id)
+    assert store.record.stage == Stage.DATABASE_PROVISIONING
+    assert events == ["database"]
+    with pytest.raises(AmbiguousCreation):
+        service(store, events).run(TENANT.id)
+    assert provisioner.run(TENANT.id).stage == Stage.ACTIVE
+    assert events == ["database", "database", "create", "migrate", "verify"]
+    provisioner.run(TENANT.id)
+    assert events.count("database") == 2
+
+
+def test_prepared_database_cannot_silently_revert_to_schema_only_workflow():
+    store, events = Store(), []
+    store.record = ProvisioningRecord(TENANT, Stage.DATABASE_READY)
+    with pytest.raises(AmbiguousCreation, match="Database preparation callback"):
+        service(store, events).run(TENANT.id)
+    assert events == []

@@ -169,6 +169,7 @@ def django_durable_provisioning_callback(
     admin_connection,
     credential_provider,
     using="default",
+    grant_database_connect=False,
 ):
     """Build the complete restricted-role callback for a trusted Provisioner.
 
@@ -184,7 +185,7 @@ def django_durable_provisioning_callback(
 
     return RestrictedAccessCoordinator(
         DjangoAccessResolver(registry_model, using=using),
-        PostgresRoleManager(admin_connection, credential_provider),
+        PostgresRoleManager(admin_connection, credential_provider, grant_database_connect=grant_database_connect),
         DjangoAccessOperationJournal(AccessOperation, using=using),
         DjangoOwnershipReceiptStore(RoleOwnershipReceipt, using=using),
         DjangoRoleBindingRecorder(registry_model, using=using),

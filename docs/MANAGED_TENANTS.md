@@ -176,8 +176,8 @@ Custom existing factories remain supported overrides.
 ## Failure and deployment boundaries
 
 Lifecycle metadata and locks stay on `default`; the selected alias controls data
-DDL, roles, migrations and runtime queries. Dedicated targets are pre-created and
-reserved to one tenant. Failed creation preserves inactive metadata/resources;
+DDL, roles, migrations and runtime queries. Dedicated targets are reserved to one tenant. Pre-created targets are the
+default; [automatic creation](AUTOMATIC_DATABASES.md) is opt-in per alias. Failed creation preserves inactive metadata/resources;
 ambiguous effects require verified recovery. Deactivation only needs the central
 database, so a failed target or secret provider cannot prevent disabling routing.
 Activation still requires readiness and fresh credentials. Neither operation drains

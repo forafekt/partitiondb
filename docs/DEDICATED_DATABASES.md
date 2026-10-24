@@ -6,8 +6,9 @@ is still created inside the dedicated database. The target can be on the same
 PostgreSQL server or a separate server with different administrative credentials.
 The library supplies `TenantModel`, `TenantProvisionForm`, `TenantAdmin`,
 `TenantWorkflow` and `create_tenant`; the example subclasses these defaults. See
-[built-in management](MANAGED_TENANTS.md). This milestone does not create databases, move existing tenant data or add aliases
-at request time. Allauth remains application-owned and is outside this example.
+[built-in management](MANAGED_TENANTS.md). Pre-created databases remain the default. [Automatic creation](AUTOMATIC_DATABASES.md)
+is a separate opt-in workflow with a passing installed-package PostgreSQL run; release checks remain pending. Neither mode moves tenant
+data or adds aliases at request time. Allauth remains application-owned and is outside this example.
 
 ## Configure and run the example
 
@@ -105,7 +106,8 @@ SQL to the shared database. Wrong-alias cursor acquisition is rejected.
 A separate database is not by itself a complete PostgreSQL security policy.
 Review CONNECT/TEMP, PUBLIC grants, functions, ownership, other databases and
 server administration privileges. PartitionDB's existing role helper grants
-schema/table/sequence access; it does not configure database-wide CONNECT policy.
+schema/table/sequence access; it leaves pre-created database-wide CONNECT policy unchanged. Automatic creation
+revokes PUBLIC privileges and explicitly grants the restricted role CONNECT.
 Independent-server deployments also need their own TLS, networking, backup,
 monitoring and credential-management configuration. The supplied file store is
 still for development.
@@ -127,6 +129,6 @@ and sufficient role/grant permissions. This is bounded regression evidence, not 
 claim of network-partition tolerance, general TLS/pool compatibility or tenant
 backup/restore acceptance across all deployment topologies.
 
-Next milestones: explicit database creation/ownership recovery, then dynamic
-endpoint/pool management if required. Production secret stores, coordinated
+The new [database creation/ownership workflow](AUTOMATIC_DATABASES.md) passed
+the user-run installed-package PostgreSQL suite; release checks remain pending. Dynamic endpoint/pool management remains future work if required. Production secret stores, coordinated
 rotation, retirement and tenant data relocation remain separate work.

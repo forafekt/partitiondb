@@ -15,6 +15,12 @@ def check_configuration(app_configs, **kwargs):
     except ImproperlyConfigured as error:
         return [Error(str(error), id="partitiondb.E008")]
     errors = []
+    try:
+        from .database_settings import database_provisioning_targets
+
+        database_provisioning_targets()
+    except ImproperlyConfigured as error:
+        errors.append(Error(str(error), id="partitiondb.E033"))
     hosts = config.get("SHARED_HOSTS", [])
     if not isinstance(hosts, (list, tuple)) or any(
         not isinstance(h, str) or not h or h != h.lower().rstrip(".") or "/" in h or ":" in h or "*" in h for h in hosts

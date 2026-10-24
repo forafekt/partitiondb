@@ -94,3 +94,5 @@ PostgreSQL tests and examples, run `docker compose run --rm validation`.
 For the exact-wheel matrix and acceptance suites, run
 `python scripts/release_check.py`. These commands target disposable test services,
 not a production database. See the operating contract before deployment.
+
+Opt-in [automatic database creation and recovery](docs/AUTOMATIC_DATABASES.md) is in development; its 416-test installed-package PostgreSQL run passed, with release checks still pending.

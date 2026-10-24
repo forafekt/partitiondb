@@ -108,7 +108,7 @@ DATABASES = {
     )
 }
 
-# Optional, pre-created tenant database. No database is created by this setting.
+# Optional tenant target. Pre-created by default; automatic creation is opt-in.
 if os.getenv("POSTGRES_DEDICATED_DB"):
     from django.core.exceptions import ImproperlyConfigured
 
@@ -172,3 +172,14 @@ MAILERS = {
 
 # A localhost platform login does not establish a tenant-host session.
 SESSION_COOKIE_DOMAIN = None
+
+
+# Explicit opt-in: the target database may be absent, but its alias is static.
+if os.getenv("PARTITIONDB_CREATE_DEDICATED_DATABASE") == "1":
+    if "dedicated" not in DATABASES:
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured("Set POSTGRES_DEDICATED_DB before enabling automatic creation")
+    PARTITIONDB["DATABASE_PROVISIONING"] = {
+        "dedicated": {"maintenance_database": os.getenv("POSTGRES_MAINTENANCE_DB", "postgres")}
+    }

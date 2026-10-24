@@ -33,8 +33,9 @@ evidence remain on `default`; schema DDL, migrations, grants and runtime queries
 use the tenant alias. Shared and dedicated tenants coexist, including identical
 schema names. See [dedicated database setup and limits](DEDICATED_DATABASES.md).
 
-Database creation/ownership recovery, dynamic aliases/pools and moving existing
-tenant data between layouts are not implemented. Version 0.2.0a36 remains the
+Opt-in database creation/ownership recovery is now implemented in the working
+tree and passed the user-run installed-package PostgreSQL suite (see below). Dynamic aliases/pools and moving
+existing tenant data between layouts are not implemented. Version 0.2.0a36 remains the
 released baseline; this next milestone stays in development while acceptance is
 reviewed. A new alpha is appropriate when the next database lifecycle slice is
 ready; version promotion is not required for every example/test change.
@@ -166,11 +167,29 @@ command and built-in registry migration. This working tree is unreleased; a36's
 prior full release acceptance remains evidence for that immutable tagged version.
 
 
-## Pending manual validation
+## Automatic database validation — user-run 2026-10-24
 
-Post-baseline hardening avoids constructing credential providers for shared
-access workflows and makes the provisioning form inspect the complete central
-registry for existing schema reservations, even with a filtered application
-manager. Focused regressions were added but have not been run. The user now runs
-validation manually; the 391-test results above describe the preceding baseline
-and do not validate these later changes.
+The shared-provider/schema-reservation hardening passed 10 focused tests plus
+lint and formatting checks, run manually by the user. That verification predates
+the automatic database changes below.
+
+Automatic database creation adds durable intent and cluster/owner/OID receipts,
+separate database checkpoints, conservative no-adoption recovery, read-only admin
+evidence and explicit operator commands. PUBLIC database privileges are revoked
+before connections are enabled; CONNECT is granted to the restricted role in the
+same transaction that enables its login. Database preparation precedes opening
+the target. Existing pre-created targets remain supported without opting in.
+
+New tests cover failure boundaries, changed identities, actual process exit before
+receipt persistence, audited rollback/retry, and the existing browser/migration
+scenario with both pre-created and automatic databases. The user supplied a
+successful installed-package run: **416 passed in 135.57s**, Python **3.12.15** /
+Django **6.0.9**, with required PostgreSQL tests. The import probe confirmed the
+installed package rather than checkout source. Its metadata remains 0.2.0a36;
+this is a new development build, not the immutable released a36 artifact.
+
+This output does not establish current lint/format, migration drift, the full
+supported-version release matrix, independent-server acceptance or final artifact
+checks. Earlier 391-test results describe their earlier baseline. No new
+version/tag is promoted and no tests were run by the agent for this update.
+See [automatic database operations](AUTOMATIC_DATABASES.md).

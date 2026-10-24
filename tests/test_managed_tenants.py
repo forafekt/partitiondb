@@ -137,3 +137,40 @@ def test_schema_reservation_check_uses_complete_central_registry():
         database_alias="default", schema_name="example"
     )
     model._default_manager.filter.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, [], {"default": {"maintenance_database": "postgres"}}, {"missing": {"maintenance_database": "postgres"}}],
+)
+def test_invalid_database_creation_settings_fail_before_connecting(value):
+    from partitiondb.adapters.django.database_settings import database_provisioning_targets
+
+    with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, DATABASE_PROVISIONING=value)):
+        with pytest.raises(ImproperlyConfigured):
+            database_provisioning_targets()
+
+
+def test_database_creation_settings_require_a_separate_trusted_target():
+    from partitiondb.adapters.django.database_settings import database_provisioning_targets
+
+    aliases = {"dedicated": SimpleNamespace(settings_dict={"NAME": "tenant_example"})}
+    config = dict(
+        settings.PARTITIONDB,
+        TENANT_MODEL="organizations.Organization",
+        SHARED_APPS=[*settings.PARTITIONDB["SHARED_APPS"], "partitiondb_access_control"],
+        DATABASE_PROVISIONING={"dedicated": {"maintenance_database": "postgres"}},
+    )
+    with (
+        patch("partitiondb.adapters.django.database_settings.connections", aliases),
+        override_settings(PARTITIONDB=config),
+    ):
+        assert database_provisioning_targets() == {"dedicated": "postgres"}
+        for options in (
+            {},
+            {"maintenance_database": "tenant_example"},
+            {"maintenance_database": "postgres", "dsn": "private"},
+        ):
+            with override_settings(PARTITIONDB=dict(config, DATABASE_PROVISIONING={"dedicated": options})):
+                with pytest.raises(ImproperlyConfigured):
+                    database_provisioning_targets()

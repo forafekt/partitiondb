@@ -1,6 +1,6 @@
 """Default managed Django tenant workflow, extensible through subclass methods."""
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from types import SimpleNamespace
 from uuid import uuid4
@@ -24,6 +24,13 @@ from .configuration import get_config
 from .model_registry import get_domain_model, get_tenant_model
 from .registry_lifecycle import RegistryLifecycle
 from .scope import atomic_tenant
+
+
+class TenantAccessContext(SimpleNamespace):
+    @property
+    def admin_connection(self):
+        return self._admin_connection()
+
 
 _initial_migration = ContextVar("partitiondb_initial_migration", default=None)
 
@@ -67,6 +74,38 @@ class TenantWorkflow:
         params = get_config().callback("PROVISIONING_CONNECTION_PARAMS", required=True)(alias)
         with psycopg.connect(**params, autocommit=True) as connection:
             yield connection
+
+    @contextmanager
+    def open_database_maintenance_connection(self, alias, maintenance_database):
+        """Override for deployment-specific database administration credentials."""
+        params = dict(get_config().callback("PROVISIONING_CONNECTION_PARAMS", required=True)(alias))
+        if params.get("dbname") != connections[alias].settings_dict["NAME"]:
+            raise ValueError("Database administration parameters must match the configured target name")
+        params["dbname"] = maintenance_database
+        with psycopg.connect(**params, autocommit=True) as connection:
+            yield connection
+
+    @contextmanager
+    def database_context(self, tenant, control_connection):
+        """Caller holds the central lifecycle lock; acquire the target lock second."""
+        from partitiondb.database_provisioning import DatabaseProvisioner
+        from partitiondb.postgres_database import PostgresDatabaseManager, cluster_id
+
+        from .access_control.models import DatabaseOperation, DatabaseRecoveryAudit
+        from .database_settings import database_provisioning_targets
+        from .database_store import DjangoDatabaseJournal
+
+        targets = database_provisioning_targets()
+        if tenant.database not in targets:
+            raise ValueError("Automatic database provisioning is not enabled for this alias")
+        with self.open_database_maintenance_connection(tenant.database, targets[tenant.database]) as connection:
+            manager = PostgresDatabaseManager(connection)
+            target = manager.target(tenant, connections[tenant.database].settings_dict["NAME"])
+            if target.cluster_id == cluster_id(control_connection) and target.name == control_connection.info.dbname:
+                raise ValueError("The control-plane database cannot be an automatic tenant target")
+            journal = DjangoDatabaseJournal(DatabaseOperation, DatabaseRecoveryAudit)
+            with manager.lock(target):
+                yield DatabaseProvisioner(journal, manager), target
 
     def seed(self, tenant):
         """Restartable application setup, called inside privileged tenant scope."""
@@ -140,11 +179,9 @@ class TenantWorkflow:
         organization = self.model._base_manager.using("default").get(pk=tenant_id)
         tenant = organization.as_tenant()
 
-        def create(identity):
-            with self.open_connection(identity.database) as connection:
-                SchemaManager(connection).create(identity.schema)
-
         def migrate(identity):
+            if automatic_database:
+                verify_runtime_target(identity)
             token = _initial_migration.set(identity)
             try:
                 call_command(
@@ -168,49 +205,112 @@ class TenantWorkflow:
             if organization.access_policy == "restricted":
                 readiness(identity)
 
-        with (
-            self.open_connection("default") as connection,
-            self.open_connection(tenant.database) as admin_connection,
-        ):
-            if tenant.database != "default":
-                # A mistaken alias/endpoint must not turn the control-plane DB into
-                # a purported dedicated tenant database.
-                control_tables = admin_connection.execute(
-                    "SELECT to_regclass(%s), to_regclass('public.partitiondb_provisioning')",
-                    (sql.Identifier("public", self.model._meta.db_table).as_string(admin_connection),),
-                ).fetchone()
-                if any(control_tables):
-                    raise ValueError("Dedicated target contains control-plane tables")
+        from .database_settings import database_provisioning_targets
+
+        automatic_database = tenant.database in database_provisioning_targets()
+        if tenant.database != "default" and not automatic_database:
+            from .access_control.models import DatabaseOperation
+
+            if (
+                DatabaseOperation._base_manager.using("default")
+                .filter(tenant_id=tenant.id, database_alias=tenant.database)
+                .exclude(state="cleaned")
+                .exists()
+            ):
+                raise ImproperlyConfigured("Keep DATABASE_PROVISIONING enabled for its existing managed databases")
+        with ExitStack() as resources:
+            connection = resources.enter_context(self.open_connection("default"))
+            target_connection = None
+
+            def admin_connection():
+                nonlocal target_connection
+                if target_connection is not None:
+                    return target_connection
+                # Do not open a database that has not been created yet. All
+                # schema/role work acquires this connection only after prepare.
+                if automatic_database:
+                    from partitiondb.database_provisioning import DatabaseState
+                    from partitiondb.postgres_database import cluster_id
+
+                    with self.database_context(tenant, connection) as (database_service, target):
+                        operation = database_service.verify(target)
+                        if operation.state != DatabaseState.READY:
+                            raise ValueError("Database creation must complete before tenant data operations")
+                        candidate = resources.enter_context(self.open_connection(tenant.database))
+                        oid = candidate.execute(
+                            "SELECT oid FROM pg_database WHERE datname = current_database()"
+                        ).fetchone()[0]
+                        if cluster_id(candidate) != target.cluster_id or oid != operation.database_oid:
+                            raise ValueError("Runtime target connection does not match the database receipt")
+                else:
+                    candidate = resources.enter_context(self.open_connection(tenant.database))
+                if tenant.database != "default":
+                    control_tables = candidate.execute(
+                        "SELECT to_regclass(%s), to_regclass('public.partitiondb_provisioning')",
+                        (sql.Identifier("public", self.model._meta.db_table).as_string(candidate),),
+                    ).fetchone()
+                    if any(control_tables):
+                        raise ValueError("Dedicated target contains control-plane tables")
+                target_connection = candidate
+                return candidate
+
+            def verify_runtime_target(identity):
+                with self.database_context(identity, connection) as (database_service, target):
+                    operation = database_service.verify(target)
+                    with atomic_tenant(identity, privileged=True):
+                        with connections[identity.database].cursor() as cursor:
+                            cursor.execute(
+                                "SELECT system_identifier::text, (SELECT oid FROM pg_database "
+                                "WHERE datname = current_database()) FROM pg_control_system()"
+                            )
+                            observed = cursor.fetchone()
+                    if observed != (target.cluster_id, operation.database_oid):
+                        raise ValueError("Django target connection does not match the database receipt")
+
+            def prepare_database(identity):
+                registration = self.model._base_manager.using("default").get(pk=identity.id)
+                if registration.active or registration.as_tenant() != identity:
+                    raise ValueError("Database creation requires inactive exact tenant admission")
+                with self.database_context(identity, connection) as (database_service, target):
+                    database_service.prepare(target)
+
+            def create_schema(identity):
+                SchemaManager(admin_connection()).create(identity.schema)
+
+            def provision_access(identity):
+                django_durable_provisioning_callback(
+                    self.model,
+                    admin_connection=admin_connection(),
+                    credential_provider=credentials,
+                    grant_database_connect=automatic_database,
+                )(identity)
+
             credentials = self.credentials() if organization.access_policy == "restricted" else None
             if organization.access_policy == "restricted" and credentials is None:
                 raise ImproperlyConfigured("Restricted tenants require PARTITIONDB.CREDENTIAL_PROVIDER")
-            inspector = PostgresRoleInspector(admin_connection)
-            authentication = PsycopgCredentialAuthentication(credentials, lambda _: admin_connection.info.dsn)
+            inspector = SimpleNamespace(
+                inspect=lambda identity: PostgresRoleInspector(admin_connection()).inspect(identity)
+            )
+            authentication = PsycopgCredentialAuthentication(credentials, lambda _: admin_connection().info.dsn)
             readiness = DjangoAccessReadiness(
                 self.model, inspect=inspector.inspect, credential_authentication=authentication
             )
             store = PostgresProvisioningStore(connection)
-
             provisioner = Provisioner(
                 store,
-                create=create,
+                create=create_schema,
                 migrate=migrate,
                 verify=verify,
-                provision_access=django_durable_provisioning_callback(
-                    self.model,
-                    admin_connection=admin_connection,
-                    credential_provider=credentials,
-                )
-                if organization.access_policy == "restricted"
-                else None,
+                prepare_database=prepare_database if automatic_database else None,
+                provision_access=provision_access if organization.access_policy == "restricted" else None,
             )
-            yield SimpleNamespace(
+            yield TenantAccessContext(
                 tenant=tenant,
                 provisioner=provisioner,
                 inspector=inspector,
                 authentication=authentication,
                 credentials=credentials,
-                admin_connection=admin_connection,
+                _admin_connection=admin_connection,
             )
 
     @contextmanager
@@ -255,6 +355,28 @@ class TenantWorkflow:
             raise ValueError("Runtime tenant identity changed")
         if record.access_policy == "shared":
             return None
+        if tenant.database != "default":
+            from .access_control.models import DatabaseOperation
+            from .database_settings import database_provisioning_targets
+
+            operation = (
+                DatabaseOperation._base_manager.using("default")
+                .filter(tenant_id=tenant.id, database_alias=tenant.database)
+                .exclude(state="cleaned")
+                .first()
+            )
+            automatic = tenant.database in database_provisioning_targets()
+            if (automatic and operation is None) or (
+                operation is not None
+                and (
+                    not automatic
+                    or operation.state != "ready"
+                    or operation.schema_name != tenant.schema
+                    or operation.tenant_type != tenant.tenant_type
+                    or operation.database_name != connections[tenant.database].settings_dict["NAME"]
+                )
+            ):
+                raise ValueError("Runtime database configuration does not match completed database provisioning")
         if record.access_role != tenant_role_name(tenant):
             raise ValueError("Restricted runtime binding is missing or mismatched")
         provider = self.credentials()

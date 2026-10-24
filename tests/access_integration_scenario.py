@@ -35,8 +35,11 @@ def crash_worker():
 
     with access_context(os.environ["PARTITIONDB_CRASH_TENANT"]) as context:
         # The role, secret and receipt must survive abrupt process termination.
-        context.provisioner.provision_access.record_binding = lambda *_: os._exit(71)
-        context.provisioner.run(os.environ["PARTITIONDB_CRASH_TENANT"])
+        with patch(
+            "partitiondb.adapters.django.access_services.DjangoRoleBindingRecorder.__call__",
+            side_effect=lambda *_: os._exit(71),
+        ):
+            context.provisioner.run(os.environ["PARTITIONDB_CRASH_TENANT"])
     raise AssertionError("Expected abrupt termination")
 
 
@@ -468,9 +471,12 @@ def main():
             retry = register("retry")
             retry_tenant = retry.as_tenant()
             with access_context(retry_tenant.id) as context:
-                context.provisioner.provision_access.role_manager.provision = Mock(side_effect=RuntimeError("injected"))
                 try:
-                    context.provisioner.run(retry_tenant.id)
+                    with patch(
+                        "partitiondb.postgres_role_manager.PostgresRoleManager.provision",
+                        side_effect=RuntimeError("injected"),
+                    ):
+                        context.provisioner.run(retry_tenant.id)
                 except RuntimeError:
                     pass
                 else:

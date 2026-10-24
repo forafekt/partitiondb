@@ -18,6 +18,7 @@ DEFAULTS = {
     "TENANT_WORKFLOW": "partitiondb.adapters.django.workflow.TenantWorkflow",
     "CREDENTIAL_PROVIDER": None,
     "DEVELOPMENT_CREDENTIALS_DIR": None,
+    "DATABASE_PROVISIONING": {},
     "PROVISIONING_CONNECTION_PARAMS": "partitiondb.adapters.django.workflow.provisioning_connection_params",
     "SHARED_APPS": [],
     "TENANT_APPS": [],

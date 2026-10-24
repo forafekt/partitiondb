@@ -220,8 +220,10 @@ def main():
                 },
             ):
                 try:
-                    with access_context(tenant.id):
-                        pass
+                    with access_context(tenant.id) as context:
+                        # Target connections are now acquired lazily so a missing
+                        # database can be prepared before any connection to it.
+                        _ = context.admin_connection
                 except ValueError as error:
                     assert "control-plane" in str(error)
                 else:
