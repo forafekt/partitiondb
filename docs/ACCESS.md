@@ -22,13 +22,14 @@ provisions access, verifies ownership/authentication and activates the organizat
 The command has the same option:
 
 ```sh
-python tests/django_project/manage.py create_organization \
+python tests/django_project/manage.py create_tenant \
   --name Demo --schema org_demo --hostname demo.localhost --access-policy restricted
 ```
 
-The example uses `DevelopmentCredentials` in its application code. Secrets are
-stored as exclusive, private files under `PARTITIONDB_DEMO_CREDENTIALS_DIR`, which
-can be configured through the same environment variable. Its default is the
+The example selects PartitionDB's `DevelopmentCredentials` through
+`CREDENTIAL_PROVIDER`. Private files use `PARTITIONDB.DEVELOPMENT_CREDENTIALS_DIR`;
+the example reads its value from the `PARTITIONDB_DEMO_CREDENTIALS_DIR` environment
+variable. Its default is the
 fixture's `.secrets` directory. The parent must exist. References are hashed for
 filenames, directory/file permissions are checked, and writes/deletions are
 fsynced. Existing references cannot be silently overwritten. The folder is ignored
@@ -91,7 +92,8 @@ role or secret. Rejected checks return a conflict page without logging success.
 Lock contention, stale confirmations and non-ambiguous checkpoints do not permit
 blind reprovisioning.
 
-For custom applications, use `AuditedDjangoReconciliationService` with
+`TenantAdmin` supplies this orchestration by default. For lower-level custom
+integrations, use `AuditedDjangoReconciliationService` with
 `registry_model=...`, inspector and authentication verifier. The service reconciles
 bookkeeping/checkpoints; the application explicitly resumes its Provisioner and
 performs admission. Supply `DjangoAccessReadiness` as `RegistryLifecycle`'s

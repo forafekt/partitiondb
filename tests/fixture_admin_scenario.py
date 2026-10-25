@@ -34,7 +34,7 @@ def main():
 
     assert not check_configuration(None), check_configuration(None)
     call_command("migrate", verbosity=0, interactive=False)
-    call_command("create_organization", name="Demo", schema="demo", hostname="demo.localhost", verbosity=0)
+    call_command("create_tenant", name="Demo", schema="demo", hostname="demo.localhost", verbosity=0)
     organization = Organization.objects.get(schema_name="demo")
     user = get_user_model().objects.create_user("staff", password="test-only", is_staff=True)
     membership = Membership.objects.create(user=user, organization=organization, role=Membership.Role.VIEWER)

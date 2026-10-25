@@ -15,6 +15,12 @@ def check_configuration(app_configs, **kwargs):
     except ImproperlyConfigured as error:
         return [Error(str(error), id="partitiondb.E008")]
     errors = []
+    try:
+        from .database_settings import database_provisioning_targets
+
+        database_provisioning_targets()
+    except ImproperlyConfigured as error:
+        errors.append(Error(str(error), id="partitiondb.E033"))
     hosts = config.get("SHARED_HOSTS", [])
     if not isinstance(hosts, (list, tuple)) or any(
         not isinstance(h, str) or not h or h != h.lower().rstrip(".") or "/" in h or ":" in h or "*" in h for h in hosts
@@ -118,6 +124,20 @@ def check_configuration(app_configs, **kwargs):
             config.callback(name)
         except ImproperlyConfigured as error:
             errors.append(Error(str(error), id="partitiondb.E030"))
+    if config["TENANT_MODEL"]:
+        from .model_registry import get_domain_model, get_tenant_model
+
+        try:
+            get_tenant_model()
+            if config["PROVISIONER_FACTORY"] == "partitiondb.adapters.django.workflow.provisioner_factory":
+                if "partitiondb_access_control" not in config["SHARED_APPS"]:
+                    raise ImproperlyConfigured("Managed tenants require partitiondb_access_control in SHARED_APPS")
+            if config["DOMAIN_MODEL"] or config["RESOLVER"] == "partitiondb.adapters.django.workflow.resolve_host":
+                get_domain_model()
+            for name in ("TENANT_WORKFLOW", "CREDENTIAL_PROVIDER", "PROVISIONING_CONNECTION_PARAMS"):
+                config.callback(name)
+        except ImproperlyConfigured as error:
+            errors.append(Error(str(error), id="partitiondb.E031"))
     identity = "partitiondb.adapters.django.identity.SharedIdentityMiddleware"
     if middleware_matches(middleware, identity):
         expected = [

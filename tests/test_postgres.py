@@ -292,7 +292,8 @@ def test_checkpoint_store_upgrade_failure_preserves_existing_table(conn, tenants
 
 
 @pytest.mark.postgres
-def test_checkpoint_store_persists_access_stages_before_callbacks(conn, tenants):
+@pytest.mark.parametrize("prepare_database", [False, True])
+def test_checkpoint_store_persists_access_stages_before_callbacks(conn, tenants, prepare_database):
     from partitiondb.provisioning import Provisioner, Stage
     from partitiondb.provisioning_postgres import PostgresProvisioningStore
 
@@ -308,6 +309,10 @@ def test_checkpoint_store_persists_access_stages_before_callbacks(conn, tenants)
                 psycopg.sql.SQL("SELECT stage FROM {} WHERE tenant_id = %s").format(store.table),
                 (tenant.id,),
             ).fetchone()[0]
+
+        def database(identity):
+            assert persisted_stage() == Stage.DATABASE_PROVISIONING
+            callbacks.append("database")
 
         def create(identity):
             assert persisted_stage() == Stage.CREATING
@@ -337,14 +342,26 @@ def test_checkpoint_store_persists_access_stages_before_callbacks(conn, tenants)
                 checkpoints.append(event.stage)
 
         provisioner = Provisioner(
-            store, create=create, migrate=migrate, provision_access=access, verify=verify, observer=observe
+            store,
+            create=create,
+            migrate=migrate,
+            provision_access=access,
+            verify=verify,
+            observer=observe,
+            prepare_database=database if prepare_database else None,
         )
         try:
             assert provisioner.run(tenant.id).stage == Stage.ACTIVE
-            assert checkpoints == list(Stage)[1:]
-            assert callbacks == ["create", "migrate", "access", "verify"]
+            expected_stages = [
+                stage
+                for stage in list(Stage)[1:]
+                if prepare_database or stage not in (Stage.DATABASE_PROVISIONING, Stage.DATABASE_READY)
+            ]
+            expected_callbacks = (["database"] if prepare_database else []) + ["create", "migrate", "access", "verify"]
+            assert checkpoints == expected_stages
+            assert callbacks == expected_callbacks
             assert provisioner.run(tenant.id).stage == Stage.ACTIVE
-            assert callbacks == ["create", "migrate", "access", "verify"]
+            assert callbacks == expected_callbacks
             store.install()
             with store.lock(tenant.id):
                 assert store.get(tenant.id).stage == Stage.ACTIVE

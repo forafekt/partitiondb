@@ -64,11 +64,13 @@ fresh admissions through cooperating lookups; it does not revoke running work.
 
 | Topic | Guide |
 |---|---|
+| Built-in tenant management | [Models, forms, admin and workflow](docs/MANAGED_TENANTS.md) |
 | Configuration manager and extensions | [Settings suite](docs/SETTINGS.md) |
 | Setup and ORM boundaries | [Django](docs/DJANGO.md) |
 | Identity and cache | [Identity/cache](docs/IDENTITY_CACHE.md) |
 | Registry models and lookup | [Models/events](docs/MODELS_EVENTS.md), [registry](docs/DJANGO_REGISTRY.md) |
 | Shared/tenant admin and login | [Scope and login routing](docs/TENANT_LOGIN.md), [shared admin](docs/SHARED_ADMIN.md) |
+| Optional database per tenant | [Dedicated database setup](docs/DEDICATED_DATABASES.md) |
 | Restricted database access | [Integration and limitations](docs/ACCESS.md) |
 | Provisioning and admission | [Recovery](docs/PROVISIONING.md), [CLI](docs/PROVISIONING_COMMAND.md), [admission](docs/REGISTRY_LIFECYCLE.md) |
 | Migrations and operations | [Fleet](docs/FLEET.md), [events](docs/OPERATION_EVENTS.md), [operating contract](docs/OPERATIONS.md) |
@@ -92,3 +94,5 @@ PostgreSQL tests and examples, run `docker compose run --rm validation`.
 For the exact-wheel matrix and acceptance suites, run
 `python scripts/release_check.py`. These commands target disposable test services,
 not a production database. See the operating contract before deployment.
+
+Opt-in [automatic database creation and recovery](docs/AUTOMATIC_DATABASES.md) is in development; its 416-test installed-package PostgreSQL run passed, with release checks still pending.

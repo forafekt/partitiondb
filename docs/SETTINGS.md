@@ -164,6 +164,23 @@ arguments, or use them directly in an existing PARTITIONDB dictionary.
 | `SUBFOLDER_PREFIX` | `'t'` | Canonical path mount segment. |
 | `AUTHORIZE` | `None` | Callable (request, tenant) → explicit True for membership/access. |
 
+### Managed tenant defaults
+
+| Option | Default | Purpose |
+|---|---|---|
+| `TENANT_MODEL` | `None` | Shared concrete registry `app_label.ModelName`; inferred for the optional registry app. |
+| `DOMAIN_MODEL` | `None` | Shared `DomainMixin` model whose tenant FK references `TENANT_MODEL`. |
+| `TENANT_WORKFLOW` | Built-in `TenantWorkflow` | Subclass or zero-argument factory for the managed lifecycle. |
+| `CREDENTIAL_PROVIDER` | `None` | Zero-argument secret-provider factory; required for restricted tenants. |
+| `DEVELOPMENT_CREDENTIALS_DIR` | `None` | Private directory used only by the opt-in development provider. |
+| `PROVISIONING_CONNECTION_PARAMS` | Built-in alias lookup | Trusted alias → psycopg kwargs for administration connections. |
+
+With a configured tenant model, host resolver, inventory, provisioning/admission,
+runtime credentials and migration-context callbacks default to library functions
+unless explicitly supplied. See [built-in management](MANAGED_TENANTS.md) for models,
+form/admin subclasses and workflow hooks. Tables below show the unconfigured
+legacy defaults; explicit custom callbacks and `None` are preserved.
+
 ### Lifecycle and observations
 
 | Option | Default | Purpose |
@@ -210,14 +227,23 @@ finalization is skipped when Django fails. Plan/check runs do not enter it.
 For restricted-role upgrades, compose
 `partitiondb.adapters.django.access_control.migration_access.DjangoMigrationAccess`
 with a concrete registry model, dedicated provisioning store, administrative
-idle autocommit connection for the tenant's database, and credential authenticator. The example
-wires `apps.organizations.provisioning.migration_context` through central settings.
+idle autocommit connection for the tenant's database, and credential authenticator. The built-in managed workflow
+wires `partitiondb.adapters.django.workflow.migration_context` automatically.
 The helper requires inactive admission and a completed initial provisioning
 checkpoint; it never activates tenants automatically. First provisioning runs
-migrations before a role exists and already owns the lifecycle lock, so its
-application callback explicitly delegates that initial migration path without
-re-entering the lock. Do not expose this trusted bypass as a request parameter.
+migrations before a role exists and already owns the lifecycle lock, so the built-in workflow delegates that initial migration path without re-entering
+the lock. Do not expose this trusted bypass as a request parameter.
 
 The setting defaults to `None` for compatibility with schema-only deployments.
 For fleet upgrades, provide an application inventory of explicitly selected,
 quiesced tenants; the example's normal active-only inventory is for routing.
+
+
+## Automatic database targets
+
+`DATABASE_PROVISIONING` defaults to `{}`. Opt in new non-default aliases with
+`{"dedicated": {"maintenance_database": "postgres"}}`. Names/endpoints still come
+from static DATABASES; no credentials belong in this mapping. Install shared
+migrations and run `install_provisioning_store` before using the new stages. See
+[database creation and recovery](AUTOMATIC_DATABASES.md) for permissions, extension
+points, commands and the no-adoption boundary.

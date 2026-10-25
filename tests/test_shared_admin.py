@@ -83,7 +83,7 @@ def test_shared_admin_rejects_tenant_registration_and_lists_disabled_models():
         assert not site.has_permission(request)
 
 
-def test_provisioning_form_failure_is_retained_and_permission_checked():
+def test_provisioning_form_failure_is_retained_and_permission_checked(caplog):
     class Form(forms.Form):
         name = forms.CharField()
 
@@ -101,6 +101,8 @@ def test_provisioning_form_failure_is_retained_and_permission_checked():
     response = model_admin.add_view(request)
     assert response.context_data["provisioning_failed"]
     assert "private failure" not in str(response.context_data["form"].errors)
+    assert "private failure" not in caplog.text
+    assert "RuntimeError" in caplog.text
     request.user.is_superuser = False
     with pytest.raises(PermissionDenied):
         model_admin.add_view(request)

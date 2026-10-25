@@ -45,6 +45,26 @@ def main():
             "access_error.html",
         ):
             archive.getinfo("partitiondb/adapters/django/templates/partitiondb/admin/" + template)
+        for module in (
+            "database_models.py",
+            "database_store.py",
+            "database_settings.py",
+            "management/commands/tenant_database.py",
+            "management/commands/install_provisioning_store.py",
+            "access_control/migrations/0003_database_provisioning.py",
+            "forms.py",
+            "workflow.py",
+            "model_registry.py",
+            "managed_admin.py",
+            "credentials.py",
+            "management/commands/create_tenant.py",
+            "registry_app/models.py",
+            "registry_app/apps.py",
+            "registry_app/migrations/0001_initial.py",
+        ):
+            archive.getinfo("partitiondb/adapters/django/" + module)
+        for module in ("database_provisioning.py", "postgres_database.py"):
+            archive.getinfo("partitiondb/" + module)
         metadata = email.message_from_bytes(archive.read(f"partitiondb-{version}.dist-info/METADATA"))
         if metadata["Name"] != "partitiondb" or metadata["Version"] != version:
             raise ValueError("Wheel metadata does not match project metadata")

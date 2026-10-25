@@ -79,3 +79,14 @@ class DevelopmentCredentials:
         except FileNotFoundError:
             return True
         return False
+
+
+def development_credentials():
+    from django.core.exceptions import ImproperlyConfigured
+
+    from .configuration import get_config
+
+    directory = get_config()["DEVELOPMENT_CREDENTIALS_DIR"]
+    if directory is None:
+        raise ImproperlyConfigured("Set PARTITIONDB.DEVELOPMENT_CREDENTIALS_DIR")
+    return DevelopmentCredentials(directory)

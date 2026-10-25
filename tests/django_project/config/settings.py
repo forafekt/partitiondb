@@ -47,7 +47,6 @@ TENANCY = DjangoSetup(
         "workspaces": "apps.workspaces.apps.WorkspacesConfig",
         "audit": "apps.audit.apps.AuditConfig",
     },
-    resolver="apps.organizations.tenancy.resolve_host",
     authorize="apps.organizations.tenancy.authorize_tenant",
     tenant_urlconf="config.urls",
     shared_hosts=["localhost", "127.0.0.1", "192.168.1.15"],
@@ -55,11 +54,11 @@ TENANCY = DjangoSetup(
     tenant_admin=True,
     TENANT_AUTH_PATHS=["/accounts/", "/api/auth/"],
     TENANT_AUTH_URLCONF="config.urls_auth",
-    TENANTS="apps.organizations.tenancy.list_tenants",
-    TENANT_DATABASE_ACCESS="apps.organizations.provisioning.runtime_credentials",
-    PROVISIONER_FACTORY="apps.organizations.provisioning.provisioner_factory",
-    MIGRATION_CONTEXT="apps.organizations.provisioning.migration_context",
-    REGISTRY_LIFECYCLE_FACTORY="apps.organizations.provisioning.registry_lifecycle_factory",
+    TENANT_MODEL="organizations.Organization",
+    DOMAIN_MODEL="organizations.Domain",
+    TENANT_WORKFLOW="apps.workspaces.tenant_setup.WorkspaceTenantWorkflow",
+    CREDENTIAL_PROVIDER="partitiondb.adapters.django.credentials.development_credentials",
+    DEVELOPMENT_CREDENTIALS_DIR=Path(os.getenv("PARTITIONDB_DEMO_CREDENTIALS_DIR", str(BASE_DIR / ".secrets"))),
     TENANT_ADMIN_PERMISSIONS="apps.organizations.tenancy.tenant_admin_permissions",
     TENANT_ADMIN_LOG_MODEL="audit.AdminAudit",
 )
@@ -108,6 +107,21 @@ DATABASES = {
         CONN_HEALTH_CHECKS=True,
     )
 }
+
+# Optional tenant target. Pre-created by default; automatic creation is opt-in.
+if os.getenv("POSTGRES_DEDICATED_DB"):
+    from django.core.exceptions import ImproperlyConfigured
+
+    DATABASES["dedicated"] = TENANCY.database(
+        NAME=os.environ["POSTGRES_DEDICATED_DB"],
+        USER=os.getenv("POSTGRES_DEDICATED_USER", DATABASES["default"]["USER"]),
+        PASSWORD=os.getenv("POSTGRES_DEDICATED_PASSWORD", DATABASES["default"]["PASSWORD"]),
+        HOST=os.getenv("POSTGRES_DEDICATED_HOST", DATABASES["default"]["HOST"]),
+        PORT=os.getenv("POSTGRES_DEDICATED_PORT", str(DATABASES["default"]["PORT"])),
+        CONN_HEALTH_CHECKS=True,
+    )
+    if all(str(DATABASES["default"][key]) == str(DATABASES["dedicated"][key]) for key in ("NAME", "HOST", "PORT")):
+        raise ImproperlyConfigured("Dedicated target must differ from the control-plane database")
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
@@ -159,5 +173,13 @@ MAILERS = {
 # A localhost platform login does not establish a tenant-host session.
 SESSION_COOKIE_DOMAIN = None
 
-# Local development only; replace the provider in organizations.provisioning for deployment.
-PARTITIONDB_DEMO_CREDENTIALS_DIR = Path(os.getenv("PARTITIONDB_DEMO_CREDENTIALS_DIR", str(BASE_DIR / ".secrets")))
+
+# Explicit opt-in: the target database may be absent, but its alias is static.
+if os.getenv("PARTITIONDB_CREATE_DEDICATED_DATABASE") == "1":
+    if "dedicated" not in DATABASES:
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured("Set POSTGRES_DEDICATED_DB before enabling automatic creation")
+    PARTITIONDB["DATABASE_PROVISIONING"] = {
+        "dedicated": {"maintenance_database": os.getenv("POSTGRES_MAINTENANCE_DB", "postgres")}
+    }

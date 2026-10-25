@@ -8,6 +8,7 @@ from partitiondb import Tenant
 from partitiondb.core import validate_schema
 from partitiondb.domains import normalize_hostname
 
+from .access_models import TenantAccessMixin
 from .tenant_types import tenant_policy
 
 
@@ -128,3 +129,33 @@ class TenantAdminAuditMixin(models.Model):
     class Meta:
         abstract = True
         ordering = ["-occurred_at", "-pk"]
+
+
+class TenantModel(TenantMixin, TenantAccessMixin):
+    """Default abstract managed registry; applications supply the concrete model.
+
+    All non-default aliases are dedicated reservations in this model. Applications
+    needing grouped/shared aliases can override Meta and clean deliberately.
+    """
+
+    name = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta(TenantMixin.Meta):
+        abstract = True
+        constraints = [
+            *TenantMixin.Meta.constraints,
+            models.UniqueConstraint(
+                fields=["database_alias"],
+                condition=~models.Q(database_alias="default"),
+                name="%(app_label)s_%(class)s_dedicated_database_unique",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.database_alias != "default" and self.access_policy != "restricted":
+            raise ValidationError({"access_policy": "Dedicated databases require a dedicated PostgreSQL role"})
+
+    def __str__(self):
+        return self.name

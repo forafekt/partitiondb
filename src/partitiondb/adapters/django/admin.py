@@ -182,8 +182,8 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
         if request.method == "POST" and form.is_valid():
             try:
                 obj = self.provision_tenant(request, form.cleaned_data)
-            except Exception:
-                logging.getLogger(__name__).exception("Admin provisioning failed")
+            except Exception as error:
+                logging.getLogger(__name__).error("Admin provisioning failed (%s)", type(error).__name__)
                 failed = True
                 form.add_error(
                     None,

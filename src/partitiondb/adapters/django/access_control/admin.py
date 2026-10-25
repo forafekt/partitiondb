@@ -2,7 +2,13 @@
 
 from django.contrib import admin
 
-from .models import AccessOperation, AccessRecoveryAudit, RoleOwnershipReceipt
+from .models import (
+    AccessOperation,
+    AccessRecoveryAudit,
+    DatabaseOperation,
+    DatabaseRecoveryAudit,
+    RoleOwnershipReceipt,
+)
 
 
 class ReadOnlyEvidenceAdmin(admin.ModelAdmin):
@@ -34,4 +40,16 @@ class RoleOwnershipReceiptAdmin(ReadOnlyEvidenceAdmin):
 @admin.register(AccessRecoveryAudit)
 class AccessRecoveryAuditAdmin(ReadOnlyEvidenceAdmin):
     list_display = ("tenant_id", "actor_id", "decision", "observed_state", "created_at")
+    search_fields = ("tenant_id", "operation_id", "actor_id")
+
+
+@admin.register(DatabaseOperation)
+class DatabaseOperationAdmin(ReadOnlyEvidenceAdmin):
+    list_display = ("operation_id", "tenant_id", "database_alias", "database_name", "state", "database_oid")
+    search_fields = ("tenant_id", "operation_id", "database_name")
+
+
+@admin.register(DatabaseRecoveryAudit)
+class DatabaseRecoveryAuditAdmin(ReadOnlyEvidenceAdmin):
+    list_display = ("operation_id", "tenant_id", "actor_id", "decision", "created_at")
     search_fields = ("tenant_id", "operation_id", "actor_id")

@@ -1,16 +1,11 @@
 from django.conf import settings
 from django.db import models
 
-from partitiondb.adapters.django.access_models import TenantAccessMixin
-from partitiondb.adapters.django.models import DomainMixin, TenantMixin
+from partitiondb.adapters.django.models import DomainMixin, TenantModel
 
 
-class Organization(TenantMixin, TenantAccessMixin):
-    name = models.CharField(max_length=200)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.name
+class Organization(TenantModel):
+    pass
 
 
 class Domain(DomainMixin):

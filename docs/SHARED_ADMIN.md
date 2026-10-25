@@ -89,7 +89,7 @@ Run `python scripts/release_check.py` for the broader matrix and acceptance rele
 
 ### Using an existing Core command as the service boundary
 
-If Core already has the `create_organization` command from the integration tutorial,
+If Core already has the `create_tenant` command from the integration tutorial,
 the admin hook can adapt it without moving business policy into PartitionDB:
 
 ```python
@@ -100,7 +100,7 @@ from django.core.management import call_command
 # Inside OrganizationAdmin:
 def provision_tenant(self, request, cleaned_data):
     output = StringIO()
-    call_command("create_organization", **cleaned_data, stdout=output, stderr=output)
+    call_command("create_tenant", **cleaned_data, stdout=output, stderr=output)
     return Organization.objects.get(schema_name=cleaned_data["schema"], database_alias="default")
 ```
 

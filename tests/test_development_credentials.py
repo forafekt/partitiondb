@@ -6,8 +6,7 @@ from tests.django_setup import configure
 
 configure()
 
-from apps.organizations.credentials import DevelopmentCredentials  # noqa: E402
-
+from partitiondb.adapters.django.credentials import DevelopmentCredentials  # noqa: E402
 from partitiondb.adapters.django.runtime_access import (  # noqa: E402
     TenantDatabaseCredentials,
     current_database_credentials,

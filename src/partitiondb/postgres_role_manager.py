@@ -39,9 +39,10 @@ def _password() -> str:
 
 
 class PostgresRoleManager:
-    def __init__(self, connection, credentials: CredentialProvider):
+    def __init__(self, connection, credentials: CredentialProvider, *, grant_database_connect=False):
         self.connection = connection
         self.credentials = credentials
+        self.grant_database_connect = grant_database_connect
 
     def provision(self, tenant: Tenant, *, credential_ref: str) -> RoleBinding:
         """Create a NOINHERIT LOGIN role and grant tenant access.
@@ -69,6 +70,12 @@ class PostgresRoleManager:
             self.credentials.put(credential_ref, password)
             provision_restricted_role(self.connection, tenant, role)
             with self.connection.transaction():
+                if self.grant_database_connect:
+                    self.connection.execute(
+                        sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
+                            sql.Identifier(self.connection.info.dbname), sql.Identifier(role)
+                        )
+                    )
                 self.connection.execute(
                     sql.SQL("ALTER ROLE {} LOGIN PASSWORD {}").format(sql.Identifier(role), sql.Literal(password)),
                 )

@@ -13,6 +13,13 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils.module_loading import import_string
 
 DEFAULTS = {
+    "TENANT_MODEL": None,
+    "DOMAIN_MODEL": None,
+    "TENANT_WORKFLOW": "partitiondb.adapters.django.workflow.TenantWorkflow",
+    "CREDENTIAL_PROVIDER": None,
+    "DEVELOPMENT_CREDENTIALS_DIR": None,
+    "DATABASE_PROVISIONING": {},
+    "PROVISIONING_CONNECTION_PARAMS": "partitiondb.adapters.django.workflow.provisioning_connection_params",
     "SHARED_APPS": [],
     "TENANT_APPS": [],
     "TENANT_TYPES": {},
@@ -41,6 +48,9 @@ DEFAULTS = {
 }
 CALLBACKS = frozenset(
     {
+        "TENANT_WORKFLOW",
+        "CREDENTIAL_PROVIDER",
+        "PROVISIONING_CONNECTION_PARAMS",
         "RESOLVER",
         "SUBFOLDER_RESOLVER",
         "AUTHORIZE",
@@ -71,6 +81,22 @@ class PartitionDBSettings(Mapping):
         if unknown:
             raise ImproperlyConfigured("Unknown PARTITIONDB settings: " + ", ".join(sorted(map(str, unknown))))
         self._values = {**deepcopy(DEFAULTS), **values}
+        if "partitiondb_registry" in self._values["SHARED_APPS"] and "TENANT_MODEL" not in values:
+            self._values["TENANT_MODEL"] = "partitiondb_registry.Tenant"
+            if "DOMAIN_MODEL" not in values:
+                self._values["DOMAIN_MODEL"] = "partitiondb_registry.Domain"
+        if self._values["TENANT_MODEL"]:
+            # Explicit None/custom values still win over the managed defaults.
+            for key, name in {
+                "RESOLVER": "resolve_host",
+                "TENANTS": "list_tenants",
+                "PROVISIONER_FACTORY": "provisioner_factory",
+                "REGISTRY_LIFECYCLE_FACTORY": "registry_lifecycle_factory",
+                "TENANT_DATABASE_ACCESS": "runtime_credentials",
+                "MIGRATION_CONTEXT": "migration_context",
+            }.items():
+                if key not in values:
+                    self._values[key] = "partitiondb.adapters.django.workflow." + name
 
     def __getitem__(self, key):
         return self._values[key]
@@ -148,7 +174,7 @@ class DjangoSetup:
         *,
         shared_apps,
         tenant_apps,
-        resolver,
+        resolver=None,
         tenant_urlconf,
         authorize=None,
         shared_hosts=(),
@@ -200,6 +226,8 @@ class DjangoSetup:
         }
         if set(values) & options.keys():
             raise ImproperlyConfigured("Use DjangoSetup's named arguments for app, resolver and shared-host options")
+        if resolver is None:
+            values.pop("RESOLVER" if routing == "host" else "SUBFOLDER_RESOLVER", None)
         self.partitiondb = PartitionDBSettings({**values, **options}).as_dict()
 
     def middleware(self, *, before=(), after_auth=(), before_tenant=()):

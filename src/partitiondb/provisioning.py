@@ -16,6 +16,8 @@ from .core import Tenant, tenant_scope
 
 class Stage(StrEnum):
     NEW = "new"
+    DATABASE_PROVISIONING = "database_provisioning"
+    DATABASE_READY = "database_ready"
     CREATING = "creating"
     SCHEMA_READY = "schema_ready"
     MIGRATING = "migrating"
@@ -68,8 +70,11 @@ class Provisioner:
     create must fail on existing schemas, rather than adopt them. migrate must be
     restartable after partial application; verify must check readiness without
     changing application data. These callbacks receive a trusted routing identity
-    and must establish their own adapter/database boundary. No callback runs for
-    an already ACTIVE record. Authorization belongs to the caller.
+    and must establish their own adapter/database boundary. Optional
+    prepare_database runs before schema creation and may be resumed: it must own
+    durable database intent/receipts and reject ambiguous effects rather than
+    blindly repeat CREATE DATABASE. No callback runs for an already ACTIVE
+    record. Authorization belongs to the caller.
     """
 
     def __init__(
@@ -80,12 +85,14 @@ class Provisioner:
         migrate: Callable[[Tenant], None],
         verify: Callable[[Tenant], None],
         provision_access: Callable[[Tenant], None] | None = None,
+        prepare_database: Callable[[Tenant], None] | None = None,
         observer: Callable[[LifecycleEvent], None] | None = None,
     ) -> None:
         self.store = store
         self.create = create
         self.migrate = migrate
         self.verify = verify
+        self.prepare_database = prepare_database
         self.provision_access = provision_access
         self.observer = observer
 
@@ -126,7 +133,16 @@ class Provisioner:
             record = self._record(tenant_id)
             if record.stage == Stage.CREATING:
                 raise AmbiguousCreation("Inspect schema ownership and reconcile creation first")
-            if record.stage == Stage.NEW:
+            if record.stage == Stage.NEW and self.prepare_database is not None:
+                record = self._advance(record, Stage.DATABASE_PROVISIONING)
+            if record.stage == Stage.DATABASE_PROVISIONING:
+                if self.prepare_database is None:
+                    raise AmbiguousCreation("Database preparation callback is required to resume this tenant")
+                self._invoke(record, self.prepare_database)
+                record = self._advance(record, Stage.DATABASE_READY)
+            if record.stage == Stage.DATABASE_READY and self.prepare_database is None:
+                raise AmbiguousCreation("Database preparation callback is required for this prepared tenant")
+            if record.stage in (Stage.NEW, Stage.DATABASE_READY):
                 record = self._advance(record, Stage.CREATING)
                 self._invoke(record, self.create)
                 record = self._advance(record, Stage.SCHEMA_READY)
