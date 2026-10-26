@@ -55,10 +55,10 @@ def test_form_created_database_routing_survives_process_restart(remote_profile, 
             # Discover only this test's generated database with a matching
             # durable receipt. Missing receipts never justify deleting resources.
             with psycopg.connect(make_conninfo(dsn, dbname=control), autocommit=True) as registry:
-                if registry.execute("SELECT to_regclass('public.partitiondb_tenant_database_target')").fetchone()[0]:
+                if registry.execute("SELECT to_regclass('public.pdb_tenant_database_target')").fetchone()[0]:
                     rows = registry.execute(
-                        "SELECT t.database_name, o.database_oid FROM public.partitiondb_tenant_database_target t "
-                        "LEFT JOIN public.partitiondb_database_operation o ON o.database_alias=t.alias "
+                        "SELECT t.database_name, o.database_oid FROM public.pdb_tenant_database_target t "
+                        "LEFT JOIN public.pdb_database_operation o ON o.database_alias=t.alias "
                         "AND o.state != 'cleaned'"
                     ).fetchall()
                     for name, receipt_oid in rows:

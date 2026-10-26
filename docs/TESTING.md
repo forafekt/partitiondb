@@ -87,3 +87,77 @@ No script tags or publishes. `technical_passed` describes its exact artifacts;
 `publication_ready` remains false pending final review. A version/runtime change
 requires affected checks again; historical pass counts do not validate a new tree.
 Agent working evidence and release handoff are kept separately in `.codex`.
+
+## Fresh development baseline
+
+The next release replaces the pre-production migration history with initial
+migrations and uses `pdb_` names for concrete package model tables. Old databases
+must be rebuilt; this is not an upgrade path for existing data. Django app labels
+and the separate `pdb_provisioning` checkpoint table are unchanged.
+
+Preview repository-owned migration deletion (third-party migrations are excluded):
+
+```sh
+poetry run python scripts/reset_migrations.py
+poetry run python scripts/reset_migrations.py --apply --regenerate
+```
+
+The second command deletes local migration files, preserves `__init__.py`, clears
+migration bytecode and generates `0001_initial` files for the package and example
+apps without database access. Run it only when deliberately replacing the baseline.
+
+Stop application and worker processes before resetting databases. Set
+`PDB_RESET_DSN` securely to an explicit development PostgreSQL connection. Preview
+selected targets, then repeat with the confirmation flags to execute:
+
+```sh
+poetry run python scripts/purge_databases.py --database example_tenant
+poetry run python scripts/purge_databases.py --database example_tenant --apply --confirm "DELETE DEVELOPMENT DATA"
+```
+
+Repeat `--database` for every database to remove, including the control database
+if rebuilding everything. Connect to a separate maintenance database on each
+server. Alternatively, `--schema tenant_schema` drops that schema CASCADE in the
+connected database; `--schema public` also removes shared tables and Django's
+migration history. Database/schema deletion is irreversible and can partially
+complete if a later target fails. No active sessions are forcibly terminated.
+
+Recreate dropped databases/schemas and their intended owners/grants before running
+shared migrations and creating tenants. These scripts do not reset PostgreSQL
+roles, OpenBao secrets, development credential files or uploaded media. Keep or
+clean those separately as appropriate for the disposable environment.
+
+For multiple servers, set `PDB_RESET_DSNS` to newline-separated DSNs or
+comma-separated PostgreSQL URIs. `PDB_RESET_DSN` still accepts a single DSN or the
+same list format. `PDB_RESET_DSNS` takes precedence when nonempty. For example:
+
+```sh
+export PDB_RESET_DSNS='postgresql://localhost:55433/postgres,postgresql://localhost:55434/postgres'
+poetry run python scripts/purge_databases.py --database example_tenant
+```
+
+The same database/schema targets must exist on every connection. All connections
+and target names are checked before deletion starts. Use separate invocations
+when servers need different targets. A later execution failure can still leave a
+partial reset because drops cannot be rolled back across servers. Connect to
+`postgres` rather than `partitiondb` when dropping the `partitiondb` database.
+
+### Remove development roles
+
+Preview all custom roles on the configured servers:
+
+```sh
+poetry run python scripts/purge_databases.py --purge-roles
+poetry run python scripts/purge_databases.py --purge-roles --apply --confirm "DELETE DEVELOPMENT DATA"
+```
+
+Built-in `pg_` roles, `postgres`, `partitiondb`, every connected user and session
+user are preserved. Repeat `--keep-role NAME` to preserve other custom roles.
+This selects all other custom roles, including non-tenant application users.
+Ownership is reassigned to the connected administrator and role grants are removed
+in each supplied database before cluster-wide role deletion. Include every database
+with role dependencies in the DSN list. Dependencies in omitted databases cause
+role deletion to fail; earlier changes may already have committed. Prefer a
+role-only invocation when supplying multiple databases with different schemas.
+Secrets and uploaded files are unaffected. No reset commands were run as part of
+adding this option.

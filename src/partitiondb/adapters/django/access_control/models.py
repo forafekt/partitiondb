@@ -25,7 +25,7 @@ class DatabaseServerProfile(models.Model):
     verified_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = "partitiondb_database_server_profile"
+        db_table = "pdb_database_server_profile"
 
     def clean(self):
         from django.core.exceptions import ValidationError
@@ -55,7 +55,7 @@ class DatabaseServerProfile(models.Model):
 
 class AccessOperation(AccessOperationMixin):
     class Meta:
-        db_table = "partitiondb_access_operation"
+        db_table = "pdb_access_operation"
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant_id", "database_alias"],
@@ -67,17 +67,17 @@ class AccessOperation(AccessOperationMixin):
 
 class RoleOwnershipReceipt(RoleOwnershipReceiptMixin):
     class Meta:
-        db_table = "partitiondb_role_ownership_receipt"
+        db_table = "pdb_role_ownership_receipt"
 
 
 class AccessRecoveryAudit(AccessRecoveryAuditMixin):
     class Meta:
-        db_table = "partitiondb_access_recovery_audit"
+        db_table = "pdb_access_recovery_audit"
 
 
 class DatabaseOperation(DatabaseOperationMixin):
     class Meta:
-        db_table = "partitiondb_database_operation"
+        db_table = "pdb_database_operation"
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant_id", "database_alias"],
@@ -94,12 +94,12 @@ class DatabaseOperation(DatabaseOperationMixin):
 
 class DatabaseRecoveryAudit(DatabaseRecoveryAuditMixin):
     class Meta:
-        db_table = "partitiondb_database_recovery_audit"
+        db_table = "pdb_database_recovery_audit"
 
 
 class TenantDatabaseTarget(TenantDatabaseTargetMixin):
     class Meta:
-        db_table = "partitiondb_tenant_database_target"
+        db_table = "pdb_tenant_database_target"
         constraints = [
             models.UniqueConstraint(fields=["profile", "database_name"], name="pdb_database_profile_name_unique"),
             models.UniqueConstraint(

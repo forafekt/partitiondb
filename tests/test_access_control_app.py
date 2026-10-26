@@ -41,8 +41,8 @@ def test_access_control_app_migrates_without_activelane_models(tmp_path):
         else:
             raise AssertionError('Missing unique tenant target constraint')
         assert AccessOperation.objects.count() == 1
-        assert 'partitiondb_role_ownership_receipt' in connection.introspection.table_names()
-        assert 'partitiondb_access_recovery_audit' in connection.introspection.table_names()
+        assert 'pdb_role_ownership_receipt' in connection.introspection.table_names()
+        assert 'pdb_access_recovery_audit' in connection.introspection.table_names()
         from partitiondb.core import Tenant
         from partitiondb.access_operations import AccessOperation as Intent, OperationState
         from partitiondb.access_evidence import RoleOwnershipReceipt as Receipt

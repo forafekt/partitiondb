@@ -305,7 +305,7 @@ class TenantWorkflow:
                     candidate = resources.enter_context(self.open_connection(tenant.database))
                 if tenant.database != "default":
                     control_tables = candidate.execute(
-                        "SELECT to_regclass(%s), to_regclass('public.partitiondb_provisioning')",
+                        "SELECT to_regclass(%s), to_regclass('public.pdb_provisioning')",
                         (sql.Identifier("public", self.model._meta.db_table).as_string(candidate),),
                     ).fetchone()
                     if any(control_tables):

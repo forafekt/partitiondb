@@ -20,7 +20,7 @@ class PostgresProvisioningStore:
     def __init__(self, connection, *, schema="public"):
         validate_schema(schema, allow_public=True)
         self.connection = connection
-        self.table = sql.Identifier(schema, "partitiondb_provisioning")
+        self.table = sql.Identifier(schema, "pdb_provisioning")
         self._tenant_id = None
         self._idle()
 
@@ -57,8 +57,8 @@ class PostgresProvisioningStore:
             self.connection.execute(
                 sql.SQL(
                     "ALTER TABLE {} ADD COLUMN IF NOT EXISTS tenant_type text, "
-                    "DROP CONSTRAINT IF EXISTS partitiondb_provisioning_stage_check, "
-                    "ADD CONSTRAINT partitiondb_provisioning_stage_check CHECK (stage IN ({}))"
+                    "DROP CONSTRAINT IF EXISTS pdb_provisioning_stage_check, "
+                    "ADD CONSTRAINT pdb_provisioning_stage_check CHECK (stage IN ({}))"
                 ).format(self.table, stages)
             )
 

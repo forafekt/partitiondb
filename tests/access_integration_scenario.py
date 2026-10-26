@@ -395,7 +395,7 @@ def main():
                     raise AssertionError("Cross-tenant query succeeded")
                 try:
                     with transaction.atomic(), connections[tenant.database].cursor() as cursor:
-                        cursor.execute("SELECT * FROM public.partitiondb_access_operation")
+                        cursor.execute("SELECT * FROM public.pdb_access_operation")
                 except Exception as error:
                     assert getattr(error.__cause__, "sqlstate", None) == "42501"
                 else:

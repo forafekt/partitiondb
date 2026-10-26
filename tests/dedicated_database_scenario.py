@@ -137,9 +137,9 @@ def main():
                     "organizations_organization",
                     "auth_user",
                     "django_session",
-                    "partitiondb_access_operation",
-                    "partitiondb_role_ownership_receipt",
-                    "partitiondb_provisioning",
+                    "pdb_access_operation",
+                    "pdb_role_ownership_receipt",
+                    "pdb_provisioning",
                 ):
                     assert (
                         context.admin_connection.execute("SELECT to_regclass(%s)", ("public." + table,)).fetchone()[0]
