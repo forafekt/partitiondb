@@ -15,7 +15,10 @@ from tests.django_setup import configure
 from tests.test_provisioning import Store
 
 configure()
-from apps.organizations.models import Organization  # noqa: E402
+from partitiondb.adapters.django import get_tenant_model  # noqa: E402
+
+Organization = get_tenant_model()
+
 
 TENANT = Tenant("one", "alpha")
 MODULE = "partitiondb.adapters.django.registry_lifecycle"

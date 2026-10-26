@@ -147,7 +147,7 @@ class ControlPlaneAdminSite(admin.AdminSite):
 
 
 class ProvisioningTenantAdmin(TenantRegistryAdmin):
-    """Opt-in add form delegates creation to an application-owned service.
+    """Opt-in add form delegates creation to a configured provisioning service.
 
     Set provisioning_form_class and implement provision_tenant(request, cleaned_data).
     The service must persist inactive metadata, checkpoints, provision and activate;
@@ -155,13 +155,20 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
     """
 
     provisioning_form_class = None
+    provisioning_template_name = "partitiondb/admin/provision.html"
+
+    def get_provisioning_form_class(self, request):
+        return self.provisioning_form_class
+
+    def get_provisioning_fieldsets(self, request, form):
+        return ((None, {"fields": tuple(form.fields)}),)
 
     def provision_tenant(self, request, cleaned_data):
         raise NotImplementedError("Implement the application provisioning service")
 
     def has_add_permission(self, request):
         return (
-            self.provisioning_form_class is not None
+            self.get_provisioning_form_class(request) is not None
             and request.user.is_superuser
             and super().has_add_permission(request)
         )
@@ -177,7 +184,10 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
         if not self.has_add_permission(request):
             raise PermissionDenied
         request.current_app = self.admin_site.name
-        form = self.provisioning_form_class(request.POST if request.method == "POST" else None)
+        from django.contrib.admin.helpers import AdminForm
+
+        form_class = self.get_provisioning_form_class(request)
+        form = form_class(request.POST if request.method == "POST" else None)
         failed = False
         if request.method == "POST" and form.is_valid():
             try:
@@ -187,11 +197,11 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
                 failed = True
                 form.add_error(
                     None,
-                    "Provisioning did not complete. Metadata and schema may "
+                    "Provisioning did not complete. Metadata and infrastructure may "
                     "remain. Inspect records and logs before recovery; do not recreate.",
                 )
             else:
-                self.log_addition(request, obj, "Provisioned through application service")
+                self.log_addition(request, obj, "Provisioned through configured tenant workflow")
                 self.message_user(request, "Tenant provisioned successfully.")
                 return HttpResponseRedirect(
                     reverse(
@@ -201,13 +211,20 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
                 )
         return TemplateResponse(
             request,
-            "partitiondb/admin/provision.html",
+            self.provisioning_template_name,
             {
                 **self.admin_site.each_context(request),
                 **(extra_context or {}),
                 "title": "Create and provision tenant",
                 "opts": self.opts,
                 "form": form,
+                "adminform": AdminForm(form, self.get_provisioning_fieldsets(request, form), {}, model_admin=self),
+                "media": self.media + form.media,
+                "add": True,
+                "change": False,
+                "is_popup": False,
+                "has_view_permission": self.has_view_permission(request),
+                "has_add_permission": True,
                 "provisioning_failed": failed,
             },
         )

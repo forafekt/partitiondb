@@ -1,0 +1,11 @@
+.git
+.venv
+.env
+**/.secrets
+**/__pycache__
+**/staticfiles
+dist
+release_reports
+.pytest_cache
+.ruff_cache
+.mypy_cache

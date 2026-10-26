@@ -174,3 +174,25 @@ def test_database_creation_settings_require_a_separate_trusted_target():
             with override_settings(PARTITIONDB=dict(config, DATABASE_PROVISIONING={"dedicated": options})):
                 with pytest.raises(ImproperlyConfigured):
                     database_provisioning_targets()
+
+
+def test_openbao_factory_uses_central_options_without_reading_token_or_network(tmp_path):
+    from partitiondb.credential_providers.openbao import TokenFile, django_credentials
+
+    options = {
+        "address": "https://secrets.internal",
+        "mount": "secret",
+        "prefix": "partitiondb",
+        "mount_accessor": "kv_expected",
+        "token_file": str(tmp_path / "not-created"),
+    }
+    with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, CREDENTIAL_PROVIDER_OPTIONS=options)):
+        with patch("partitiondb.credential_providers.openbao.OpenBaoKV2") as constructor:
+            assert django_credentials() is constructor.return_value
+        args = constructor.call_args.kwargs
+        assert isinstance(args["token"], TokenFile)
+        assert args["token"].path == options["token_file"]
+        assert args["address"] == options["address"]
+    with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, CREDENTIAL_PROVIDER_OPTIONS={})):
+        with pytest.raises(ImproperlyConfigured):
+            django_credentials()

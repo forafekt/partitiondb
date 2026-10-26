@@ -32,7 +32,7 @@ def validate_schema(value: str, *, allow_public: bool = False) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Tenant:
-    """Serializable routing identity; database is a preconfigured alias, never a DSN."""
+    """Serializable routing identity; database is a trusted adapter alias, never a DSN."""
 
     id: str
     schema: str

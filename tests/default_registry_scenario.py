@@ -18,6 +18,12 @@ def main():
     urls.urlpatterns = []
     sys.modules[urls.__name__] = urls
     with tempfile.TemporaryDirectory() as directory:
+        credential_config = {
+            "CREDENTIAL_PROVIDER": "partitiondb.adapters.django.credentials.development_credentials",
+            "DEVELOPMENT_CREDENTIALS_DIR": directory,
+        }
+        if os.environ.get("PARTITIONDB_DEFAULT_REGISTRY_OPENBAO") == "1":
+            credential_config = {"CREDENTIAL_PROVIDER": "tests.openbao_support.credentials"}
         settings.configure(
             SECRET_KEY="test-only",
             ROOT_URLCONF=urls.__name__,
@@ -51,8 +57,7 @@ def main():
             PARTITIONDB={
                 "SHARED_APPS": ["partitiondb_registry", "partitiondb_access_control"],
                 "TENANT_APPS": ["workspaces"],
-                "CREDENTIAL_PROVIDER": "partitiondb.adapters.django.credentials.development_credentials",
-                "DEVELOPMENT_CREDENTIALS_DIR": directory,
+                **credential_config,
             },
         )
         import django
@@ -94,6 +99,7 @@ def main():
             with access_context(tenant.id) as context:
                 context.admin_connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(record.access_role)))
                 context.admin_connection.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(record.access_role)))
+                context.credentials.delete(record.credential_ref)
             connections.close_all()
         print("BUILT-IN REGISTRY, WORKFLOW, COMMAND AND RESTRICTED RUNTIME PASSED")
 

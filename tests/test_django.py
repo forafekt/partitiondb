@@ -7,7 +7,6 @@ from partitiondb import MissingTenant, Tenant, current_tenant, tenant_scope
 from tests.django_setup import configure
 
 configure()
-from apps.organizations.models import Organization
 from apps.workspaces.models import Workspace
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
@@ -15,9 +14,12 @@ from django.db import connection, connections
 from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.test import RequestFactory
 
+from partitiondb.adapters.django import get_tenant_model
 from partitiondb.adapters.django.middleware import TenantMiddleware
 from partitiondb.adapters.django.router import TenantRouter
 from partitiondb.adapters.django.scope import atomic_tenant
+
+Organization = get_tenant_model()
 
 
 def resolve(host):
@@ -350,8 +352,12 @@ def test_generic_tenant_command_scopes_dumpdata_and_closes_connection(schemas):
 
 
 def test_abstract_registry_model_validation():
-    from apps.organizations.models import Domain, Organization
     from django.core.exceptions import ValidationError
+
+    from partitiondb.adapters.django import get_domain_model, get_tenant_model
+
+    Organization = get_tenant_model()
+    Domain = get_domain_model()
 
     with pytest.raises(ValidationError):
         Organization(schema_name="public").clean()
@@ -384,9 +390,13 @@ def test_django_lifecycle_signal_bridge():
 
 @pytest.mark.postgres
 def test_registry_models_constraints_routing_and_protected_domains(schemas):
-    from apps.organizations.models import Domain, Organization
     from django.core.exceptions import ValidationError
     from django.db.models.deletion import ProtectedError
+
+    from partitiondb.adapters.django import get_domain_model, get_tenant_model
+
+    Organization = get_tenant_model()
+    Domain = get_domain_model()
 
     call_command("migrate", verbosity=0, interactive=False)
     org = Organization.objects.create(name="First test organization", schema_name=schemas[0].schema)

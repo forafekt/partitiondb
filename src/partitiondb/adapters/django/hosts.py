@@ -13,7 +13,8 @@ class RegistryHostMiddleware:
     """Install first, with ALLOWED_HOSTS=['*']; this is the effective allowlist.
 
     Django still validates Host syntax. Registry lookup is exact and must resolve
-    active tenants only. No process-global settings are mutated or cached.
+    active tenants only. Resolution may hydrate trusted database routes, without
+    rewriting the application's static DATABASES declaration.
     """
 
     sync_capable = True

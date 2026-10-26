@@ -32,3 +32,27 @@ class DatabaseRecoveryAuditMixin(models.Model):
 
     class Meta:
         abstract = True
+
+
+class TenantDatabaseTargetMixin(models.Model):
+    """Non-secret routing reservation. Endpoint credentials stay in settings."""
+
+    alias = models.CharField(max_length=64, unique=True)
+    profile = models.CharField(max_length=64)
+    database_name = models.CharField(max_length=63)
+    profile_fingerprint = models.CharField(max_length=64)
+    tenant_id = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            from django.core.exceptions import ValidationError
+
+            previous = type(self)._base_manager.using("default").get(pk=self.pk)
+            fields = ("alias", "profile", "database_name", "profile_fingerprint", "tenant_id")
+            if any(getattr(previous, field) != getattr(self, field) for field in fields):
+                raise ValidationError("Managed database routing is immutable through ordinary save()")
+        return super().save(*args, **kwargs)

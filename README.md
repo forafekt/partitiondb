@@ -1,98 +1,67 @@
 # PartitionDB
 
-Explicit PostgreSQL tenant boundaries with a dependency-free Python core and
-optional Django and Celery adapters. Licensed under [MIT](LICENSE), with
-[upstream notices](THIRD_PARTY_NOTICES).
+Explicit PostgreSQL tenancy for Python, with optional Django and Celery adapters.
+Use tenant schemas in a shared database, restricted PostgreSQL roles, or a database
+per tenant. Shared identity and lifecycle metadata stay in the control plane.
 
-Version 0.2.0a35 is a prerelease and a breaking replacement for the original
-Citivenue extraction. It separates routing identity from database transactions,
-framework integration and application permissions.
+The core has no runtime dependencies. Python 3.11+ is supported; Django 6.x needs
+Python 3.12+. PostgreSQL 16 is the integration target. This is alpha software;
+validate your application and deployment before upgrading.
 
-## Install
-
-Python 3.11+. From this checkout, use a virtual environment:
+## Try the application
 
 ```sh
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install '.[django]'
+docker compose up --build -d
 ```
 
-Extras: `postgres` for psycopg, `django` for Django/PostgreSQL, `celery` for Celery,
-`testing` for pytest helpers, and `dev` for development tools. Applications should
-lock their own resolved dependencies.
+Open http://localhost:8000/admin/ and sign in with `admin` / `local-admin-only`.
+This local stack runs `tests/django_project` with two PostgreSQL servers, OpenBao,
+Nginx/Gunicorn, RabbitMQ, Celery, Redis and Mailpit. Credentials are local fixtures.
+See [local setup](docs/LOCAL_INFRASTRUCTURE.md) for tenant creation and service access.
 
-## Core and PostgreSQL
+## Install from GitHub
+
+Pin the tag you have validated; for example:
+
+```sh
+pip install 'partitiondb[django] @ git+https://github.com/forafekt/partitiondb.git@v0.2.0a37'
+```
+
+The checkout contains the unreleased a38 candidate. Documentation describes this
+checkout; some features are newer than a37. Extras: `postgres`, `django`, `celery`,
+`testing`, and `dev`. GitHub installation remains the release path for this project.
+
+## Execution boundaries
 
 ```python
-import psycopg
 from partitiondb import Tenant, current_tenant, tenant_scope
-from partitiondb.postgres import transaction
 
-tenant = Tenant("organization-42", "org_42")
+tenant = Tenant("customer-42", "customer_42")
 with tenant_scope(tenant):
     assert current_tenant() == tenant
-
-# Resolve membership and credentials before opening a database scope.
-with psycopg.connect(application_dsn, autocommit=True) as connection:
-    with transaction(connection, tenant):
-        connection.execute("SELECT * FROM project")
 ```
 
-A context records immutable routing identity; it does not authorize access or
-open a transaction. Resolve identities through trusted metadata. Database scopes
-require exclusively leased, idle connections. Async psycopg uses async_transaction.
-Privileged schema creation/migrations are separate from runtime credentials.
+`tenant_scope` carries identity; it does not open a database transaction or grant
+access. Use `partitiondb.postgres.transaction(connection, tenant)` for psycopg or
+`partitiondb.adapters.django.scope.atomic_tenant(tenant)` for Django database work.
+Resolve identity from trusted metadata and check membership before entering a scope.
 
-## Supported scope
+## Guides
 
-- Schema create/drop/rename and recoverable provisioning checkpoints.
-- Opt-in restricted roles, durable access evidence, audited recovery and scoped runtime credentials.
-- Django request/ORM boundaries, shared identity, membership callbacks and domains.
-- Static tenant types, subfolder routing, fresh registry lookup and admission.
-- Single/fleet migrations, tenant commands and best-effort progress events.
-- Tenant cache keys, storage, templates, static collection, registry admin and tests.
-- Optional Celery 5.6 task boundaries with fresh active-tenant lookup per attempt.
+| Need | Guide |
+| --- | --- |
+| Configure Django and customize components | [Settings](docs/SETTINGS.md) |
+| Models, admin, authentication and routing | [Django](docs/DJANGO.md) |
+| Schema/database tenancy and server profiles | [Databases](docs/DATABASES.md) |
+| Restricted roles and secret providers | [Database access](docs/ACCESS.md) |
+| Provisioning, recovery and upgrades | [Operations](docs/OPERATIONS.md) |
+| Jobs | [Celery](docs/CELERY.md) |
+| Cache, storage, templates and static assets | [Integrations](docs/INTEGRATIONS.md) |
+| App subsets and URLconfs by tenant type | [Tenant types](docs/TENANT_TYPES.md) |
+| Lifecycle and migration notifications | [Events](docs/EVENTS.md) |
+| Run checks and prepare a release | [Testing](docs/TESTING.md) |
+| Upgrade the original extracted package | [Migration](docs/MIGRATION.md) |
 
-Django requires direct PostgreSQL or session-mode pooling and synchronous request
-boundaries. Automatic credential rotation, schema cloning, automatic retirement or
-draining/deletion, type conversion, manifest staticfiles and application-specific
-users/billing/ownership flows are outside this release scope. Deactivation stops
-fresh admissions through cooperating lookups; it does not revoke running work.
-
-## Documentation
-
-| Topic | Guide |
-|---|---|
-| Built-in tenant management | [Models, forms, admin and workflow](docs/MANAGED_TENANTS.md) |
-| Configuration manager and extensions | [Settings suite](docs/SETTINGS.md) |
-| Setup and ORM boundaries | [Django](docs/DJANGO.md) |
-| Identity and cache | [Identity/cache](docs/IDENTITY_CACHE.md) |
-| Registry models and lookup | [Models/events](docs/MODELS_EVENTS.md), [registry](docs/DJANGO_REGISTRY.md) |
-| Shared/tenant admin and login | [Scope and login routing](docs/TENANT_LOGIN.md), [shared admin](docs/SHARED_ADMIN.md) |
-| Optional database per tenant | [Dedicated database setup](docs/DEDICATED_DATABASES.md) |
-| Restricted database access | [Integration and limitations](docs/ACCESS.md) |
-| Provisioning and admission | [Recovery](docs/PROVISIONING.md), [CLI](docs/PROVISIONING_COMMAND.md), [admission](docs/REGISTRY_LIFECYCLE.md) |
-| Migrations and operations | [Fleet](docs/FLEET.md), [events](docs/OPERATION_EVENTS.md), [operating contract](docs/OPERATIONS.md) |
-| Optional integrations | [Celery](docs/CELERY.md), [tenant types](docs/TENANT_TYPES.md) |
-| Assets and tests | [Storage/testing](docs/STORAGE_TESTING.md), [templates/static/admin/routing](docs/ASSETS_ADMIN_ROUTING.md) |
-| Examples and upgrades | [Django test project](tests/django_project/), [migration guide](docs/MIGRATION.md) |
-| Completion and release checks | [Current gaps and plan](docs/COMPLETION.md), [validation](docs/RELEASE_VALIDATION.md) |
-
-## Development
-
-```sh
-python -m pip install '.[django,dev]'
-python -m ruff check .
-python -m ruff format --check .
-python -m mypy
-python -m pytest
-```
-
-Database tests skip without PARTITIONDB_TEST_DSN. For the full disposable
-PostgreSQL tests and examples, run `docker compose run --rm validation`.
-For the exact-wheel matrix and acceptance suites, run
-`python scripts/release_check.py`. These commands target disposable test services,
-not a production database. See the operating contract before deployment.
-
-Opt-in [automatic database creation and recovery](docs/AUTOMATIC_DATABASES.md) is in development; its 416-test installed-package PostgreSQL run passed, with release checks still pending.
+PartitionDB does not provide membership policy, SSO, server/VM deployment,
+credential rotation, session termination, automatic retirement, or distributed
+rollback. Its local Compose deployment demonstrates integration, not production HA.

@@ -82,11 +82,12 @@ def test_gate_records_missing_command_without_exception_message(tmp_path, monkey
     assert "secret" not in repr(record)
 
 
-def test_container_gate_requires_and_selects_exact_built_wheel(tmp_path, monkeypatch):
+@pytest.mark.parametrize("gate", ["matrix", "postgres_acceptance", "celery_acceptance", "openbao_acceptance"])
+def test_container_gate_requires_and_selects_exact_built_wheel(tmp_path, monkeypatch, gate):
     root = project(tmp_path, monkeypatch)
     directory = root / "release_reports" / "test"
     directory.mkdir(parents=True)
-    assert release_check.run_gate("matrix", [], directory)["error_type"] == "MissingWheel"
+    assert release_check.run_gate(gate, [], directory)["error_type"] == "MissingWheel"
     artifact = directory / "artifacts" / "partitiondb-0.2.0a27-py3-none-any.whl"
     artifact.parent.mkdir()
     artifact.write_bytes(b"wheel")
@@ -97,7 +98,7 @@ def test_container_gate_requires_and_selects_exact_built_wheel(tmp_path, monkeyp
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(release_check.subprocess, "run", run)
-    assert release_check.run_gate("matrix", [], directory)["status"] == "passed"
+    assert release_check.run_gate(gate, [], directory)["status"] == "passed"
 
 
 def test_installed_package_probe_rejects_checkout_source(tmp_path):

@@ -89,6 +89,9 @@ try:
     queues = [mailbox.get_queue('unique-worker'), mailbox.get_reply_queue()]
     queues.extend(app.amqp.queues.values())
     assert all(queue.durable or queue.exclusive for queue in queues)
+    assert all(queue.queue_arguments.get('x-queue-type') == 'quorum' for queue in app.amqp.queues.values())
+    assert app.conf.worker_detect_quorum_queues
+    assert app.conf.broker_transport_options['confirm_publish']
     assert app.conf.event_queue_exclusive and not app.conf.event_queue_durable
     from celery.backends.filesystem import FilesystemBackend
     assert isinstance(app.backend, FilesystemBackend)

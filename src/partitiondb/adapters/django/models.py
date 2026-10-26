@@ -1,7 +1,7 @@
 """Optional abstract control-plane models. No DDL or hidden provisioning on save."""
 
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from django.db import connections, models
+from django.db import models
 from django.db.models.functions import Lower
 
 from partitiondb import Tenant
@@ -32,7 +32,20 @@ class TenantMixin(models.Model):
             validate_schema(self.schema_name)
         except ValueError as error:
             raise ValidationError({"schema_name": str(error)}) from error
-        if self.database_alias not in connections:
+        from .database_routes import ensure_database_alias, managed_alias, tenant_database_aliases
+
+        if managed_alias(self.database_alias):
+            try:
+                ensure_database_alias(
+                    self.database_alias,
+                    tenant_id=str(self.pk) if not self._state.adding else None,
+                    allow_unbound=self._state.adding,
+                )
+            except (ValueError, ImproperlyConfigured) as error:
+                raise ValidationError(
+                    {"database_alias": "Tenant database route is unavailable or mismatched"}
+                ) from error
+        elif self.database_alias not in tenant_database_aliases():
             raise ValidationError({"database_alias": "Use a preconfigured database alias"})
 
         try:

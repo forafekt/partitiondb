@@ -1,5 +1,6 @@
 """Default managed tenant admin; subclass forms and workflow methods to customize."""
 
+from django.contrib import admin
 from django.core.checks import Error
 from django.core.exceptions import ImproperlyConfigured
 
@@ -23,13 +24,36 @@ class TenantAdmin(TenantAccessRegistryAdmin, ProvisioningTenantAdmin):
         "pk",
         "name",
         "schema_name",
-        "database_alias",
+        "database_location",
         "active",
         "access_policy",
         "access_role",
     )
     search_fields = ("name", "schema_name")
     ordering = ("name",)
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        if obj is not None and "database_location" not in fields:
+            return (*fields, "database_location")
+        return fields
+
+    @admin.display(description="Database")
+    def database_location(self, obj):
+        from django.db import connections
+
+        from .database_routes import managed_alias
+
+        if managed_alias(obj.database_alias):
+            from .access_control.models import TenantDatabaseTarget
+
+            target = (
+                TenantDatabaseTarget._base_manager.using("default")
+                .filter(alias=obj.database_alias, tenant_id=str(obj.pk))
+                .first()
+            )
+            return f"{target.database_name} ({target.profile})" if target else "Unresolved database route"
+        return connections[obj.database_alias].settings_dict["NAME"]
 
     def access_inspection_service(self, request, tenant):
         with self.get_workflow(request).access_context(tenant.id) as context:
@@ -86,4 +110,5 @@ class TenantAdmin(TenantAccessRegistryAdmin, ProvisioningTenantAdmin):
         return get_workflow()
 
     def provision_tenant(self, request, cleaned_data):
-        return self.get_workflow(request).create(**self.provisioning_form_class.creation_options(cleaned_data))
+        form_class = self.get_provisioning_form_class(request)
+        return self.get_workflow(request).create(**form_class.creation_options(cleaned_data))

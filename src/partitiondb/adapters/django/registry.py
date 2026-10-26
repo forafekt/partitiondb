@@ -11,7 +11,9 @@ from .router import app_sets
 class DjangoRegistry:
     """Active-only metadata adapter; no cache, authorization, DDL or registration.
 
-    Shared registry models use the default alias. Call outside tenant scope.
+    Shared registry models use the default alias. Managed database identities may
+    hydrate this process's connection definitions, without DDL or metadata writes.
+    Call outside tenant scope.
     Application membership checks still belong to the request authorizer.
     """
 

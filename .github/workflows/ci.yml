@@ -75,3 +75,32 @@ jobs:
         with:
           name: distributions-python-${{ matrix.python }}-django-${{ strategy.job-index }}
           path: dist/
+
+
+  openbao:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install build
+      - name: Build the exact candidate wheel
+        run: python -m build
+      - name: Select the built wheel for service acceptance
+        run: |
+          python - <<'PYCODE'
+          import os
+          import tomllib
+          from pathlib import Path
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          wheel = f"/package/dist/partitiondb-{version}-py3-none-any.whl"
+          with open(os.environ["GITHUB_ENV"], "a") as stream:
+              stream.write(f"PARTITIONDB_PACKAGE={wheel}\n")
+          PYCODE
+      - name: OpenBao and PostgreSQL acceptance against installed wheel
+        run: docker compose -f compose.tests.yml --profile secrets run --rm openbao_acceptance
+      - name: Stop disposable services
+        if: always()
+        run: docker compose -f compose.tests.yml --profile secrets down

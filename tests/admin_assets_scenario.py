@@ -10,7 +10,6 @@ from tests.django_setup import configure
 
 def main(sqlite_name=None):
     configure(admin=True, sqlite_name=sqlite_name)
-    from apps.organizations.models import Domain, Organization
     from django.contrib.auth import get_user_model
     from django.core.management import call_command
     from django.db import connections
@@ -18,8 +17,12 @@ def main(sqlite_name=None):
     from django.urls import reverse
 
     from partitiondb import Tenant, tenant_scope
+    from partitiondb.adapters.django import get_domain_model, get_tenant_model
     from partitiondb.keys import storage_prefix
     from tests.admin_urls import site
+
+    Organization = get_tenant_model()
+    Domain = get_domain_model()
 
     assert not site.check(None)
 

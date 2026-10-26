@@ -72,6 +72,15 @@ def configure(*, shared_auth=False, admin=False, sqlite_name=None):
         DATABASES={"default": database},
         DATABASE_ROUTERS=["partitiondb.adapters.django.router.TenantRouter"],
         PARTITIONDB={
+            "TENANT_MODEL": "organizations.Organization",
+            "DOMAIN_MODEL": "organizations.Domain",
+            # These isolated adapter tests deliberately exercise manual callback
+            # composition. Managed workflow scenarios run in separate processes.
+            "TENANTS": None,
+            "PROVISIONER_FACTORY": None,
+            "REGISTRY_LIFECYCLE_FACTORY": None,
+            "TENANT_DATABASE_ACCESS": None,
+            "MIGRATION_CONTEXT": None,
             "SHARED_APPS": ["organizations", "accounts", "auth", "contenttypes"]
             + (["sessions"] if shared_auth else [])
             + (["admin", "messages", "staticfiles"] if admin else []),

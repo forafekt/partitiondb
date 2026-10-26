@@ -59,7 +59,14 @@ class RegistryLifecycle:
                 self.verify_access(confirm)
             with transaction.atomic(using=self.using):
                 row = self.model._base_manager.using(self.using).select_for_update().get(pk=confirm.id)
-                identity = row.as_tenant()
+                from .database_routes import managed_alias
+
+                central_only = not active and managed_alias(row.database_alias)
+                identity = (
+                    Tenant(str(row.pk), row.schema_name, row.database_alias, tenant_type=row.get_tenant_type())
+                    if central_only
+                    else row.as_tenant()
+                )
                 if identity != confirm:
                     raise ValueError("Registry identity does not match confirmation")
                 if active:
@@ -70,6 +77,13 @@ class RegistryLifecycle:
                     if record is None or record.tenant != identity or record.stage != Stage.ACTIVE:
                         raise ValueError("Activation requires a matching ACTIVE checkpoint")
                 if row.active != active:
-                    row.active = active
-                    row.save(using=self.using, update_fields=["active"])
+                    if central_only:
+                        # The exact registry row is locked and confirmed. Do not
+                        # require a working target/profile to disable admission.
+                        changed = self.model._base_manager.using(self.using).filter(pk=row.pk).update(active=False)
+                        if changed != 1:
+                            raise ValueError("Registry admission row disappeared")
+                    else:
+                        row.active = active
+                        row.save(using=self.using, update_fields=["active"])
         return RegistryState(identity, active)

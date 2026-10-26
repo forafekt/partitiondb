@@ -19,7 +19,9 @@ def main():
     for python, django in MATRIX:
         print(f"Matrix: Python {python}, Django {django}", flush=True)
         environment = dict(os.environ, PARTITIONDB_PYTHON=python, PARTITIONDB_DJANGO=django)
-        result = subprocess.run(["docker", "compose", "run", "--rm", "validation"], cwd=ROOT, env=environment)
+        result = subprocess.run(
+            ["docker", "compose", "-f", "compose.tests.yml", "run", "--rm", "validation"], cwd=ROOT, env=environment
+        )
         if result.returncode:
             failures.append((python, django))
     if failures:

@@ -398,3 +398,8 @@ release_reports
 
 # Local development PostgreSQL credentials
 .secrets/
+
+# Track the local deployment archetype despite generic virtualenv patterns.
+!docker/local/
+!docker/local/**
+.codex

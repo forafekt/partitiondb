@@ -22,10 +22,10 @@ Existing names that are uppercase, non-ASCII, begin with underscores, or otherwi
 | App paths in app lists | Explicit Django app labels |
 | `migrate_schemas` | Public `migrate`, then `migrate_tenant SCHEMA` for each inventory entry |
 | Automatic schema lifecycle on save/delete | Explicit staged provisioning and `SchemaManager` |
-| Tenant/domain mixins | Your own control-plane models and unique constraints |
+| Tenant/domain mixins | Library TenantModel/DomainMixin or reviewed custom shared models |
 | Custom tenant user/permission classes | Preserve their tables and migrate ownership into your app first |
 | Implicit public fallback | Explicit control-plane workflow; never unknown-host fallback |
-| Dynamic DB aliases | Preconfigured trusted aliases |
+| Dynamic DB aliases | Trusted static sources or library-owned persisted database routes |
 
 ## Safe upgrade sequence
 

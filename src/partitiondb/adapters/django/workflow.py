@@ -69,16 +69,26 @@ class TenantWorkflow:
         factory = get_config().callback("CREDENTIAL_PROVIDER")
         return factory() if factory is not None else None
 
+    def connection_params(self, alias):
+        from .database_routes import connection_source, ensure_database_alias
+
+        ensure_database_alias(alias)
+        source, name = connection_source(alias)
+        params = dict(get_config().callback("PROVISIONING_CONNECTION_PARAMS", required=True)(source))
+        if name is not None:
+            params["dbname"] = name
+        return params
+
     @contextmanager
     def open_connection(self, alias):
-        params = get_config().callback("PROVISIONING_CONNECTION_PARAMS", required=True)(alias)
+        params = self.connection_params(alias)
         with psycopg.connect(**params, autocommit=True) as connection:
             yield connection
 
     @contextmanager
     def open_database_maintenance_connection(self, alias, maintenance_database):
         """Override for deployment-specific database administration credentials."""
-        params = dict(get_config().callback("PROVISIONING_CONNECTION_PARAMS", required=True)(alias))
+        params = self.connection_params(alias)
         if params.get("dbname") != connections[alias].settings_dict["NAME"]:
             raise ValueError("Database administration parameters must match the configured target name")
         params["dbname"] = maintenance_database
@@ -92,13 +102,17 @@ class TenantWorkflow:
         from partitiondb.postgres_database import PostgresDatabaseManager, cluster_id
 
         from .access_control.models import DatabaseOperation, DatabaseRecoveryAudit
-        from .database_settings import database_provisioning_targets
+        from .database_routes import maintenance_database
         from .database_store import DjangoDatabaseJournal
 
-        targets = database_provisioning_targets()
-        if tenant.database not in targets:
-            raise ValueError("Automatic database provisioning is not enabled for this alias")
-        with self.open_database_maintenance_connection(tenant.database, targets[tenant.database]) as connection:
+        maintenance = maintenance_database(tenant.database)
+        with self.open_database_maintenance_connection(tenant.database, maintenance) as connection:
+            from .database_routes import _target, managed_alias
+
+            if managed_alias(tenant.database):
+                _, profile = _target(tenant.database)
+                if profile.cluster_id and cluster_id(connection) != profile.cluster_id:
+                    raise ValueError("Registered PostgreSQL server identity changed")
             manager = PostgresDatabaseManager(connection)
             target = manager.target(tenant, connections[tenant.database].settings_dict["NAME"])
             if target.cluster_id == cluster_id(control_connection) and target.name == control_connection.info.dbname:
@@ -130,29 +144,74 @@ class TenantWorkflow:
             raise ValueError("Application fields cannot override tenant security metadata")
         return {"name": name, **values}
 
-    def create(self, *, name, schema, hostname, access_policy="shared", database="default", tenant_data=None):
+    def create(
+        self,
+        *,
+        name,
+        schema,
+        hostname,
+        access_policy="shared",
+        database="default",
+        tenant_data=None,
+        new_database=False,
+        database_name=None,
+        database_profile=None,
+    ):
+        from partitiondb.core import validate_schema
+
+        from .database_routes import managed_alias, reserve_database_target, tenant_database_aliases
+
         require_control_plane()
-        if database not in connections:
+        validate_schema(schema)
+        if type(new_database) is not bool:
+            raise TypeError("new_database must be a boolean")
+        if new_database:
+            if database != "default":
+                raise ValueError("Select an existing database or request a new one, not both")
+            access_policy = "restricted"
+        elif database_name is not None or database_profile is not None or managed_alias(database):
+            raise ValueError("New database information requires new_database=True")
+        if database not in tenant_database_aliases():
             raise ValueError("Use a preconfigured database alias")
         if database != "default" and access_policy != "restricted":
             raise ValueError("Dedicated databases require restricted access")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("Tenant name cannot be empty")
         domain_model = get_domain_model()
-        with transaction.atomic(using="default"):
-            if (
-                database != "default"
-                and self.model._base_manager.using("default").filter(database_alias=database).exists()
-            ):
-                raise ValueError("Dedicated database is already reserved; inspect its tenant")
-            record = self.model._base_manager.using("default").create(
-                **self.tenant_values(name.strip(), tenant_data),
-                schema_name=schema,
-                database_alias=database,
-                access_policy=access_policy,
-                credential_ref="partitiondb/" + uuid4().hex if access_policy == "restricted" else "",
-            )
-            domain_model._base_manager.using("default").create(tenant=record, hostname=hostname, is_primary=True)
+        target = None
+        try:
+            with transaction.atomic(using="default"):
+                if new_database:
+                    target = reserve_database_target(profile_name=database_profile, name=database_name, schema=schema)
+                    database = target.alias
+                if (
+                    database != "default"
+                    and self.model._base_manager.using("default").filter(database_alias=database).exists()
+                ):
+                    raise ValueError("Dedicated database is already reserved; inspect its tenant")
+                record = self.model._base_manager.using("default").create(
+                    **self.tenant_values(name.strip(), tenant_data),
+                    schema_name=schema,
+                    database_alias=database,
+                    access_policy=access_policy,
+                    credential_ref="partitiondb/" + uuid4().hex if access_policy == "restricted" else "",
+                )
+                if target is not None:
+                    bound = (
+                        type(target)
+                        ._base_manager.using("default")
+                        .filter(pk=target.pk, tenant_id="")
+                        .update(tenant_id=str(record.pk))
+                    )
+                    if bound != 1:
+                        raise ValueError("Database reservation changed during registration")
+                domain_model._base_manager.using("default").create(tenant=record, hostname=hostname, is_primary=True)
+        except BaseException:
+            if target is not None:
+                from .database_routes import discard_database_alias
+
+                discard_database_alias(target.alias)
+            raise
         # Retain inactive registration on any subsequent external failure.
         identity = record.as_tenant()
         with self.open_connection("default") as connection:
@@ -205,9 +264,9 @@ class TenantWorkflow:
             if organization.access_policy == "restricted":
                 readiness(identity)
 
-        from .database_settings import database_provisioning_targets
+        from .database_routes import automatic_database as uses_automatic_database
 
-        automatic_database = tenant.database in database_provisioning_targets()
+        automatic_database = uses_automatic_database(tenant.database)
         if tenant.database != "default" and not automatic_database:
             from .access_control.models import DatabaseOperation
 
@@ -357,7 +416,7 @@ class TenantWorkflow:
             return None
         if tenant.database != "default":
             from .access_control.models import DatabaseOperation
-            from .database_settings import database_provisioning_targets
+            from .database_routes import automatic_database
 
             operation = (
                 DatabaseOperation._base_manager.using("default")
@@ -365,7 +424,7 @@ class TenantWorkflow:
                 .exclude(state="cleaned")
                 .first()
             )
-            automatic = tenant.database in database_provisioning_targets()
+            automatic = automatic_database(tenant.database)
             if (automatic and operation is None) or (
                 operation is not None
                 and (

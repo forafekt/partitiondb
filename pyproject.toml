@@ -28,7 +28,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/dist", "/release_reports", "**/.secrets"]
+exclude = ["/dist", "/release_reports", "/.codex", "**/.secrets"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/partitiondb"]
@@ -48,7 +48,7 @@ files = [
 ]
 
 [tool.pytest.ini_options]
-markers = ["postgres: requires PARTITIONDB_TEST_DSN"]
+markers = ["postgres: requires PARTITIONDB_TEST_DSN", "openbao: requires disposable PARTITIONDB_OPENBAO_TEST_ADDR"]
 pythonpath = ["src", "."]
 testpaths = ["tests"]
 

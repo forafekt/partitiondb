@@ -10,7 +10,10 @@ from partitiondb.adapters.django.registry import DjangoRegistry
 from tests.django_setup import configure
 
 configure()
-from apps.organizations.models import Domain, Organization  # noqa: E402
+from partitiondb.adapters.django import get_domain_model, get_tenant_model  # noqa: E402
+
+Organization = get_tenant_model()
+Domain = get_domain_model()
 
 
 @pytest.mark.parametrize("method,arg", [("get", "one"), ("resolve_host", "alpha.test"), ("list_tenants", None)])
@@ -63,7 +66,9 @@ from django.core.management import call_command
 from partitiondb import MissingTenant, current_tenant
 from partitiondb.adapters.django.registry import DjangoRegistry
 from partitiondb.jobs import job_scope
-from apps.organizations.models import Organization, Domain
+from partitiondb.adapters.django import get_domain_model, get_tenant_model
+Organization = get_tenant_model()
+Domain = get_domain_model()
 call_command("migrate", verbosity=0, interactive=False)
 registry=DjangoRegistry(Organization, domain_model=Domain)
 row=Organization.objects.create(name="Alpha test organization", schema_name="alpha")

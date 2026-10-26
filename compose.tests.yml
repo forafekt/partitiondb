@@ -1,0 +1,149 @@
+# Standalone disposable validation infrastructure; separate from the application.
+# docker compose -f compose.tests.yml run --rm validation
+name: partitiondb-tests
+
+x-runner: &runner
+  image: python:3.12-slim
+  init: true
+  working_dir: /package
+  volumes:
+    - .:/package:ro
+  environment: &test-environment
+    PARTITIONDB_PACKAGE: ${PARTITIONDB_PACKAGE:-.}
+    PARTITIONDB_TEST_DSN: postgresql://partitiondb:test-only@postgres:5432/partitiondb
+    PYTHONDONTWRITEBYTECODE: '1'
+  depends_on: &database-ready
+    postgres:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: partitiondb
+      POSTGRES_PASSWORD: test-only
+      POSTGRES_DB: partitiondb
+    ports: ['127.0.0.1:55432:5432']
+    # Disposable storage is intentionally separate from local application data.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U partitiondb -d partitiondb']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  migrate:
+    <<: *runner
+    environment:
+      <<: *test-environment
+      DJANGO_SETTINGS_MODULE: config.settings
+      POSTGRES_DB: partitiondb
+      POSTGRES_USER: partitiondb
+      POSTGRES_PASSWORD: test-only
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: '5432'
+      PYTHONPATH: /package/tests/django_project
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - sh
+      - -ec
+      - |
+        pip install "$${PARTITIONDB_PACKAGE}[django,postgres]"
+        python tests/django_project/manage.py migrate --noinput
+
+  tests:
+    <<: *runner
+    profiles: [checks]
+    command:
+      - sh
+      - -ec
+      - pip install "$${PARTITIONDB_PACKAGE}[django,dev]" && python -m pytest --require-postgres -p no:cacheprovider
+
+  validation:
+    <<: *runner
+    profiles: [checks]
+    image: python:${PARTITIONDB_PYTHON:-3.12}-slim
+    environment:
+      <<: *test-environment
+      PARTITIONDB_DJANGO: ${PARTITIONDB_DJANGO:->=6.0,<6.1}
+    command:
+      - sh
+      - -ec
+      - pip install "$${PARTITIONDB_PACKAGE}[django,dev]" "Django$${PARTITIONDB_DJANGO}" && python scripts/validate.py --installed-package
+
+  acceptance:
+    <<: *runner
+    profiles: [checks]
+    image: partitiondb-tests-acceptance:local
+    build:
+      context: .
+      dockerfile: Dockerfile.acceptance
+    command:
+      - sh
+      - -ec
+      - pip install "$${PARTITIONDB_PACKAGE}[postgres]" && python scripts/production_checks.py
+
+  rabbitmq:
+    image: rabbitmq:4
+    profiles: [celery]
+    environment:
+      RABBITMQ_DEFAULT_USER: partitiondb
+      RABBITMQ_DEFAULT_PASS: test-only
+      RABBITMQ_DEFAULT_VHOST: partitiondb
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  celery_acceptance:
+    <<: *runner
+    profiles: [celery]
+    environment:
+      <<: *test-environment
+      PARTITIONDB_CELERY_BROKER: amqp://partitiondb:test-only@rabbitmq:5672/partitiondb
+    depends_on:
+      <<: *database-ready
+      rabbitmq:
+        condition: service_healthy
+    command:
+      - sh
+      - -ec
+      - pip install "$${PARTITIONDB_PACKAGE}[postgres,celery]" && python -m scripts.celery_acceptance
+
+  openbao:
+    image: ghcr.io/openbao/openbao:2.5.0
+    profiles: [secrets]
+    cap_add: [IPC_LOCK]
+    command: [server, -dev, -dev-root-token-id=partitiondb-test-only, '-dev-listen-address=0.0.0.0:8200']
+    ports: ['127.0.0.1:58200:8200']
+    environment:
+      BAO_ADDR: http://127.0.0.1:8200
+    healthcheck:
+      test: [CMD, bao, status]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  openbao_acceptance:
+    <<: *runner
+    profiles: [secrets]
+    # Plaintext acceptance traffic remains loopback-only; production uses TLS.
+    network_mode: service:openbao
+    environment:
+      <<: *test-environment
+      PARTITIONDB_OPENBAO_TEST_ADDR: http://127.0.0.1:8200
+    depends_on:
+      openbao:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command:
+      - sh
+      - -ec
+      - pip install "$${PARTITIONDB_PACKAGE}[django,testing]" && python -m scripts.openbao_acceptance

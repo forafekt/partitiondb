@@ -17,13 +17,15 @@ def main():
         if "--crash" not in sys.argv:
             os.environ["PARTITIONDB_DEMO_CREDENTIALS_DIR"] = str(Path(directory) / "secrets")
         configure()
-        from apps.organizations.models import Organization
         from django.core.management import CommandError, call_command
         from django.db import connections
 
+        from partitiondb.adapters.django import get_tenant_model
         from partitiondb.adapters.django.access_control.models import DatabaseOperation, DatabaseRecoveryAudit
         from partitiondb.adapters.django.workflow import get_workflow
         from partitiondb.postgres_role_manager import tenant_role_name
+
+        Organization = get_tenant_model()
 
         if "--crash" in sys.argv:
             with patch(

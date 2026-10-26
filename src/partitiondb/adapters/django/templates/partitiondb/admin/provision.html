@@ -1,7 +1,22 @@
-{% extends "admin/base_site.html" %}
+{% extends "admin/change_form.html" %}
+{% load i18n %}
 {% block content %}
-<p>Creates tenant infrastructure through the configured application service. Failures preserve data for inspection.</p>
-<form method="post">{% csrf_token %}{{ form.as_p }}
-{% if not provisioning_failed %}<input type="submit" value="Create and provision">{% endif %}
-</form>
+<div id="content-main">
+  <p>Select where this tenant's data will live. An automatic database target is created before its schema and application tables. Failures preserve resources for inspection.</p>
+  <form method="post" id="{{ opts.model_name }}_form" novalidate>
+    {% csrf_token %}
+    {% if form.errors %}
+      <p class="errornote">{% translate "Please correct the errors below." %}</p>
+    {% endif %}
+    {{ form.non_field_errors }}
+    {% for fieldset in adminform %}
+      {% include "admin/includes/fieldset.html" with heading_level=2 prefix="provisioning" id_prefix=0 id_suffix=forloop.counter0 %}
+    {% endfor %}
+    {% if not provisioning_failed %}
+      <div class="submit-row">
+        <input type="submit" class="default" value="{% translate 'Create and provision' %}">
+      </div>
+    {% endif %}
+  </form>
+</div>
 {% endblock %}

@@ -22,7 +22,8 @@ def main():
     import django
 
     django.setup()
-    from apps.organizations.models import Membership, Organization
+    # Application-specific membership/auth integration is intentional.
+    from apps.organizations.models import Membership
     from django.conf import settings
     from django.contrib.auth import get_user_model
     from django.core.management import call_command
@@ -30,9 +31,12 @@ def main():
     from django.test import Client
 
     from partitiondb import current_tenant
+    from partitiondb.adapters.django import get_tenant_model
     from partitiondb.adapters.django.checks import check_configuration
 
     assert not check_configuration(None), check_configuration(None)
+    Organization = get_tenant_model()
+
     call_command("migrate", verbosity=0, interactive=False)
     call_command("create_tenant", name="Demo", schema="demo", hostname="demo.localhost", verbosity=0)
     organization = Organization.objects.get(schema_name="demo")

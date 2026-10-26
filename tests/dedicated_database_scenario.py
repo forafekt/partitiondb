@@ -18,13 +18,15 @@ def main():
     with tempfile.TemporaryDirectory() as directory:
         os.environ["PARTITIONDB_DEMO_CREDENTIALS_DIR"] = str(Path(directory) / "secrets")
         configure()
-        from apps.organizations.models import Domain, Membership, Organization
+        # Application-specific membership/auth integration is intentional.
+        from apps.organizations.models import Membership
         from apps.workspaces.models import Workspace
         from django.contrib.auth import get_user_model
         from django.core.management import CommandError, call_command
         from django.db import connections
         from django.test import Client
 
+        from partitiondb.adapters.django import get_domain_model, get_tenant_model
         from partitiondb.adapters.django.access_control.models import (
             AccessOperation,
             RoleOwnershipReceipt,
@@ -33,6 +35,9 @@ def main():
         from partitiondb.adapters.django.workflow import access_context, registry_lifecycle_factory
         from partitiondb.postgres_role_manager import tenant_role_name
         from partitiondb.provisioning import Stage
+
+        Organization = get_tenant_model()
+        Domain = get_domain_model()
 
         call_command("migrate", verbosity=0, interactive=False)
         root = get_user_model().objects.create_superuser("operator", password="test-only")

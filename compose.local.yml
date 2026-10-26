@@ -1,0 +1,285 @@
+# Standalone stack: docker compose -f compose.local.yml up --build -d
+# All passwords below are LOCAL FIXTURES. Do not deploy this file to production.
+name: partitiondb-local
+x-app: &app
+  image: partitiondb-local:dev
+  build:
+    context: .
+    dockerfile: Dockerfile.local
+  init: true
+  environment: &app-env
+    DJANGO_SETTINGS_MODULE: config.settings_local
+    DJANGO_SECRET_KEY: local-fixture-only-replace-outside-this-stack-0123456789
+    POSTGRES_HOST: postgres-control
+    POSTGRES_PORT: '5432'
+    POSTGRES_DB: partitiondb
+    POSTGRES_USER: partitiondb
+    POSTGRES_PASSWORD: local-database-only
+    DJANGO_SUPERUSER_USERNAME: admin
+    DJANGO_SUPERUSER_PASSWORD: local-admin-only
+    CELERY_BROKER_URL: amqp://partitiondb:local-broker-only@rabbitmq:5672/partitiondb
+    CELERY_RESULT_BACKEND: redis://:local-results-only@redis:6379/0
+  volumes:
+    - runtime:/runtime:ro
+    - ca:/ca:ro
+    - static:/static
+    - media:/media
+  networks: [backend]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: [/tmp]
+
+services:
+  certificates:
+    image: partitiondb-local-certificates:dev
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+      target: certificates
+    user: '0:0'
+    volumes:
+      - ./docker/local/certificates.sh:/setup.sh:ro
+      - tls:/tls
+      - ca:/ca
+      - bootstrap:/bootstrap
+      - runtime:/runtime
+      - static:/static
+      - media:/media
+      - bao-data:/bao-data
+    command: [sh, /setup.sh]
+    networks: [backend]
+
+  postgres-control:
+    image: postgres:16
+    environment: &postgres-env
+      POSTGRES_USER: partitiondb
+      POSTGRES_PASSWORD: local-database-only
+      POSTGRES_DB: partitiondb
+    command: &postgres-command
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/tls/server.crt
+      - -c
+      - ssl_key_file=/tls/server.key
+    volumes:
+      - control-data:/var/lib/postgresql/data
+      - tls:/tls:ro
+    ports: ['127.0.0.1:55433:5432']
+    depends_on:
+      certificates: {condition: service_completed_successfully}
+    healthcheck: &pg-health
+      test: [CMD-SHELL, 'pg_isready -U partitiondb -d postgres']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    networks: [backend]
+    restart: unless-stopped
+
+  postgres-tenants:
+    image: postgres:16
+    environment:
+      <<: *postgres-env
+      POSTGRES_DB: postgres
+    command: *postgres-command
+    volumes:
+      - tenant-data:/var/lib/postgresql/data
+      - tls:/tls:ro
+    ports: ['127.0.0.1:55434:5432']
+    depends_on:
+      certificates: {condition: service_completed_successfully}
+    healthcheck: *pg-health
+    networks: [backend]
+    restart: unless-stopped
+
+  openbao:
+    image: ghcr.io/openbao/openbao:2.5.0
+    user: '10001:10001'
+    entrypoint: [bao]
+    command: [server, -config=/etc/bao/local.hcl]
+    environment:
+      BAO_ADDR: https://127.0.0.1:8200
+      BAO_CACERT: /ca/ca.pem
+    volumes:
+      - ./docker/local/openbao.hcl:/etc/bao/local.hcl:ro
+      - bao-data:/bao/data
+      - tls:/tls:ro
+      - ca:/ca:ro
+    ports: ['127.0.0.1:58201:8200']
+    depends_on:
+      certificates: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, bao, status]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+    networks: [backend]
+    restart: unless-stopped
+
+  bao-bootstrap:
+    <<: *app
+    user: '0:0'
+    # This isolated local operator owns recovery material; application services
+    # never receive the bootstrap or TLS private-key volumes.
+    volumes:
+      - bootstrap:/bootstrap
+      - runtime:/runtime
+      - ca:/ca:ro
+    command: [python, docker/local/bootstrap_bao.py]
+    depends_on:
+      openbao: {condition: service_started}
+      certificates: {condition: service_completed_successfully}
+    # Needs to write token files for the application's UID.
+    cap_drop: []
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+
+  bao-renew:
+    <<: *app
+    volumes:
+      - runtime:/runtime:ro
+      - ca:/ca:ro
+    command: [python, docker/local/renew_bao.py]
+    depends_on:
+      bao-bootstrap: {condition: service_completed_successfully}
+      openbao: {condition: service_healthy}
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: partitiondb
+      RABBITMQ_DEFAULT_PASS: local-broker-only
+      RABBITMQ_DEFAULT_VHOST: partitiondb
+    volumes: [rabbit-data:/var/lib/rabbitmq]
+    ports: ['127.0.0.1:15673:15672']
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [backend]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: [redis-server, --appendonly, 'yes', --requirepass, local-results-only]
+    environment:
+      REDISCLI_AUTH: local-results-only
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ['127.0.0.1:58025:8025']
+    networks: [backend]
+    restart: unless-stopped
+
+  initialize:
+    <<: *app
+    command:
+      - sh
+      - -ec
+      - |
+        python docker/local/initialize_database.py
+        python tests/django_project/manage.py migrate --noinput
+        python tests/django_project/manage.py install_provisioning_store
+        python tests/django_project/manage.py collectstatic --noinput
+        python docker/local/initialize_app.py
+    depends_on:
+      postgres-control: {condition: service_healthy}
+      postgres-tenants: {condition: service_healthy}
+      bao-bootstrap: {condition: service_completed_successfully}
+      openbao: {condition: service_healthy}
+
+  web:
+    <<: *app
+    volumes:
+      - runtime:/runtime:ro
+      - ca:/ca:ro
+      - static:/static:ro
+      - media:/media
+    depends_on:
+      initialize: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      mailpit: {condition: service_started}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  worker:
+    <<: *app
+    command: [celery, -A, config.celery_local:app, worker, --loglevel=INFO, --concurrency=2]
+    depends_on:
+      initialize: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+
+  proxy:
+    image: nginxinc/nginx-unprivileged:1.28-alpine
+    ports: ['127.0.0.1:8000:8080']
+    volumes:
+      - ./docker/local/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - static:/static:ro
+    depends_on:
+      web: {condition: service_healthy}
+    networks: [backend]
+    restart: unless-stopped
+
+  backup:
+    image: postgres:16
+    profiles: [operations]
+    environment:
+      PGPASSWORD: local-database-only
+      PGUSER: partitiondb
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: /ca/ca.pem
+    volumes:
+      - backups:/backups
+      - ca:/ca:ro
+    command:
+      - sh
+      - -ec
+      - |
+        umask 077
+        stamp=$$(date -u +%Y%m%dT%H%M%SZ)
+        pg_dumpall -h postgres-control > /backups/control-$$stamp.sql
+        pg_dumpall -h postgres-tenants > /backups/tenants-$$stamp.sql
+        echo 'Database snapshots written; OpenBao and uploads require separate coordinated backup.'
+    depends_on:
+      postgres-control: {condition: service_healthy}
+      postgres-tenants: {condition: service_healthy}
+    networks: [backend]
+
+networks:
+  backend:
+    driver: bridge
+volumes:
+  control-data:
+  tenant-data:
+  bao-data:
+  bootstrap:
+  runtime:
+  tls:
+  ca:
+  static:
+  media:
+  rabbit-data:
+  redis-data:
+  backups:

@@ -49,6 +49,10 @@ def main():
             "database_models.py",
             "database_store.py",
             "database_settings.py",
+            "database_routes.py",
+            "server_profiles.py",
+            "access_control/migrations/0005_database_server_profile.py",
+            "access_control/migrations/0004_tenant_database_target.py",
             "management/commands/tenant_database.py",
             "management/commands/install_provisioning_store.py",
             "access_control/migrations/0003_database_provisioning.py",
@@ -63,7 +67,12 @@ def main():
             "registry_app/migrations/0001_initial.py",
         ):
             archive.getinfo("partitiondb/adapters/django/" + module)
-        for module in ("database_provisioning.py", "postgres_database.py"):
+        for module in (
+            "database_provisioning.py",
+            "postgres_database.py",
+            "credential_providers/__init__.py",
+            "credential_providers/openbao.py",
+        ):
             archive.getinfo("partitiondb/" + module)
         metadata = email.message_from_bytes(archive.read(f"partitiondb-{version}.dist-info/METADATA"))
         if metadata["Name"] != "partitiondb" or metadata["Version"] != version:

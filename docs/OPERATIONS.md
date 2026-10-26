@@ -1,71 +1,135 @@
-# Operating contract
+# Provisioning, recovery and upgrades
 
-## Isolation and credentials
+Use administrative credentials and a shared control-plane context. Provisioning
+and recovery reject outer transactions: durable checkpoints must commit separately
+from external DDL and secret-store writes. Never delete resources on a generic
+failure or assume an exception means nothing committed.
 
-Tenant schema selection is not authorization. Resolve a tenant through trusted metadata, verify membership and operation permissions, then open its data scope. Do not use a request's arbitrary schema header as routing authority. Tenant IDs and database aliases in queued jobs must be re-resolved and authorized at execution time.
+## Provisioning
 
-Use separate provisioning and application credentials. Revoke schema creation from runtime roles. Grant only required USAGE and table/sequence permissions. Public and tenant schemas must not be writable by untrusted database users. PostgreSQL implicitly searches pg_catalog first when it is omitted from search_path; this implementation intentionally relies on that behavior and avoids explicit pg_catalog as the CREATE target. Revoke TEMP where your threat model requires preventing temporary-object shadowing. Application migrations run with elevated credentials during maintenance; runtime app access should not require DDL rights.
+The managed `TenantWorkflow` owns registration, optional database preparation,
+schema creation, migration, business hooks, role provisioning and admission.
+Ordinary model saves perform none of these side effects.
 
-One runtime role with access to every schema still has access to every schema through explicit qualification. Dedicated databases/roles are appropriate when stronger isolation is required. The opt-in [role manager](ACCESS.md) generates passwords through a deployment-supplied secret provider; the Django backend can use the explicit TENANT_DATABASE_ACCESS callback inside atomic_tenant to select per-tenant credentials without changing settings.DATABASES. Row-level security, encryption and arbitrary SQL confinement are outside this library.
+```sh
+python manage.py migrate --noinput
+python manage.py install_provisioning_store
+python manage.py create_tenant --name Demo --schema demo --hostname demo.localhost
+python manage.py provision_tenant TENANT_ID --status
+python manage.py provision_tenant TENANT_ID
+```
 
-## Connections
+The normal creation workflow also installs/upgrades its checkpoint store. Quiesce
+older provisioners before an upgrade: store constraint changes can lock the table.
+An ACTIVE checkpoint is a no-op on resume; it is not a migration upgrade command.
 
-Standalone PostgreSQL scopes exclusively lease an idle connection for a complete transaction; no concurrent use or nested transaction. Return it to a pool only after the context has exited. Transaction-local search_path resets on commit and rollback. Do not manipulate search_path or transaction state manually inside the scope.
+The framework-neutral `Provisioner` accepts a durable locked store and callbacks
+for create, migrate and verify, plus optional database/access preparation and an
+observer. Callbacks own their database scopes. `PostgresProvisioningStore` uses a
+dedicated autocommit control connection and per-tenant session advisory locks.
+All cooperating writers must share that store and lock protocol; external DDL
+is not constrained. Lock contention fails for the caller to handle deliberately.
 
-The Django backend uses session state and supports direct PostgreSQL or session-mode PgBouncer only. Driver pooling is rejected. Transaction/statement-mode proxies cannot safely separate the backend's SET from its subsequent query. Use CONN_MAX_AGE=0, ATOMIC_REQUESTS=False, and the supplied service/request boundaries. Tenant requests close connections. Public connections follow ordinary Django lifecycle cleanup. No raw cursor may escape its scope. Cursors obtained before a context switch are outside the safety contract.
+## Recover interrupted creation
 
-## Migrations and provisioning
+Ambiguous database, schema and role creation are separate checkpoints. Inspect
+the exact tenant/route and external resources before choosing recovery.
 
-A migration deployment should inventory tenants, record progress/version/duration, and expose failures. migrate_tenant operates on one schema; migrate_tenants provides bounded fleet workers. The deployment orchestrator owns retries. PostgreSQL advisory locks coordinate participating migrators, not hostile or unrelated DDL clients. Quiesce writes for destructive migrations and rename/drop operations. Never rename an actively routed tenant. Rename metadata, schema and background-job references as a maintenance operation with a recovery plan.
+For schema ambiguity at CREATING:
 
-A schema creation race raises DuplicateSchema rather than silently adopting another process's schema. Treat it as a reconciliation problem. A failed tenant migration retains its schema and non-active registry entry. Do not cascade-delete on a generic exception. Deletion requires authorization in your control plane, backup retention checks, job draining, an exact confirmation and an explicit cascade choice.
+```sh
+python manage.py provision_tenant TENANT_ID --reconcile-created \
+  --confirm-schema SCHEMA --confirm-database ALIAS
+```
 
-## Side effects and jobs
+Use `--reconcile-missing` instead only after independently confirming absence.
+Typed records also require `--confirm-type TYPE`. These commands record the
+operator's finding; they do not prove ownership or run DDL. Resume afterwards.
 
-Use an outbox for durable external effects. Django response status >=400 rolls back the middleware transaction, including errors converted to responses by Django. on_commit callbacks run after database commit; their failure cannot undo that commit. Reconcile failed effects rather than blindly retrying the entire request.
+For automatic database creation:
 
-Core ContextVar state supports concurrent tasks, but does not make a DB connection concurrency-safe. Python child tasks inherit context at creation; scope lifetime does not cancel them. Workers must establish their own verified identity boundary. Never put a live connection or tenant-scoped ORM object into a queue payload.
+```sh
+python manage.py tenant_database TENANT_ID status
+python manage.py tenant_database TENANT_ID retry \
+  --confirm-operation OPERATION_ID --confirm-name DATABASE_NAME \
+  --confirm-schema SCHEMA --confirm-database ALIAS --actor OPERATOR_ID
+```
 
-## Caches, files, templates and observability
+RETRY requires confirmed absence of an unreceipted database. `ready` requires a
+saved receipt matching current cluster/owner/OID; it never adopts a database whose
+receipt was lost. Decisions are audited. Resume provisioning and perform admission
+when needed. A database that exists without ownership evidence needs out-of-band
+investigation; there is no automatic drop-and-retry shortcut.
 
-`partitiondb.keys.cache_key` includes tenant ID, schema and alias in a bounded hashed key. `storage_prefix` returns an opaque tenant prefix, not a safe filename sanitizer or authorization layer. Add backend-specific traversal prevention and access controls. Avoid global framework caches of tenant-specific ORM state. This version does not support tenant-local Django contenttypes/auth object caches as a shared global cache across schemas; integration needs explicit cache scoping or invalidation and acceptance tests.
+For ACCESS_PROVISIONING ambiguity, use the tenant's admin access-status page.
+READY verifies the journal-bound receipt/OID, grants and fresh password, repairs
+matching bookkeeping and resumes. RETRY requires both role absence and confirmed
+secret absence; it preserves history and starts a new attempt. Audit failure stops
+advancement. Neither action rotates an active tenant's broken password.
 
-Record tenant ID, schema, alias, request/job correlation ID, migration version and timings in structured application logs. Never log passwords or DSNs. This package does not configure global logging handlers. Monitor unknown host rates, failed resolutions, connection errors, migration failures and connection capacity. Use per-tenant backup/restore rehearsals and full database backups with role/ownership metadata.
+## Admission and migration deployment
 
-## Sources used to check operating assumptions
+```sh
+python manage.py tenant_admission TENANT_ID deactivate --confirm-schema SCHEMA --confirm-database ALIAS
+python manage.py migrate_tenant SCHEMA --database ALIAS --tenant-id TENANT_ID --plan
+python manage.py migrate_tenant SCHEMA --database ALIAS --tenant-id TENANT_ID
+python manage.py migrate_tenant SCHEMA --database ALIAS --tenant-id TENANT_ID --check
+python manage.py tenant_admission TENANT_ID activate --confirm-schema SCHEMA --confirm-database ALIAS
+```
 
-- Django database connection guidance: https://docs.djangoproject.com/en/6.0/ref/databases/
-- PostgreSQL schema/search-path security: https://www.postgresql.org/docs/17/ddl-schemas.html
+Typed commands require the corresponding tenant/confirmation type. Admission uses
+lifecycle and row locks plus exact identity checks. Deactivation needs no working
+secret; generated routes can be disabled centrally even with a missing profile.
+Activation requires an ACTIVE checkpoint and restricted-access readiness.
+Deactivation does not revoke credentials, drain requests or terminate sessions.
+Fresh registry/job lookup must reject inactive tenants; retained identities are
+not retroactively revoked.
 
-See [release validation](RELEASE_VALIDATION.md) for executed acceptance and deployment limits.
+For upgrades: disable admission, drain work, apply migrations, refresh grants,
+verify application version/access, then activate. Managed `MIGRATION_CONTEXT`
+refreshes restricted grants after successful apply runs for an inactive exact
+identity with verified journal/receipt/role/password. Plan/check and failed runs
+do not grant. If finalization fails after DDL committed, keep admission disabled
+and rerun the command after investigation. READY/RETRY is not an upgrade repair.
+Without this context, arrange an equivalent verified grant-refresh procedure.
 
+App/migration targets such as `migrate_tenant SCHEMA projects 0002` are supported;
+check the full graph as well as individual apps. Router-skipped operations can
+still have migration recorder entries. Non-atomic migrations/external effects
+need application recovery; there is no cross-tenant distributed rollback.
 
-## Restricted tenants after later migrations
+## Fleet and command wrappers
 
-Configure `MIGRATION_CONTEXT` to finalize restricted-role access after successful
-Django migrations. The example wires a lifecycle-locked `DjangoMigrationAccess`:
-it verifies the inactive exact registry identity, completed operation and receipt,
-current role OID/attributes and fresh password authentication before granting
-existing tenant tables and sequences, then verifies full access readiness. It
-never creates roles, rotates passwords or activates admission. See
-[settings](SETTINGS.md#migration-access-context).
+```sh
+python manage.py migrate_tenants --workers 2 --plan
+python manage.py migrate_tenants --workers 2
+python manage.py tenant_command SCHEMA --tenant-id TENANT_ID dumpdata projects --indent 2
+python manage.py all_tenants_command --workers 2 dumpdata projects --indent 2
+```
 
-Without this optional context, `migrate_tenant` remains schema-only and the
-operator must arrange equivalent verified grant refresh or reviewed default
-privileges for every object-creating migration role. `Provisioner.run()` on an
-ACTIVE record is still a no-op, not an upgrade mechanism.
+The managed inventory returns active tenants; use explicit trusted identities for
+inactive maintenance. Fleet commands validate duplicate IDs/routes, use fresh
+subprocesses and bounded concurrency. Failure stops new scheduling unless
+`--keep-going`; in-flight children finish. This is not a durable fleet journal.
+For core-only execution, `partitiondb.fleet.run_fleet` returns ordered outcomes.
 
-For a controlled deployment, disable new admission, drain existing work, apply
-migrations, refresh grants, check access readiness and application migration
-version, then reactivate. A failure leaves admission disabled for investigation.
-Atomic Django migrations roll back their own DDL/data on failure, while earlier
-successful migrations remain applied. Non-atomic migrations and external effects
-require restartable application operations and separate recovery procedures.
+Wrapper options precede the inner command. The inner command owns transactions;
+nested migration/wrapper commands are rejected. If it has a `--database` option,
+select the same alias explicitly. `--manage` selects the fleet entry-point script.
 
-Django migrations may already have committed when grant finalization fails. The
-command reports failure and leaves admission disabled; rerun the same migration
-command after addressing the cause to retry the idempotent grant step. Do not
-manually mark the original access operation incomplete or use recovery READY/RETRY
-for this upgrade failure. Quiescence and the application's expected migration
-version remain deployment responsibilities. Locks coordinate participating tools;
-external DDL or direct registry writes can bypass them.
+## Operating boundaries
+
+Keep runtime credentials separate from provisioning credentials. A role granted
+all schemas can bypass schema selection with qualified SQL. Secure PUBLIC grants,
+TEMP, schema/function ownership and external memberships for your deployment.
+Use direct connections or session pooling and honor lifecycle/migration locks.
+
+Use an outbox for required side effects; `on_commit` failures cannot undo commit.
+Never pass live connections, querysets or tenant ORM objects to jobs. Protect task
+publishers: a tenant ID is not authorization. Keep shared framework caches outside
+tenant data scopes. Log identity/stage/timing without passwords or DSNs.
+
+Coordinate backups of control/tenant databases, roles, secrets and private uploads.
+Rehearse restores and validate cluster/OID receipts before admission. Retention,
+credential rotation/revocation, data relocation and destructive retirement remain
+explicit deployment/application workflows.

@@ -19,7 +19,15 @@ app = Celery(
 )
 app.conf.update(
     task_default_queue=os.environ["PARTITIONDB_CELERY_QUEUE"],
-    task_queues=[Queue(os.environ["PARTITIONDB_CELERY_QUEUE"], durable=True)],
+    task_queues=[
+        Queue(
+            os.environ["PARTITIONDB_CELERY_QUEUE"],
+            durable=True,
+            queue_arguments={"x-queue-type": "quorum"},
+        )
+    ],
+    worker_detect_quorum_queues=True,
+    broker_transport_options={"confirm_publish": True},
     control_queue_exclusive=True,
     control_queue_durable=False,
     event_queue_exclusive=True,

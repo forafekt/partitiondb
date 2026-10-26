@@ -16,9 +16,12 @@ def check_configuration(app_configs, **kwargs):
         return [Error(str(error), id="partitiondb.E008")]
     errors = []
     try:
+        from .database_routes import database_profiles, tenant_database_aliases
         from .database_settings import database_provisioning_targets
 
         database_provisioning_targets()
+        database_profiles(include_registered=False)
+        tenant_database_aliases()
     except ImproperlyConfigured as error:
         errors.append(Error(str(error), id="partitiondb.E033"))
     hosts = config.get("SHARED_HOSTS", [])
