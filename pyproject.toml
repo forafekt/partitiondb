@@ -37,14 +37,14 @@ packages = ["src/partitiondb"]
 python_version = "3.11"
 strict = true
 files = [
-    "src/partitiondb/core.py",
-    "src/partitiondb/contracts.py",
-    "src/partitiondb/keys.py",
-    "src/partitiondb/jobs.py",
-    "src/partitiondb/provisioning.py",
-    "src/partitiondb/fleet.py",
-    "src/partitiondb/domains.py",
-    "src/partitiondb/operation_events.py",
+    "src/partitiondb/tenancy/identity.py",
+    "src/partitiondb/tenancy/contracts.py",
+    "src/partitiondb/tenancy/keys.py",
+    "src/partitiondb/tenancy/jobs.py",
+    "src/partitiondb/provisioning/__init__.py",
+    "src/partitiondb/provisioning/fleet.py",
+    "src/partitiondb/tenancy/domains.py",
+    "src/partitiondb/provisioning/events.py",
 ]
 
 [tool.pytest.ini_options]

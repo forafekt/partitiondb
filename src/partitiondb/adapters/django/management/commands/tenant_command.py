@@ -5,7 +5,7 @@ from django.db import connections
 
 from partitiondb import tenant_scope
 from partitiondb.adapters.django.configuration import get_config
-from partitiondb.adapters.django.inventory import operational_tenant
+from partitiondb.adapters.django.operations.inventory import operational_tenant
 
 
 class Command(BaseCommand):
@@ -57,6 +57,6 @@ class Command(BaseCommand):
                 )
         finally:
             connection.close()
-            from partitiondb.adapters.django.database_routes import release_database_alias
+            from partitiondb.adapters.django.databases.routes import release_database_alias
 
             release_database_alias(tenant.database)

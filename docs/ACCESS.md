@@ -44,7 +44,7 @@ Local POSIX development can use:
 
 ```python
 PARTITIONDB.update(
-    CREDENTIAL_PROVIDER="partitiondb.adapters.django.credentials.development_credentials",
+    CREDENTIAL_PROVIDER="partitiondb.adapters.django.databases.credentials.development_credentials",
     DEVELOPMENT_CREDENTIALS_DIR=BASE_DIR / ".secrets",
 )
 ```
@@ -58,7 +58,7 @@ Run OpenBao as an external service within the customer's network. Configure:
 
 ```python
 PARTITIONDB.update(
-    CREDENTIAL_PROVIDER="partitiondb.credential_providers.openbao.django_credentials",
+    CREDENTIAL_PROVIDER="partitiondb.adapters.django.databases.credentials.openbao_credentials",
     CREDENTIAL_PROVIDER_OPTIONS={
         "address": "https://secrets.internal:8200",
         "mount": "secret",

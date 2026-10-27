@@ -9,7 +9,7 @@ pytest.importorskip("django")
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.http import HttpResponseNotAllowed
 
-from partitiondb.adapters.django.access_admin import TenantAccessRegistryAdmin
+from partitiondb.adapters.django.administration.access import TenantAccessRegistryAdmin
 
 
 def make_admin():

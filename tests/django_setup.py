@@ -34,6 +34,7 @@ def configure(*, shared_auth=False, admin=False, sqlite_name=None):
         INSTALLED_APPS=[
             "partitiondb.adapters.django.apps.PartitionDBConfig",
             "apps.organizations.apps.OrganizationsConfig",
+            "partitiondb.adapters.django.registry_app",
             "apps.workspaces.apps.WorkspacesConfig",
             "django.contrib.auth",
             "django.contrib.contenttypes",
@@ -70,10 +71,10 @@ def configure(*, shared_auth=False, admin=False, sqlite_name=None):
         ),
         STATIC_URL="/static/",
         DATABASES={"default": database},
-        DATABASE_ROUTERS=["partitiondb.adapters.django.router.TenantRouter"],
+        DATABASE_ROUTERS=["partitiondb.adapters.django.routing.router.TenantRouter"],
         PARTITIONDB={
-            "TENANT_MODEL": "organizations.Organization",
-            "DOMAIN_MODEL": "organizations.Domain",
+            "TENANT_MODEL": "partitiondb_registry.Tenant",
+            "DOMAIN_MODEL": "partitiondb_registry.Domain",
             # These isolated adapter tests deliberately exercise manual callback
             # composition. Managed workflow scenarios run in separate processes.
             "TENANTS": None,
@@ -81,7 +82,7 @@ def configure(*, shared_auth=False, admin=False, sqlite_name=None):
             "REGISTRY_LIFECYCLE_FACTORY": None,
             "TENANT_DATABASE_ACCESS": None,
             "MIGRATION_CONTEXT": None,
-            "SHARED_APPS": ["organizations", "accounts", "auth", "contenttypes"]
+            "SHARED_APPS": ["partitiondb_registry", "organizations", "accounts", "auth", "contenttypes"]
             + (["sessions"] if shared_auth else [])
             + (["admin", "messages", "staticfiles"] if admin else []),
             "TENANT_APPS": ["workspaces"],

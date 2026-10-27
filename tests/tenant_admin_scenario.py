@@ -76,16 +76,16 @@ def main(postgres=False):
                 "django.contrib.messages",
             ],
             DATABASES=databases,
-            DATABASE_ROUTERS=["partitiondb.adapters.django.router.TenantRouter"],
+            DATABASE_ROUTERS=["partitiondb.adapters.django.routing.router.TenantRouter"],
             ROOT_URLCONF="tests.tenant_admin_urls",
             STATIC_URL="/static/",
             MIDDLEWARE=[
                 "django.contrib.sessions.middleware.SessionMiddleware",
                 "django.contrib.auth.middleware.AuthenticationMiddleware",
-                "partitiondb.adapters.django.admin_auth.TenantAdminAuthMiddleware",
-                "partitiondb.adapters.django.identity.SharedIdentityMiddleware",
+                "partitiondb.adapters.django.administration.authentication.TenantAdminAuthMiddleware",
+                "partitiondb.adapters.django.routing.identity.SharedIdentityMiddleware",
                 "django.contrib.messages.middleware.MessageMiddleware",
-                "partitiondb.adapters.django.middleware.TenantMiddleware",
+                "partitiondb.adapters.django.routing.middleware.TenantMiddleware",
             ],
             TEMPLATES=[
                 {
@@ -120,7 +120,7 @@ def main(postgres=False):
         from django.test import Client
 
         from partitiondb import tenant_scope
-        from partitiondb.adapters.django.models import TenantAdminAuditMixin
+        from partitiondb.adapters.django.registry.models import TenantAdminAuditMixin
 
         class Audit(TenantAdminAuditMixin):
             class Meta(TenantAdminAuditMixin.Meta):

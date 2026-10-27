@@ -1,6 +1,6 @@
 """Application workspace hooks; infrastructure lifecycle comes from PartitionDB."""
 
-from partitiondb.adapters.django.workflow import TenantWorkflow
+from partitiondb.adapters.django.registry.workflow import TenantWorkflow
 
 from .models import Workspace
 

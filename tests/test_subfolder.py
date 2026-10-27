@@ -9,7 +9,7 @@ from django.test import RequestFactory, override_settings
 from django.urls import get_script_prefix
 
 from partitiondb import Tenant, current_tenant
-from partitiondb.adapters.django.subfolder import TenantSubfolderMiddleware
+from partitiondb.adapters.django.routing.subfolder import TenantSubfolderMiddleware
 from tests.django_setup import configure
 
 configure()
@@ -26,7 +26,7 @@ def test_subfolder_context_is_restored_on_denial_in_concurrent_requests():
         middleware = TenantSubfolderMiddleware(downstream)
 
         def deny(request, tenant):
-            from partitiondb.adapters.django.router import app_sets
+            from partitiondb.adapters.django.routing.router import app_sets
 
             assert app_sets() == (set(config["SHARED_APPS"]), set(config["TENANT_APPS"]))
             assert request.path_info == "/items/"
@@ -86,7 +86,7 @@ def inventory():
 def test_operational_identity_uses_inventory_for_namespaced_assets():
     from django.core.exceptions import ImproperlyConfigured
 
-    from partitiondb.adapters.django.inventory import operational_tenant
+    from partitiondb.adapters.django.operations.inventory import operational_tenant
 
     with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, TENANTS="tests.test_subfolder.inventory")):
         assert operational_tenant("alpha", "default") == Tenant("org-alpha", "alpha")

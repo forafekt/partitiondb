@@ -29,8 +29,8 @@ def main():
         from partitiondb import Tenant, tenant_scope
         from partitiondb.adapters.django.access_control.admin import DatabaseServerProfileAdmin
         from partitiondb.adapters.django.access_control.models import DatabaseServerProfile
-        from partitiondb.adapters.django.database_routes import database_profiles
-        from partitiondb.adapters.django.server_profiles import verify_server_profile
+        from partitiondb.adapters.django.databases.profiles import verify_server_profile
+        from partitiondb.adapters.django.databases.routes import database_profiles
 
         call_command("migrate", verbosity=0)
         assert database_profiles() == {}
@@ -50,8 +50,8 @@ def main():
         context.__enter__ = Mock(return_value=connection)
         context.__exit__ = Mock(return_value=False)
         with (
-            patch("partitiondb.adapters.django.server_profiles.psycopg.connect", return_value=context),
-            patch("partitiondb.adapters.django.server_profiles.cluster_id", return_value="12345"),
+            patch("partitiondb.adapters.django.databases.profiles.psycopg.connect", return_value=context),
+            patch("partitiondb.adapters.django.databases.profiles.cluster_id", return_value="12345"),
         ):
             row = verify_server_profile(row)
         assert row.cluster_id == "12345"
@@ -64,8 +64,8 @@ def main():
         assert database_profiles() == {}
         assert database_profiles(include_disabled=True)["local"].cluster_id == "12345"
         with (
-            patch("partitiondb.adapters.django.server_profiles.psycopg.connect", return_value=context),
-            patch("partitiondb.adapters.django.server_profiles.cluster_id", return_value="99999"),
+            patch("partitiondb.adapters.django.databases.profiles.psycopg.connect", return_value=context),
+            patch("partitiondb.adapters.django.databases.profiles.cluster_id", return_value="99999"),
         ):
             try:
                 verify_server_profile(row)

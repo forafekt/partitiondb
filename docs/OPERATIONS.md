@@ -111,7 +111,7 @@ The managed inventory returns active tenants; use explicit trusted identities fo
 inactive maintenance. Fleet commands validate duplicate IDs/routes, use fresh
 subprocesses and bounded concurrency. Failure stops new scheduling unless
 `--keep-going`; in-flight children finish. This is not a durable fleet journal.
-For core-only execution, `partitiondb.fleet.run_fleet` returns ordered outcomes.
+For core-only execution, `partitiondb.provisioning.fleet.run_fleet` returns ordered outcomes.
 
 Wrapper options precede the inner command. The inner command owns transactions;
 nested migration/wrapper commands are rejected. If it has a `--database` option,

@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def check_names(names):
-    forbidden = {"legacy", "__pycache__", ".git", ".venv", ".env", ".secrets"}
+    forbidden = {"_compat", "legacy", "__pycache__", ".git", ".venv", ".env", ".secrets"}
     for name in names:
         path = PurePosixPath(name)
         if path.is_absolute() or ".." in path.parts or forbidden.intersection(path.parts):
@@ -46,19 +46,21 @@ def main():
         ):
             archive.getinfo("partitiondb/adapters/django/templates/partitiondb/admin/" + template)
         for module in (
-            "database_models.py",
-            "database_store.py",
-            "database_settings.py",
-            "database_routes.py",
-            "server_profiles.py",
+            "databases/models.py",
+            "databases/routes.py",
+            "databases/credentials.py",
+            "registry/models.py",
+            "registry/workflow.py",
+            "administration/registry.py",
+            "administration/tenant.py",
+            "routing/middleware.py",
+            "assets/storage.py",
+            "assets/template_loaders/filesystem.py",
+            "operations/inventory.py",
+            "access_control/bindings.py",
             "access_control/migrations/0001_initial.py",
             "management/commands/tenant_database.py",
             "management/commands/install_provisioning_store.py",
-            "forms.py",
-            "workflow.py",
-            "model_registry.py",
-            "managed_admin.py",
-            "credentials.py",
             "management/commands/create_tenant.py",
             "registry_app/models.py",
             "registry_app/apps.py",
@@ -66,10 +68,19 @@ def main():
         ):
             archive.getinfo("partitiondb/adapters/django/" + module)
         for module in (
-            "database_provisioning.py",
-            "postgres_database.py",
-            "credential_providers/__init__.py",
-            "credential_providers/openbao.py",
+            "tenancy/identity.py",
+            "tenancy/assets.py",
+            "access/membership.py",
+            "access/evidence.py",
+            "credentials/__init__.py",
+            "credentials/runtime.py",
+            "credentials/development.py",
+            "credentials/openbao.py",
+            "provisioning/__init__.py",
+            "provisioning/databases.py",
+            "postgres/__init__.py",
+            "postgres/evidence.py",
+            "postgres/authentication.py",
         ):
             archive.getinfo("partitiondb/" + module)
         metadata = email.message_from_bytes(archive.read(f"partitiondb-{version}.dist-info/METADATA"))
@@ -108,6 +119,12 @@ def main():
 import sys
 sys.path.insert(0, sys.argv[1])
 import partitiondb
+from partitiondb.access.membership import role_actions
+from partitiondb.credentials.development import DevelopmentCredentials
+from partitiondb.credentials.runtime import TenantDatabaseCredentials
+from partitiondb.tenancy.assets import tenant_path
+from partitiondb.provisioning import Provisioner
+from partitiondb.provisioning.databases import DatabaseProvisioner
 from partitiondb import Tenant, current_tenant, tenant_scope
 assert partitiondb.__version__ == sys.argv[2]
 tenant = Tenant('artifact-check', 'artifact_check')

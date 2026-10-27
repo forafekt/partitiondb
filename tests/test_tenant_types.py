@@ -10,10 +10,10 @@ from django.test import RequestFactory, override_settings
 from django.urls import get_urlconf, reverse
 
 from partitiondb import Tenant, current_tenant, tenant_scope
-from partitiondb.adapters.django.middleware import TenantMiddleware
-from partitiondb.adapters.django.router import app_sets
-from partitiondb.adapters.django.tenant_types import tenant_policy, type_policies
-from partitiondb.keys import namespace
+from partitiondb.adapters.django.routing.middleware import TenantMiddleware
+from partitiondb.adapters.django.routing.router import app_sets
+from partitiondb.adapters.django.routing.tenant_types import tenant_policy, type_policies
+from partitiondb.tenancy.keys import namespace
 from tests.django_setup import configure
 
 configure()
@@ -89,7 +89,7 @@ def test_concurrent_requests_choose_type_urls_and_restore_context_on_failure():
 
     with (
         override_settings(PARTITIONDB=typed_config()),
-        patch("partitiondb.adapters.django.middleware.atomic_tenant", side_effect=tenant_scope),
+        patch("partitiondb.adapters.django.routing.middleware.atomic_tenant", side_effect=tenant_scope),
     ):
         middleware = TenantMiddleware(view)
         middleware.resolve = lambda host: FULL if host == "alpha.test" else EMPTY
@@ -114,12 +114,12 @@ def test_concurrent_requests_choose_type_urls_and_restore_context_on_failure():
 
 
 def test_inventory_type_cannot_be_silently_overridden():
-    from partitiondb.adapters.django.inventory import operational_tenant
+    from partitiondb.adapters.django.operations.inventory import operational_tenant
 
     config = dict(typed_config(), TENANTS="trusted.inventory")
     with (
         override_settings(PARTITIONDB=config),
-        patch("partitiondb.adapters.django.inventory.load_inventory", return_value=[FULL]),
+        patch("partitiondb.adapters.django.operations.inventory.load_inventory", return_value=[FULL]),
     ):
         assert operational_tenant("alpha", "default") == FULL
         with pytest.raises(ImproperlyConfigured):
@@ -131,7 +131,7 @@ def test_inventory_type_cannot_be_silently_overridden():
 def test_type_urlconf_combines_with_subfolder_reverse_prefix_and_restores_both():
     from django.urls import get_script_prefix
 
-    from partitiondb.adapters.django.subfolder import TenantSubfolderMiddleware
+    from partitiondb.adapters.django.routing.subfolder import TenantSubfolderMiddleware
 
     def view(request):
         assert request.path_info == "/full/"
@@ -142,7 +142,7 @@ def test_type_urlconf_combines_with_subfolder_reverse_prefix_and_restores_both()
     original_urlconf, original_prefix = get_urlconf(), get_script_prefix()
     with (
         override_settings(PARTITIONDB=config),
-        patch("partitiondb.adapters.django.middleware.atomic_tenant", side_effect=tenant_scope),
+        patch("partitiondb.adapters.django.routing.middleware.atomic_tenant", side_effect=tenant_scope),
     ):
         middleware = TenantSubfolderMiddleware(view)
         middleware.resolve = lambda key: FULL
@@ -159,8 +159,8 @@ def test_optional_typed_model_and_admin_expose_immutable_type_metadata():
     from django.core.exceptions import ValidationError
     from django.test.utils import isolate_apps
 
-    from partitiondb.adapters.django.admin import TenantRegistryAdmin
-    from partitiondb.adapters.django.models import TypedTenantMixin
+    from partitiondb.adapters.django.administration.registry import TenantRegistryAdmin
+    from partitiondb.adapters.django.registry.models import TypedTenantMixin
 
     with isolate_apps("apps.organizations"), override_settings(PARTITIONDB=typed_config()):
 

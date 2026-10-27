@@ -14,25 +14,36 @@ Existing names that are uppercase, non-ASCII, begin with underscores, or otherwi
 |---|---|
 | `partitiondb.registry.registry` | Django `PARTITIONDB` settings and application repository |
 | `partitiondb.backends.postgresql` | `partitiondb.adapters.django.backend` |
-| `partitiondb.routers.main.TenantSyncRouter` | `partitiondb.adapters.django.router.TenantRouter` |
-| `partitiondb.middleware.main.TenantMainMiddleware` | `partitiondb.adapters.django.middleware.TenantMiddleware` |
+| `partitiondb.routers.main.TenantSyncRouter` | `partitiondb.adapters.django.routing.router.TenantRouter` |
+| `partitiondb.middleware.main.TenantMainMiddleware` | `partitiondb.adapters.django.routing.middleware.TenantMiddleware` |
 | `set_current_tenant_ctx` / unset | `with tenant_scope(Tenant(...))` |
 | `connection.set_tenant` / `set_schema` | Django `atomic_tenant` service boundary; standalone PostgreSQL `transaction` |
 | `PARTITION_DB` mutable registry | `PARTITIONDB` with SHARED_APPS, TENANT_APPS and optional request RESOLVER |
 | App paths in app lists | Explicit Django app labels |
 | `migrate_schemas` | Public `migrate`, then `migrate_tenant SCHEMA` for each inventory entry |
 | Automatic schema lifecycle on save/delete | Explicit staged provisioning and `SchemaManager` |
-| Tenant/domain mixins | Library TenantModel/DomainMixin or reviewed custom shared models |
+| Tenant/domain mixins | `TenantModelMixin` / `DomainModelMixin` from `partitiondb.adapters.django.registry.models`, or reviewed custom shared models |
 | Custom tenant user/permission classes | Preserve their tables and migrate ownership into your app first |
 | Implicit public fallback | Explicit control-plane workflow; never unknown-host fallback |
 | Dynamic DB aliases | Trusted static sources or library-owned persisted database routes |
 
-## Safe upgrade sequence
+## Current checkout baseline
+
+This checkout replaces pre-production initial migrations and concrete table names.
+It does not supply an in-place schema/data migration for existing installations.
+Use a fresh development database as described in
+[testing](TESTING.md#fresh-development-baseline), or design and validate an explicit
+application-owned schema/data migration before retaining existing data. Current
+feature paths are listed in [architecture](ARCHITECTURE.md); former flat module
+paths have no compatibility forwarding.
+
+## Application migration planning
 
 1. Extract application-specific models into an application-owned package. Preserve table names and migration state. Use Django state/database separation only after reviewing the generated migration SQL. Never remove old apps until historical migrations and foreign keys have a tested path.
 2. Add immutable canonical schema and static alias fields to your control-plane inventory. Enforce domain uniqueness and lifecycle state.
 3. Classify every installed app once. Cross-schema foreign keys are not supported; represent shared principals with stable scalar IDs and check membership explicitly.
-4. Install the new backend/router in staging. Verify public tables remain unchanged.
+4. Install the new backend/router in staging. Verify shared tables against the reviewed schema/data migration plan; the current
+   initial-migration baseline does not preserve existing tables automatically.
 5. Run tenant migrations one schema at a time, using representative data and a versioned deployment manifest. Do not fake migrations just to make errors disappear.
 6. Move requests and jobs to explicit boundaries. Complete all lazy querysets and template evaluation within the boundary. Pass verified scalar identity claims, not shared ORM models, into tenant services.
 7. Test negative cases: unknown/suspended host, missing schema, wrong alias, permissions denied, transaction failure, stale model instance, query after request completion, worker retry, connection reuse, migration interruption.

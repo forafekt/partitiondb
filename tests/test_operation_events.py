@@ -7,7 +7,7 @@ from django.core.management import call_command
 from django.test import override_settings
 
 from partitiondb import Tenant, current_tenant
-from partitiondb.operation_events import OperationEvent, observe_operation
+from partitiondb.provisioning.events import OperationEvent, observe_operation
 from tests.django_setup import configure
 
 configure()
@@ -54,7 +54,7 @@ def test_mismatched_identity_and_non_started_boundary_are_rejected():
 
 
 def test_django_operation_signal_bridge_is_explicit():
-    from partitiondb.adapters.django.events import operation_event, publish_operation_event
+    from partitiondb.adapters.django.operations.events import operation_event, publish_operation_event
 
     received = []
 

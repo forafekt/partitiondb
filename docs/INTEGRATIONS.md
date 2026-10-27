@@ -7,19 +7,19 @@ never serve private uploads as public static files.
 ## Cache
 
 Configure a separate Django cache alias with
-`KEY_FUNCTION="partitiondb.adapters.django.cache.tenant_key"`. It requires an active
-tenant and includes identity, schema, database, type, prefix and version in a
+`KEY_FUNCTION="partitiondb.adapters.django.assets.cache.tenant_key"`. It requires an active tenant
+scope and includes identity, schema, database, type, prefix and version in a
 bounded hashed key. Keep shared sessions/control data on another alias.
 `clear()` is still backend-wide; key functions cannot scope global flushes or
 Python/framework caches. Tenant-local auth/contenttype caches are unsupported.
-The core also supplies `partitiondb.keys.cache_key` and `storage_prefix`.
+The core also supplies `partitiondb.tenancy.keys.cache_key` and `storage_prefix`.
 
 ## Private storage
 
 ```python
 STORAGES = {
     "default": {
-        "BACKEND": "partitiondb.adapters.django.storage.TenantStorage",
+        "BACKEND": "partitiondb.adapters.django.assets.storage.TenantStorage",
         "OPTIONS": {"base_alias": "tenant_base"},
     },
     "tenant_base": {
@@ -48,10 +48,10 @@ Set `TEMPLATE_ROOTS` to trusted deployment directories and place overrides benea
 `storage_prefix(tenant)`. Use `APP_DIRS=False` and these loaders:
 
 ```python
-"loaders": [(
-    "partitiondb.adapters.django.template_loaders.cached.Loader",
+TEMPLATES[0]["OPTIONS"]["loaders"] = [(
+    "partitiondb.adapters.django.assets.template_loaders.cached.Loader",
     [
-        "partitiondb.adapters.django.template_loaders.filesystem.Loader",
+        "partitiondb.adapters.django.assets.template_loaders.filesystem.Loader",
         "django.template.loaders.filesystem.Loader",
         "django.template.loaders.app_directories.Loader",
     ],
@@ -67,8 +67,8 @@ These templates are trusted executable deployment content, not a user sandbox.
 ## Public static assets
 
 Set `STATIC_ROOTS` to tenant source roots, also beneath `storage_prefix(tenant)`.
-Add `partitiondb.adapters.django.staticfiles.TenantStaticFinder` before Django's
-finders and use `partitiondb.adapters.django.staticfiles.TenantStaticFilesStorage`
+Add `partitiondb.adapters.django.assets.staticfiles.TenantStaticFinder` before Django's
+finders and use `partitiondb.adapters.django.assets.staticfiles.TenantStaticFilesStorage`
 for `STORAGES["staticfiles"]`. Tenant collection and URLs use the identity prefix;
 shared collection stays separate. The top-level `pdb` destination is reserved.
 

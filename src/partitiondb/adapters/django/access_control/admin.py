@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from .models import (
+from partitiondb.adapters.django.access_control.models import (
     AccessOperation,
     AccessRecoveryAudit,
     DatabaseOperation,
@@ -88,7 +88,7 @@ class DatabaseServerProfileAdmin(admin.ModelAdmin):
     def verify_servers(self, request, queryset):
         from django.core.exceptions import ValidationError
 
-        from partitiondb.adapters.django.server_profiles import verify_server_profile
+        from partitiondb.adapters.django.databases.profiles import verify_server_profile
 
         for profile in queryset:
             try:

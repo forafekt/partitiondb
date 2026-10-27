@@ -2,17 +2,16 @@
 
 from contextlib import contextmanager
 
-from partitiondb.access_operations import OperationState
-from partitiondb.adapters.django.access_boundary import require_control_plane
-from partitiondb.adapters.django.access_evidence_store import DjangoOwnershipReceiptStore
-from partitiondb.adapters.django.access_operation_store import DjangoAccessOperationJournal
-from partitiondb.postgres_role_inspection import PostgresRoleInspector
-from partitiondb.postgres_role_manager import tenant_role_name
-from partitiondb.postgres_roles import provision_restricted_role
+from partitiondb.access.operations import OperationState
+from partitiondb.adapters.django.access_control.boundary import require_control_plane
+from partitiondb.adapters.django.access_control.evidence_store import DjangoOwnershipReceiptStore
+from partitiondb.adapters.django.access_control.models import AccessOperation, RoleOwnershipReceipt
+from partitiondb.adapters.django.access_control.operation_store import DjangoAccessOperationJournal
+from partitiondb.adapters.django.access_control.services import DjangoAccessReadiness
+from partitiondb.postgres.role_inspection import PostgresRoleInspector
+from partitiondb.postgres.role_manager import tenant_role_name
+from partitiondb.postgres.roles import provision_restricted_role
 from partitiondb.provisioning import Stage
-
-from .models import AccessOperation, RoleOwnershipReceipt
-from .services import DjangoAccessReadiness
 
 
 class DjangoMigrationAccess:

@@ -3,10 +3,10 @@ from unittest.mock import Mock
 
 import pytest
 
-from partitiondb.access_recovery import AccessRecoveryService, RecoveryDecision, RecoveryEvidence
-from partitiondb.core import Tenant
-from partitiondb.postgres_role_inspection import RoleInspection, RoleState
+from partitiondb.access.recovery import AccessRecoveryService, RecoveryDecision, RecoveryEvidence
+from partitiondb.postgres.role_inspection import RoleInspection, RoleState
 from partitiondb.provisioning import Provisioner, ProvisioningRecord, Stage
+from partitiondb.tenancy.identity import Tenant
 
 TENANT = Tenant("1", "org_one")
 

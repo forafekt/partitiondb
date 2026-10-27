@@ -2,17 +2,13 @@ import os
 
 import pytest
 
-from tests.django_setup import configure
-
-configure()
-
-from partitiondb.adapters.django.credentials import DevelopmentCredentials  # noqa: E402
-from partitiondb.adapters.django.runtime_access import (  # noqa: E402
+from partitiondb.credentials.development import DevelopmentCredentials
+from partitiondb.credentials.runtime import (
     TenantDatabaseCredentials,
     current_database_credentials,
     database_credentials_scope,
 )
-from partitiondb.core import Tenant  # noqa: E402
+from partitiondb.tenancy.identity import Tenant
 
 
 def test_development_secret_persistence_permissions_and_no_overwrite(tmp_path):

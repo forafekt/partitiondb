@@ -43,13 +43,13 @@ def test_access_control_app_migrates_without_activelane_models(tmp_path):
         assert AccessOperation.objects.count() == 1
         assert 'pdb_role_ownership_receipt' in connection.introspection.table_names()
         assert 'pdb_access_recovery_audit' in connection.introspection.table_names()
-        from partitiondb.core import Tenant
-        from partitiondb.access_operations import AccessOperation as Intent, OperationState
-        from partitiondb.access_evidence import RoleOwnershipReceipt as Receipt
-        from partitiondb.access_recovery import RecoveryDecision
-        from partitiondb.postgres_role_inspection import RoleInspection, RoleState
-        from partitiondb.adapters.django.access_operation_store import DjangoAccessOperationJournal
-        from partitiondb.adapters.django.access_evidence_store import (
+        from partitiondb.tenancy.identity import Tenant
+        from partitiondb.access.operations import AccessOperation as Intent, OperationState
+        from partitiondb.access.evidence import RoleOwnershipReceipt as Receipt
+        from partitiondb.access.recovery import RecoveryDecision
+        from partitiondb.postgres.role_inspection import RoleInspection, RoleState
+        from partitiondb.adapters.django.access_control.operation_store import DjangoAccessOperationJournal
+        from partitiondb.adapters.django.access_control.evidence_store import (
             DjangoOwnershipReceiptStore, DjangoRecoveryAuditSink,
         )
         tenant = Tenant('new', 'org_new')

@@ -29,7 +29,7 @@ PARTITIONDB.update(
         "control": {"database_alias": "default", "maintenance_database": "postgres"},
         "tenant_server": {"database_alias": "tenant_server", "maintenance_database": "postgres"},
     },
-    CREDENTIAL_PROVIDER="partitiondb.credential_providers.openbao.django_credentials",
+    CREDENTIAL_PROVIDER="partitiondb.adapters.django.databases.credentials.openbao_credentials",
     CREDENTIAL_PROVIDER_OPTIONS={
         "address": "https://openbao:8200",
         "mount": "secret",

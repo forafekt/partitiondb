@@ -15,11 +15,11 @@ configure()
 from apps.workspaces.models import Workspace  # noqa: E402
 
 from partitiondb.adapters.django import get_tenant_model  # noqa: E402
-from partitiondb.adapters.django.admin import (  # noqa: E402
+from partitiondb.adapters.django.administration.registry import (  # noqa: E402
     ControlPlaneAdminSite,
     ProvisioningTenantAdmin,
 )
-from partitiondb.adapters.django.middleware import TenantMiddleware  # noqa: E402
+from partitiondb.adapters.django.routing.middleware import TenantMiddleware  # noqa: E402
 
 Organization = get_tenant_model()
 

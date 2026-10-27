@@ -21,12 +21,12 @@ from tests.django_setup import configure
 
 configure()
 
-from partitiondb.adapters.django.admin_auth import TenantAdminAuthMiddleware  # noqa: E402
+from partitiondb.adapters.django.administration.authentication import TenantAdminAuthMiddleware  # noqa: E402
 from partitiondb.adapters.django.checks import check_configuration  # noqa: E402
-from partitiondb.adapters.django.hosts import RegistryHostMiddleware  # noqa: E402
-from partitiondb.adapters.django.identity import SharedIdentityMiddleware  # noqa: E402
-from partitiondb.adapters.django.middleware import TenantMiddleware  # noqa: E402
-from partitiondb.adapters.django.router import TenantRouter  # noqa: E402
+from partitiondb.adapters.django.routing.hosts import RegistryHostMiddleware  # noqa: E402
+from partitiondb.adapters.django.routing.identity import SharedIdentityMiddleware  # noqa: E402
+from partitiondb.adapters.django.routing.middleware import TenantMiddleware  # noqa: E402
+from partitiondb.adapters.django.routing.router import TenantRouter  # noqa: E402
 
 
 class CustomTenantMiddleware(TenantMiddleware):

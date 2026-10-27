@@ -25,7 +25,7 @@ Progress is available at verbosity zero. An individual apply_success is not proo
 that command finalization succeeded, nor that router-skipped operations ran.
 Plan/check/no-op commands may emit no progress.
 
-Optional bridges in `partitiondb.adapters.django.events` are
+Optional bridges in `partitiondb.adapters.django.operations.events` are
 `publish_lifecycle_event`, `publish_operation_event` and
 `publish_migration_progress`. They send the corresponding `lifecycle_event`,
 `operation_event` and `migration_progress` signals with keyword `event`.

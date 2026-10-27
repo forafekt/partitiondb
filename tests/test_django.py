@@ -15,9 +15,9 @@ from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.test import RequestFactory
 
 from partitiondb.adapters.django import get_tenant_model
-from partitiondb.adapters.django.middleware import TenantMiddleware
-from partitiondb.adapters.django.router import TenantRouter
-from partitiondb.adapters.django.scope import atomic_tenant
+from partitiondb.adapters.django.routing.middleware import TenantMiddleware
+from partitiondb.adapters.django.routing.router import TenantRouter
+from partitiondb.adapters.django.routing.scope import atomic_tenant
 
 Organization = get_tenant_model()
 
@@ -97,7 +97,7 @@ def test_typed_registry_model_persists_type_and_forbids_normal_save_conversion(s
     from django.test import override_settings
     from django.test.utils import isolate_apps
 
-    from partitiondb.adapters.django.models import TypedTenantMixin
+    from partitiondb.adapters.django.registry.models import TypedTenantMixin
     from tests.test_tenant_types import TYPES
 
     with (
@@ -193,7 +193,7 @@ def test_django_middleware_response_and_streaming(schemas):
 
 
 def test_instances_do_not_cross_tenant_boundaries():
-    from partitiondb.adapters.django.signals import verify_scope
+    from partitiondb.adapters.django.routing.signals import verify_scope
 
     a, b = Tenant("a", "alpha"), Tenant("b", "beta")
     with tenant_scope(a):
@@ -371,7 +371,7 @@ def test_abstract_registry_model_validation():
 
 
 def test_django_lifecycle_signal_bridge():
-    from partitiondb.adapters.django.events import lifecycle_event, publish_lifecycle_event
+    from partitiondb.adapters.django.operations.events import lifecycle_event, publish_lifecycle_event
     from partitiondb.provisioning import LifecycleEvent, Stage
 
     received = []
@@ -467,7 +467,7 @@ def test_subfolder_routing_rewrites_and_restores_paths_and_reverse_prefix(schema
     from django.test import override_settings
     from django.urls import get_script_prefix, path, reverse
 
-    from partitiondb.adapters.django.subfolder import TenantSubfolderMiddleware
+    from partitiondb.adapters.django.routing.subfolder import TenantSubfolderMiddleware
 
     tenant = schemas[0]
     call_command("migrate_tenant", tenant.schema, verbosity=0)
@@ -505,8 +505,8 @@ def test_subfolder_shared_identity_configuration_order():
     order = [
         "django.contrib.sessions.middleware.SessionMiddleware",
         "django.contrib.auth.middleware.AuthenticationMiddleware",
-        "partitiondb.adapters.django.identity.SharedIdentityMiddleware",
-        "partitiondb.adapters.django.subfolder.TenantSubfolderMiddleware",
+        "partitiondb.adapters.django.routing.identity.SharedIdentityMiddleware",
+        "partitiondb.adapters.django.routing.subfolder.TenantSubfolderMiddleware",
     ]
     with override_settings(PARTITIONDB=config, MIDDLEWARE=order):
         ids = {error.id for error in check_configuration(None)}

@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from partitiondb.credential_providers.openbao import CredentialNotFound, CredentialStoreError, OpenBaoKV2, TokenFile
+from partitiondb.credentials.openbao import CredentialNotFound, CredentialStoreError, OpenBaoKV2, TokenFile
 
 
 @pytest.mark.openbao

@@ -18,7 +18,7 @@ def main(sqlite_name=None):
 
     from partitiondb import Tenant, tenant_scope
     from partitiondb.adapters.django import get_domain_model, get_tenant_model
-    from partitiondb.keys import storage_prefix
+    from partitiondb.tenancy.keys import storage_prefix
     from tests.admin_urls import site
 
     Organization = get_tenant_model()
@@ -33,7 +33,7 @@ def main(sqlite_name=None):
     try:
         client = Client(HTTP_HOST="alpha.test")
         client.force_login(user)
-        assert client.get(reverse("registry:organizations_organization_changelist")).status_code == 200
+        assert client.get(reverse("registry:partitiondb_registry_tenant_changelist")).status_code == 200
         dashboard = client.get(reverse("registry:index"))
         assert dashboard.status_code == 200
         assert b"Shared control plane" in dashboard.content
@@ -41,7 +41,7 @@ def main(sqlite_name=None):
         assert b"/admin/workspaces/workspace/" not in dashboard.content
         schema = "admin_" + uuid.uuid4().hex
         response = client.post(
-            reverse("registry:organizations_organization_add"),
+            reverse("registry:partitiondb_registry_tenant_add"),
             {
                 "name": "Admin test organization",
                 "schema_name": schema,
@@ -55,7 +55,7 @@ def main(sqlite_name=None):
         records.append(record.pk)
         assert not record.active
         response = client.post(
-            reverse("registry:organizations_organization_change", args=[record.pk]),
+            reverse("registry:partitiondb_registry_tenant_change", args=[record.pk]),
             {
                 "name": record.name,
                 "schema_name": "forbidden_change",
@@ -79,7 +79,7 @@ def main(sqlite_name=None):
         record.refresh_from_db()
         assert record.schema_name == schema and not record.active
         response = client.post(
-            reverse("registry:organizations_domain_add"),
+            reverse("registry:partitiondb_registry_domain_add"),
             {
                 "hostname": username.replace("_", "-").upper() + ".EXAMPLE",
                 "tenant": record.pk,
@@ -109,12 +109,12 @@ def main(sqlite_name=None):
                 PARTITIONDB=config,
                 STATIC_ROOT=collected,
                 STATICFILES_FINDERS=[
-                    "partitiondb.adapters.django.staticfiles.TenantStaticFinder",
+                    "partitiondb.adapters.django.assets.staticfiles.TenantStaticFinder",
                     "django.contrib.staticfiles.finders.AppDirectoriesFinder",
                 ],
                 STORAGES={
                     "staticfiles": {
-                        "BACKEND": ("partitiondb.adapters.django.staticfiles.TenantStaticFilesStorage"),
+                        "BACKEND": ("partitiondb.adapters.django.assets.staticfiles.TenantStaticFilesStorage"),
                     }
                 },
             ):

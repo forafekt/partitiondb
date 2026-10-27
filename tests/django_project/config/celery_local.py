@@ -16,7 +16,7 @@ def workspace_count(tenant_id):
 
     from partitiondb import tenant_scope
     from partitiondb.adapters.django import get_tenant_model
-    from partitiondb.adapters.django.scope import atomic_tenant
+    from partitiondb.adapters.django.routing.scope import atomic_tenant
 
     close_old_connections()
     try:

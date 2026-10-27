@@ -1,12 +1,10 @@
 import pytest
 
-from partitiondb.access_evidence import (
-    PostgresRecoveryEvidenceProvider,
-    PsycopgCredentialAuthentication,
-    RoleOwnershipReceipt,
-)
-from partitiondb.core import Tenant
-from partitiondb.postgres_role_inspection import RoleInspection, RoleState
+from partitiondb.access.evidence import RoleOwnershipReceipt
+from partitiondb.postgres.authentication import PsycopgCredentialAuthentication
+from partitiondb.postgres.evidence import PostgresRecoveryEvidenceProvider
+from partitiondb.postgres.role_inspection import RoleInspection, RoleState
+from partitiondb.tenancy.identity import Tenant
 
 TENANT = Tenant("one", "org_one")
 RECEIPT = RoleOwnershipReceipt("one", "default", "org_one", "pdb_org_one", 123, "secret/one", "op-1")

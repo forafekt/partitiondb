@@ -12,8 +12,8 @@ from tests.django_setup import configure
 configure()
 
 from partitiondb import Tenant, tenant_scope  # noqa: E402
-from partitiondb.adapters.django import database_routes  # noqa: E402
-from partitiondb.adapters.django.forms import TenantProvisionForm  # noqa: E402
+from partitiondb.adapters.django.databases import routes as database_routes  # noqa: E402  # noqa: E402
+from partitiondb.adapters.django.registry.forms import TenantProvisionForm  # noqa: E402
 
 
 def configuration(**options):
@@ -29,7 +29,7 @@ def test_new_database_form_maps_to_managed_workflow_without_static_alias():
     model._base_manager.using.return_value.filter.return_value.exists.return_value = False
     with (
         override_settings(PARTITIONDB=configuration()),
-        patch("partitiondb.adapters.django.forms.get_domain_model", return_value=model),
+        patch("partitiondb.adapters.django.registry.forms.get_domain_model", return_value=model),
     ):
         form = TenantProvisionForm(
             {
@@ -62,7 +62,7 @@ def test_database_names_cannot_be_connection_information_or_system_targets(name)
 def test_profiles_can_be_disabled_and_cached_tenant_aliases_are_not_reusable_choices():
     with (
         override_settings(PARTITIONDB=configuration(DATABASE_PROFILES={})),
-        patch("partitiondb.adapters.django.database_routes.connections", {"default": None, "pdb_db_cached": None}),
+        patch("partitiondb.adapters.django.databases.routes.connections", {"default": None, "pdb_db_cached": None}),
     ):
         form = TenantProvisionForm()
         assert list(form.fields["database_alias"].choices) == [("default", "Shared database (tenant schema)")]

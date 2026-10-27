@@ -2,12 +2,12 @@
 
 from django.db import models
 
-from partitiondb.adapters.django.access_evidence_models import (
+from partitiondb.adapters.django.access_control.evidence_models import (
     AccessRecoveryAuditMixin,
     RoleOwnershipReceiptMixin,
 )
-from partitiondb.adapters.django.access_operation_models import AccessOperationMixin
-from partitiondb.adapters.django.database_models import (
+from partitiondb.adapters.django.access_control.operation_models import AccessOperationMixin
+from partitiondb.adapters.django.databases.models import (
     DatabaseOperationMixin,
     DatabaseRecoveryAuditMixin,
     TenantDatabaseTargetMixin,
@@ -30,7 +30,7 @@ class DatabaseServerProfile(models.Model):
     def clean(self):
         from django.core.exceptions import ValidationError
 
-        from partitiondb.adapters.django.database_routes import database_profiles
+        from partitiondb.adapters.django.databases.routes import database_profiles
 
         if self.source_profile not in database_profiles(include_registered=False):
             raise ValidationError({"source_profile": "Select a configured source profile"})

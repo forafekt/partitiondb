@@ -23,7 +23,6 @@ def main():
 
     django.setup()
     # Application-specific membership/auth integration is intentional.
-    from apps.organizations.models import Membership
     from django.conf import settings
     from django.contrib.auth import get_user_model
     from django.core.management import call_command
@@ -33,6 +32,7 @@ def main():
     from partitiondb import current_tenant
     from partitiondb.adapters.django import get_tenant_model
     from partitiondb.adapters.django.checks import check_configuration
+    from partitiondb.adapters.django.registry_app.models import Membership
 
     assert not check_configuration(None), check_configuration(None)
     Organization = get_tenant_model()
@@ -41,7 +41,7 @@ def main():
     call_command("create_tenant", name="Demo", schema="demo", hostname="demo.localhost", verbosity=0)
     organization = Organization.objects.get(schema_name="demo")
     user = get_user_model().objects.create_user("staff", password="test-only", is_staff=True)
-    membership = Membership.objects.create(user=user, organization=organization, role=Membership.Role.VIEWER)
+    membership = Membership.objects.create(user=user, tenant=organization, role="viewer")
     get_user_model().objects.create_superuser("root", password="test-only")
     try:
         platform = Client(HTTP_HOST="localhost:8000")
@@ -50,7 +50,7 @@ def main():
             platform.post(platform_login, {"login": "root", "username": "root", "password": "test-only"}).status_code
             == 302
         )
-        assert platform.get("/admin/organizations/membership/").status_code == 200
+        assert platform.get("/admin/partitiondb_registry/membership/").status_code == 200
         assert platform.get("/admin/workspaces/workspace/").status_code == 404
 
         tenant = Client(HTTP_HOST="demo.localhost:8000")
@@ -72,8 +72,8 @@ def main():
         assert response.status_code == 200, response.content[:1000]
         assert tenant.get("/admin/workspaces/workspace/").status_code == 200
         assert tenant.get("/admin/workspaces/workspace/add/").status_code == 403
-        assert tenant.get("/admin/organizations/membership/").status_code == 404
-        membership.role = Membership.Role.EDITOR
+        assert tenant.get("/admin/partitiondb_registry/membership/").status_code == 404
+        membership.role = "editor"
         membership.save()
         assert tenant.get("/admin/workspaces/workspace/add/").status_code == 200
         membership.active = False

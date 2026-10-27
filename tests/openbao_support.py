@@ -2,7 +2,7 @@
 
 import os
 
-from partitiondb.credential_providers.openbao import OpenBaoKV2, TokenFile
+from partitiondb.credentials.openbao import OpenBaoKV2, TokenFile
 
 
 def credentials():

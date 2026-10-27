@@ -15,8 +15,8 @@ configure()
 
 from partitiondb.adapters.django import get_domain_model, get_tenant_model  # noqa: E402
 from partitiondb.adapters.django.configuration import PartitionDBSettings  # noqa: E402
-from partitiondb.adapters.django.models import DomainMixin, TenantModel  # noqa: E402
-from partitiondb.adapters.django.workflow import TenantWorkflow  # noqa: E402
+from partitiondb.adapters.django.registry.models import DomainModelMixin, TenantModelMixin  # noqa: E402
+from partitiondb.adapters.django.registry.workflow import TenantWorkflow  # noqa: E402
 
 
 @pytest.mark.parametrize("value", [None, "BadLabel", "missing.Tenant", "workspaces.Workspace"])
@@ -29,15 +29,15 @@ def test_tenant_model_rejects_invalid_configuration(value):
 def test_model_lookup_tracks_overrides_and_validates_domain_relation():
     with isolate_apps("apps.organizations") as registry:
 
-        class FirstTenant(TenantModel):
-            class Meta(TenantModel.Meta):
+        class FirstTenant(TenantModelMixin):
+            class Meta(TenantModelMixin.Meta):
                 app_label = "organizations"
 
-        class SecondTenant(TenantModel):
-            class Meta(TenantModel.Meta):
+        class SecondTenant(TenantModelMixin):
+            class Meta(TenantModelMixin.Meta):
                 app_label = "organizations"
 
-        class FirstDomain(DomainMixin):
+        class FirstDomain(DomainModelMixin):
             tenant = models.ForeignKey(FirstTenant, on_delete=models.PROTECT)
 
             class Meta:
@@ -46,7 +46,7 @@ def test_model_lookup_tracks_overrides_and_validates_domain_relation():
         config = dict(
             settings.PARTITIONDB, TENANT_MODEL="organizations.FirstTenant", DOMAIN_MODEL="organizations.FirstDomain"
         )
-        with patch("partitiondb.adapters.django.model_registry.apps", registry), override_settings(PARTITIONDB=config):
+        with patch("partitiondb.adapters.django.registry.lookup.apps", registry), override_settings(PARTITIONDB=config):
             assert get_tenant_model() is FirstTenant
             assert get_domain_model() is FirstDomain
             assert TenantWorkflow().tenant_values("Example", {"customer_code": "acme"}) == {
@@ -66,8 +66,8 @@ def test_model_lookup_tracks_overrides_and_validates_domain_relation():
 def test_managed_defaults_are_opt_in_and_explicit_callbacks_win():
     assert PartitionDBSettings()["PROVISIONER_FACTORY"] is None
     config = PartitionDBSettings({"TENANT_MODEL": "organizations.Organization"})
-    assert config["PROVISIONER_FACTORY"] == "partitiondb.adapters.django.workflow.provisioner_factory"
-    assert config["TENANT_DATABASE_ACCESS"] == "partitiondb.adapters.django.workflow.runtime_credentials"
+    assert config["PROVISIONER_FACTORY"] == "partitiondb.adapters.django.registry.workflow.provisioner_factory"
+    assert config["TENANT_DATABASE_ACCESS"] == "partitiondb.adapters.django.registry.workflow.runtime_credentials"
     custom = lambda value: value  # noqa: E731
     config = PartitionDBSettings(
         {"TENANT_MODEL": "organizations.Organization", "PROVISIONER_FACTORY": custom, "TENANT_DATABASE_ACCESS": None}
@@ -78,7 +78,7 @@ def test_managed_defaults_are_opt_in_and_explicit_callbacks_win():
 
 def test_unclassified_tenant_model_is_rejected():
     with override_settings(
-        PARTITIONDB=dict(settings.PARTITIONDB, TENANT_MODEL="organizations.Organization", SHARED_APPS=[])
+        PARTITIONDB=dict(settings.PARTITIONDB, TENANT_MODEL="partitiondb_registry.Tenant", SHARED_APPS=[])
     ):
         with pytest.raises(ImproperlyConfigured, match="shared app"):
             get_tenant_model()
@@ -101,7 +101,7 @@ def test_shared_access_does_not_depend_on_credential_provider(policy):
         yield Mock()
 
     workflow.open_connection = connection
-    module = "partitiondb.adapters.django.workflow"
+    module = "partitiondb.adapters.django.registry.workflow"
     with ExitStack() as stack:
         stack.enter_context(patch(f"{module}.require_control_plane"))
         stack.enter_context(patch.object(TenantWorkflow, "model", new_callable=PropertyMock, return_value=model))
@@ -121,13 +121,13 @@ def test_shared_access_does_not_depend_on_credential_provider(policy):
 
 
 def test_schema_reservation_check_uses_complete_central_registry():
-    from partitiondb.adapters.django.forms import TenantProvisionForm
+    from partitiondb.adapters.django.registry.forms import TenantProvisionForm
 
     model = Mock()
     model._base_manager.using.return_value.filter.return_value.exists.return_value = True
     form = TenantProvisionForm()
     form.cleaned_data = {"schema": "example", "database_alias": "default"}
-    with patch("partitiondb.adapters.django.forms.get_tenant_model", return_value=model):
+    with patch("partitiondb.adapters.django.registry.forms.get_tenant_model", return_value=model):
         from django import forms
 
         with pytest.raises(forms.ValidationError, match="already registered"):
@@ -144,7 +144,7 @@ def test_schema_reservation_check_uses_complete_central_registry():
     [None, [], {"default": {"maintenance_database": "postgres"}}, {"missing": {"maintenance_database": "postgres"}}],
 )
 def test_invalid_database_creation_settings_fail_before_connecting(value):
-    from partitiondb.adapters.django.database_settings import database_provisioning_targets
+    from partitiondb.adapters.django.databases.settings import database_provisioning_targets
 
     with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, DATABASE_PROVISIONING=value)):
         with pytest.raises(ImproperlyConfigured):
@@ -152,7 +152,7 @@ def test_invalid_database_creation_settings_fail_before_connecting(value):
 
 
 def test_database_creation_settings_require_a_separate_trusted_target():
-    from partitiondb.adapters.django.database_settings import database_provisioning_targets
+    from partitiondb.adapters.django.databases.settings import database_provisioning_targets
 
     aliases = {"dedicated": SimpleNamespace(settings_dict={"NAME": "tenant_example"})}
     config = dict(
@@ -162,7 +162,7 @@ def test_database_creation_settings_require_a_separate_trusted_target():
         DATABASE_PROVISIONING={"dedicated": {"maintenance_database": "postgres"}},
     )
     with (
-        patch("partitiondb.adapters.django.database_settings.connections", aliases),
+        patch("partitiondb.adapters.django.databases.settings.connections", aliases),
         override_settings(PARTITIONDB=config),
     ):
         assert database_provisioning_targets() == {"dedicated": "postgres"}
@@ -177,7 +177,8 @@ def test_database_creation_settings_require_a_separate_trusted_target():
 
 
 def test_openbao_factory_uses_central_options_without_reading_token_or_network(tmp_path):
-    from partitiondb.credential_providers.openbao import TokenFile, django_credentials
+    from partitiondb.adapters.django.databases.credentials import openbao_credentials
+    from partitiondb.credentials.openbao import TokenFile
 
     options = {
         "address": "https://secrets.internal",
@@ -187,12 +188,27 @@ def test_openbao_factory_uses_central_options_without_reading_token_or_network(t
         "token_file": str(tmp_path / "not-created"),
     }
     with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, CREDENTIAL_PROVIDER_OPTIONS=options)):
-        with patch("partitiondb.credential_providers.openbao.OpenBaoKV2") as constructor:
-            assert django_credentials() is constructor.return_value
+        with patch("partitiondb.credentials.openbao.OpenBaoKV2") as constructor:
+            assert openbao_credentials() is constructor.return_value
         args = constructor.call_args.kwargs
         assert isinstance(args["token"], TokenFile)
         assert args["token"].path == options["token_file"]
         assert args["address"] == options["address"]
     with override_settings(PARTITIONDB=dict(settings.PARTITIONDB, CREDENTIAL_PROVIDER_OPTIONS={})):
         with pytest.raises(ImproperlyConfigured):
-            django_credentials()
+            openbao_credentials()
+
+
+def test_registry_defaults_support_explicit_builtin_model_without_overriding_custom_registry():
+    base = {"SHARED_APPS": ["partitiondb_registry"]}
+    for values in (base, dict(base, TENANT_MODEL="partitiondb_registry.Tenant")):
+        config = PartitionDBSettings(values)
+        assert config["TENANT_MODEL"] == "partitiondb_registry.Tenant"
+        assert config["DOMAIN_MODEL"] == "partitiondb_registry.Domain"
+        assert config["MEMBERSHIP_MODEL"] == "partitiondb_registry.Membership"
+    config = PartitionDBSettings(dict(base, TENANT_MODEL="custom.Tenant"))
+    assert config["DOMAIN_MODEL"] is None
+    assert config["MEMBERSHIP_MODEL"] is None
+    config = PartitionDBSettings(dict(base, DOMAIN_MODEL=None, MEMBERSHIP_MODEL=None))
+    assert config["DOMAIN_MODEL"] is None
+    assert config["MEMBERSHIP_MODEL"] is None

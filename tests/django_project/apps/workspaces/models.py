@@ -2,7 +2,7 @@ import uuid
 
 from django.db import models
 
-from partitiondb.adapters.django.storage import TenantStorage
+from partitiondb.adapters.django.assets.storage import TenantStorage
 
 
 class Workspace(models.Model):

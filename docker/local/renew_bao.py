@@ -5,7 +5,7 @@ import ssl
 import time
 from urllib.request import Request, urlopen
 
-from partitiondb.credential_providers.openbao import TokenFile
+from partitiondb.credentials.openbao import TokenFile
 
 context = ssl.create_default_context(cafile="/ca/ca.pem")
 token = TokenFile("/runtime/bao-token")

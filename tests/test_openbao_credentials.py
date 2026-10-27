@@ -5,7 +5,7 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from partitiondb.credential_providers.openbao import CredentialNotFound, CredentialStoreError, OpenBaoKV2, TokenFile
+from partitiondb.credentials.openbao import CredentialNotFound, CredentialStoreError, OpenBaoKV2, TokenFile
 
 MOUNT = {"data": {"accessor": "kv_example", "path": "secret/", "type": "kv", "options": {"version": "2"}}}
 

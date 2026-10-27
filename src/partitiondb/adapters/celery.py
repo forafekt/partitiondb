@@ -7,7 +7,7 @@ from functools import wraps
 from celery import current_task
 
 from partitiondb import MissingTenant, current_tenant, tenant_scope
-from partitiondb.jobs import job_scope
+from partitiondb.tenancy.jobs import job_scope
 
 TENANT_HEADER = "partitiondb_tenant_id"
 

@@ -1,5 +1,5 @@
 """Optional Django adapter public model-resolution helpers."""
 
-from .model_registry import get_domain_model, get_tenant_model
+from partitiondb.adapters.django.registry.lookup import get_domain_model, get_membership_model, get_tenant_model
 
-__all__ = ["get_tenant_model", "get_domain_model"]
+__all__ = ["get_tenant_model", "get_domain_model", "get_membership_model"]

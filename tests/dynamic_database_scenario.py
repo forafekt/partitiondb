@@ -28,9 +28,9 @@ def check_runtime():
 
     from partitiondb.adapters.django import get_domain_model, get_tenant_model
     from partitiondb.adapters.django.access_control.models import TenantDatabaseTarget
-    from partitiondb.adapters.django.database_routes import managed_alias
-    from partitiondb.adapters.django.scope import atomic_tenant
-    from partitiondb.adapters.django.workflow import resolve_host
+    from partitiondb.adapters.django.databases.routes import managed_alias
+    from partitiondb.adapters.django.registry.workflow import resolve_host
+    from partitiondb.adapters.django.routing.scope import atomic_tenant
 
     assert not any(managed_alias(alias) for alias in connections)
     records = list(get_tenant_model()._base_manager.using("default").filter(name__startswith="Dynamic ").order_by("pk"))
@@ -60,7 +60,6 @@ def main():
     with tempfile.TemporaryDirectory() as directory:
         os.environ["PARTITIONDB_DEMO_CREDENTIALS_DIR"] = str(Path(directory) / "secrets")
         profile = configure_profiles()
-        from apps.organizations.models import Membership  # Explicit application membership integration.
         from apps.workspaces.models import Workspace
         from django.contrib.auth import get_user_model
         from django.core.exceptions import ImproperlyConfigured, ValidationError
@@ -70,15 +69,16 @@ def main():
 
         from partitiondb.adapters.django import get_tenant_model
         from partitiondb.adapters.django.access_control.models import DatabaseOperation, TenantDatabaseTarget
-        from partitiondb.adapters.django.database_routes import NEW_DATABASE, database_profiles, managed_alias
-        from partitiondb.adapters.django.scope import atomic_tenant
-        from partitiondb.adapters.django.workflow import get_workflow, resolve_host
+        from partitiondb.adapters.django.databases.routes import NEW_DATABASE, database_profiles, managed_alias
+        from partitiondb.adapters.django.registry.workflow import get_workflow, resolve_host
+        from partitiondb.adapters.django.registry_app.models import Membership
+        from partitiondb.adapters.django.routing.scope import atomic_tenant
 
         call_command("makemigrations", check=True, dry_run=True, verbosity=0)
         call_command("migrate", verbosity=0, interactive=False)
         if os.environ.get("PARTITIONDB_DYNAMIC_REGISTRY") == "1":
             from partitiondb.adapters.django.access_control.models import DatabaseServerProfile
-            from partitiondb.adapters.django.server_profiles import verify_server_profile
+            from partitiondb.adapters.django.databases.profiles import verify_server_profile
 
             registration = DatabaseServerProfile.objects.create(name=profile, source_profile=profile)
             registration = verify_server_profile(registration)
@@ -90,14 +90,14 @@ def main():
         platform.force_login(root)
         identities = []
         try:
-            page = platform.get("/admin/organizations/organization/add/")
+            page = platform.get("/admin/partitiondb_registry/tenant/add/")
             assert page.status_code == 200
             assert b"New database + tenant schema" in page.content
             call_command("create_tenant", name="Shared", schema="demo", hostname="shared.localhost", verbosity=0)
             shared = model.objects.get(name="Shared").as_tenant()
             names = os.environ["PARTITIONDB_DYNAMIC_DATABASE_NAMES"].split(",")
             response = platform.post(
-                "/admin/organizations/organization/add/",
+                "/admin/partitiondb_registry/tenant/add/",
                 {
                     "name": "Dynamic first",
                     "schema": "demo",
@@ -146,7 +146,7 @@ def main():
                 assert not Workspace.objects.filter(name__startswith="only-").exists()
 
             staff = get_user_model().objects.create_user("staff", password="test-only", is_staff=True)
-            Membership.objects.create(user=staff, organization=records[0], role="admin")
+            Membership.objects.create(user=staff, tenant=records[0], role="admin")
             browser = Client(HTTP_HOST="demo-db-tenant.localhost")
             assert browser.post("/admin/login/", {"username": "staff", "password": "test-only"}).status_code == 302
             assert browser.get("/admin/").status_code == 200

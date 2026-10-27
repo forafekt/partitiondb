@@ -19,7 +19,6 @@ def main():
         os.environ["PARTITIONDB_DEMO_CREDENTIALS_DIR"] = str(Path(directory) / "secrets")
         configure()
         # Application-specific membership/auth integration is intentional.
-        from apps.organizations.models import Membership
         from apps.workspaces.models import Workspace
         from django.contrib.auth import get_user_model
         from django.core.management import CommandError, call_command
@@ -31,9 +30,10 @@ def main():
             AccessOperation,
             RoleOwnershipReceipt,
         )
-        from partitiondb.adapters.django.scope import atomic_tenant
-        from partitiondb.adapters.django.workflow import access_context, registry_lifecycle_factory
-        from partitiondb.postgres_role_manager import tenant_role_name
+        from partitiondb.adapters.django.registry.workflow import access_context, registry_lifecycle_factory
+        from partitiondb.adapters.django.registry_app.models import Membership
+        from partitiondb.adapters.django.routing.scope import atomic_tenant
+        from partitiondb.postgres.role_manager import tenant_role_name
         from partitiondb.provisioning import Stage
 
         Organization = get_tenant_model()
@@ -51,7 +51,7 @@ def main():
             identities.append(shared.as_tenant())
             # The actual admin add form reserves and provisions the dedicated target.
             if os.environ.get("PARTITIONDB_TEST_DEDICATED_CRASH"):
-                from partitiondb.provisioning_postgres import PostgresProvisioningStore
+                from partitiondb.postgres.provisioning import PostgresProvisioningStore
 
                 dedicated = Organization.objects.create(
                     name="Dedicated",
@@ -77,7 +77,7 @@ def main():
                 assert not Organization.objects.get(pk=tenant.id).active
                 # Audited READY inspects the target database and finalizes central metadata.
                 response = platform.post(
-                    f"/admin/organizations/organization/{tenant.id}/reconcile-access/",
+                    f"/admin/partitiondb_registry/tenant/{tenant.id}/reconcile-access/",
                     {"decision": "ready", "confirm_tenant_id": tenant.id},
                 )
                 assert response.status_code == 302
@@ -86,7 +86,7 @@ def main():
                 assert AccessRecoveryAudit.objects.get(tenant_id=tenant.id).database_alias == "dedicated"
             else:
                 response = platform.post(
-                    "/admin/organizations/organization/add/",
+                    "/admin/partitiondb_registry/tenant/add/",
                     {
                         "name": "Dedicated",
                         "schema": "org_same",
@@ -106,7 +106,7 @@ def main():
             receipt = RoleOwnershipReceipt.objects.get(tenant_id=tenant.id)
             assert receipt.database_alias == "dedicated"
             assert AccessOperation.objects.get(tenant_id=tenant.id).state == "completed"
-            page = platform.get(f"/admin/organizations/organization/{tenant.id}/access-status/")
+            page = platform.get(f"/admin/partitiondb_registry/tenant/{tenant.id}/access-status/")
             assert page.status_code == 200
             assert "Verified — fresh password connection succeeded".encode() in page.content
             # The reserved database cannot be silently assigned to another tenant.
@@ -134,7 +134,7 @@ def main():
                     assert context.provisioner.store.get(tenant.id).stage == Stage.ACTIVE
                 assert context.admin_connection.info.dbname == os.environ["POSTGRES_DEDICATED_DB"]
                 for table in (
-                    "organizations_organization",
+                    "pdb_registry_tenant",
                     "auth_user",
                     "django_session",
                     "pdb_access_operation",
@@ -169,7 +169,7 @@ def main():
             assert connections["dedicated"].connection is None
 
             staff = get_user_model().objects.create_user("staff", password="test-only", is_staff=True)
-            Membership.objects.create(user=staff, organization=dedicated, role="admin")
+            Membership.objects.create(user=staff, tenant=dedicated, role="admin")
             client = Client(HTTP_HOST="dedicated.localhost")
             assert client.post("/admin/login/", {"username": "staff", "password": "test-only"}).status_code == 302
             assert client.get("/admin/").status_code == 200
@@ -203,7 +203,7 @@ def main():
             ):
                 assert unavailable.get("/api/workspaces/").status_code == 500
                 with patch(
-                    "partitiondb.adapters.django.workflow.TenantWorkflow.credentials",
+                    "partitiondb.adapters.django.registry.workflow.TenantWorkflow.credentials",
                     side_effect=AssertionError("Deactivation contacted the secret provider"),
                 ):
                     with registry_lifecycle_factory(tenant.id) as lifecycle:
@@ -311,7 +311,7 @@ def main():
             # Roles are cluster-global; remove their grants from their actual target before dropping them.
             for identity in identities:
                 if identity.database != "default":
-                    from partitiondb.adapters.django.workflow import provisioning_connection_params
+                    from partitiondb.adapters.django.registry.workflow import provisioning_connection_params
 
                     with psycopg.connect(**provisioning_connection_params(identity.database), autocommit=True) as admin:
                         role = tenant_role_name(identity)

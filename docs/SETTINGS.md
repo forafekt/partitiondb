@@ -16,13 +16,13 @@ TENANCY = DjangoSetup(
         "sessions": "django.contrib.sessions",
         "messages": "django.contrib.messages",
         "staticfiles": "django.contrib.staticfiles",
-        "admin": "partitiondb.adapters.django.admin_apps.PartitionDBAdminConfig",
+        "admin": "partitiondb.adapters.django.administration.apps.PartitionDBAdminConfig",
     },
     tenant_apps={"projects": "projects"},
     tenant_urlconf="config.urls_tenant",
     shared_hosts=["localhost", "127.0.0.1"],
     shared_urlconf="config.urls_platform",
-    authorize="projects.tenancy.authorize_tenant",
+    authorize="partitiondb.adapters.django.registry_app.tenancy.authorize_tenant",
 )
 INSTALLED_APPS = TENANCY.installed_apps
 PARTITIONDB = TENANCY.partitiondb
@@ -41,10 +41,11 @@ DATABASES = {
 }
 ```
 
-Supply your password securely, implement the authorizer and create the two
-URLconfs. Django's other project settings are still required. Classify every
-installed app label exactly once. The optional registry app selects the built-in
-tenant/domain models; custom model selection is described in [Django](DJANGO.md).
+Supply your password securely, create the two URLconfs, and use the built-in
+membership authorizer above or provide an application-owned callback. Django's
+other project settings are still required. Classify every installed app label
+exactly once. The optional registry app selects the built-in
+tenant/domain/membership models; custom model selection is described in [Django](DJANGO.md).
 
 `RegistryHostMiddleware` must be first with `ALLOWED_HOSTS=["*"]`; it enforces exact
 shared hosts and active registered tenant domains. Do not retain the wildcard
@@ -59,7 +60,7 @@ managed defaults. Do not put secrets in settings output or share it unreviewed.
 
 | Group | Settings |
 | --- | --- |
-| Models and workflow | `TENANT_MODEL`, `DOMAIN_MODEL`, `TENANT_WORKFLOW` |
+| Models and workflow | `TENANT_MODEL`, `DOMAIN_MODEL`, `MEMBERSHIP_MODEL`, `TENANT_WORKFLOW` |
 | Classification | `SHARED_APPS`, `TENANT_APPS`, `TENANT_TYPES` |
 | Routing | `RESOLVER`, `SHARED_HOSTS`, `SHARED_URLCONF`, `SUBFOLDER_PREFIX`, `SUBFOLDER_RESOLVER` |
 | Identity | `AUTHORIZE`, `TENANT_AUTH_PATHS`, `TENANT_AUTH_URLCONF` |
@@ -72,7 +73,12 @@ managed defaults. Do not put secrets in settings output or share it unreviewed.
 
 Selecting `TENANT_MODEL` supplies library defaults for host resolution, active
 inventory, provisioning, admission, runtime access and migration access refresh.
-No application copies of those implementations are required.
+No application copies of those implementations are required. Selecting registry
+models does not configure `AUTHORIZE`; membership checks still require the explicit
+callback. For built-in tenant admin login, also set `tenant_admin=True`, configure
+`TENANT_ADMIN_PERMISSIONS` with
+`partitiondb.adapters.django.registry_app.tenancy.tenant_admin_permissions`, and
+supply a tenant-local `TENANT_ADMIN_LOG_MODEL`; see [authentication](DJANGO.md#authentication).
 
 `DjangoComponents` customizes the host guard, tenant/identity/admin-auth middleware,
 router and backend paths. Pass it through `DjangoSetup(components=...)` and use

@@ -1,7 +1,7 @@
 from unittest.mock import Mock
 
-from partitiondb.core import Tenant
-from partitiondb.postgres_role_inspection import PostgresRoleInspector, RoleState
+from partitiondb.postgres.role_inspection import PostgresRoleInspector, RoleState
+from partitiondb.tenancy.identity import Tenant
 
 
 def test_missing_role():

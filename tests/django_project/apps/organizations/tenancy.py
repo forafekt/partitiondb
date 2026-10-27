@@ -1,41 +1,21 @@
-from .models import Membership
+from partitiondb.adapters.django.registry.lookup import get_membership_model
 
 
 def authorize_tenant(request, tenant):
     principal = request.principal
-    return bool(
-        principal.is_authenticated
-        and Membership.objects.filter(
-            user_id=principal.id,
-            organization_id=tenant.id,
-            active=True,
-        ).exists()
-    )
+
+    model = get_membership_model()
+
+    return model.objects.authorize_tenant(principal=principal, tenant=tenant)
 
 
 def tenant_admin_permissions(request, tenant):
     principal = request.principal
-    if not principal.is_authenticated:
-        return set()
 
-    membership = Membership.objects.filter(
-        user_id=principal.id,
-        organization_id=tenant.id,
-        active=True,
-    ).first()
+    model = get_membership_model()
 
-    if membership is None:
-        return set()
-
-    actions = {
-        "admin": ("view", "add", "change", "delete"),
-        "editor": ("view", "add", "change"),
-        "viewer": ("view",),
-    }.get(membership.role, ())
-
-    permissions = {f"workspaces.{action}_workspace" for action in actions}
-
-    # if membership.role == "admin":
-    #     permissions.add("audit.view_adminaudit")
-
-    return permissions
+    return model.objects.tenant_admin_permissions(
+        models=[("workspaces", "workspace"), ("audit", "adminaudit")],
+        principal=principal,
+        tenant=tenant,
+    )

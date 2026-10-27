@@ -1,7 +1,7 @@
 import pytest
 
 from partitiondb import MissingTenant, Tenant, current_tenant, tenant_scope
-from partitiondb.jobs import job_scope
+from partitiondb.tenancy.jobs import job_scope
 
 
 class Repository:

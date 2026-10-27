@@ -27,8 +27,9 @@ Pin the tag you have validated; for example:
 pip install 'partitiondb[django] @ git+https://github.com/forafekt/partitiondb.git@v0.2.0a37'
 ```
 
-The checkout contains the unreleased a38 candidate. Documentation describes this
-checkout; some features are newer than a37. Extras: `postgres`, `django`, `celery`,
+The checkout metadata declares `0.2.0a37` and includes unreleased changes.
+These guides describe the working tree; a pinned release may not include every
+documented feature. Extras: `postgres`, `django`, `celery`,
 `testing`, and `dev`. GitHub installation remains the release path for this project.
 
 ## Execution boundaries
@@ -43,13 +44,57 @@ with tenant_scope(tenant):
 
 `tenant_scope` carries identity; it does not open a database transaction or grant
 access. Use `partitiondb.postgres.transaction(connection, tenant)` for psycopg or
-`partitiondb.adapters.django.scope.atomic_tenant(tenant)` for Django database work.
+`partitiondb.adapters.django.routing.scope.atomic_tenant(tenant)` for Django database work.
 Resolve identity from trusted metadata and check membership before entering a scope.
+
+## Usage flow
+
+![PartitionDB usage flow: resolve and authorize in the shared control plane, then execute tenant database work](docs/usage-flow.png)
+
+The managed Django resolver looks up an active tenant from trusted hostname or
+subfolder metadata. Authorization runs in shared context before tenant work;
+the built-in authorizer checks active membership. Shared users, domains,
+memberships, database routes and lifecycle evidence remain on `default`.
+
+`atomic_tenant` resolves the database route and runtime credentials, enters tenant
+scope and owns the transaction. The backend selects the tenant schema. Each tenant
+has a schema, either in the shared database or a dedicated database. Dedicated
+databases require restricted PostgreSQL roles; shared-database tenants can use
+shared or restricted roles. Restricted roles provide database-enforced separation;
+a shared role can still access other granted schemas through qualified SQL.
+
+The request boundary rolls back exceptions and responses with status 400 or above,
+commits successful work, and closes the connection. Complete queries, template
+rendering and file reads inside the boundary. See [Django request handling](docs/DJANGO.md#requests-and-orm-boundaries)
+and [database access](docs/ACCESS.md).
+
+Celery tenant headers carry a stable tenant ID. Each execution/retry resolves the
+current active tenant; the task body opens its own database transaction. A tenant
+ID does not grant authorization. See [jobs](docs/CELERY.md).
+
+## Setup flow
+
+![PartitionDB setup flow: reserve inactive metadata, prepare resources, migrate and seed, verify access, then activate](docs/setup-flow.png)
+
+Configure shared and tenant apps, trusted database sources, authorization and any
+required credential provider, then apply shared migrations. Managed creation
+reserves inactive tenant/domain metadata and, when needed, a database route. It
+prepares the database, creates the tenant schema, runs tenant migrations and the
+application's restartable seed hook, provisions restricted access when selected,
+and verifies readiness before activating admission. Ordinary model saves do not
+provision infrastructure. Creation is synchronous.
+
+Failure preserves inactive records, resources and durable checkpoints. Inspect and
+reconcile ambiguous external effects before resuming; completed stages are not
+blindly recreated. An ACTIVE checkpoint is separate from registry admission and
+does not perform migration upgrades. See [settings](docs/SETTINGS.md),
+[database choices](docs/DATABASES.md), and [provisioning and recovery](docs/OPERATIONS.md).
 
 ## Guides
 
 | Need | Guide |
 | --- | --- |
+| Package layout and framework boundaries | [Architecture](docs/ARCHITECTURE.md) |
 | Configure Django and customize components | [Settings](docs/SETTINGS.md) |
 | Models, admin, authentication and routing | [Django](docs/DJANGO.md) |
 | Schema/database tenancy and server profiles | [Databases](docs/DATABASES.md) |
@@ -62,6 +107,7 @@ Resolve identity from trusted metadata and check membership before entering a sc
 | Run checks and prepare a release | [Testing](docs/TESTING.md) |
 | Upgrade the original extracted package | [Migration](docs/MIGRATION.md) |
 
-PartitionDB does not provide membership policy, SSO, server/VM deployment,
+PartitionDB provides default membership roles and CRUD actions. SSO, server/VM deployment,
 credential rotation, session termination, automatic retirement, or distributed
-rollback. Its local Compose deployment demonstrates integration, not production HA.
+rollback remain application/deployment responsibilities. Its local Compose
+deployment demonstrates integration, not production HA.

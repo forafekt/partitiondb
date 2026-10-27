@@ -10,8 +10,8 @@ import psycopg
 
 from partitiondb import Tenant
 from partitiondb.postgres import SchemaManager, transaction
+from partitiondb.postgres.provisioning import PostgresProvisioningStore
 from partitiondb.provisioning import AmbiguousCreation, Provisioner, Stage
-from partitiondb.provisioning_postgres import PostgresProvisioningStore
 
 
 def service(store, dsn, crash=None):

@@ -7,8 +7,8 @@ from django.template import Context, Engine, TemplateDoesNotExist
 from django.test import override_settings
 
 from partitiondb import Tenant, tenant_scope
-from partitiondb.adapters.django.staticfiles import TenantStaticFilesStorage, TenantStaticFinder
-from partitiondb.keys import storage_prefix
+from partitiondb.adapters.django.assets.staticfiles import TenantStaticFilesStorage, TenantStaticFinder
+from partitiondb.tenancy.keys import storage_prefix
 from tests.django_setup import configure
 
 configure()
@@ -28,9 +28,9 @@ def engine(root, shared):
         dirs=[str(shared)],
         loaders=[
             (
-                "partitiondb.adapters.django.template_loaders.cached.Loader",
+                "partitiondb.adapters.django.assets.template_loaders.cached.Loader",
                 [
-                    ("partitiondb.adapters.django.template_loaders.filesystem.Loader", [str(root)]),
+                    ("partitiondb.adapters.django.assets.template_loaders.filesystem.Loader", [str(root)]),
                     "django.template.loaders.filesystem.Loader",
                 ],
             )
@@ -131,7 +131,7 @@ def test_ordinary_cached_loader_is_rejected_at_runtime(tmp_path):
                 "django.template.loaders.cached.Loader",
                 [
                     (
-                        "partitiondb.adapters.django.template_loaders.filesystem.Loader",
+                        "partitiondb.adapters.django.assets.template_loaders.filesystem.Loader",
                         [str(tmp_path)],
                     ),
                 ],
@@ -166,7 +166,7 @@ def test_cache_configuration_check_reports_unsafe_outer_cache(tmp_path):
                         "django.template.loaders.cached.Loader",
                         [
                             (
-                                "partitiondb.adapters.django.template_loaders.filesystem.Loader",
+                                "partitiondb.adapters.django.assets.template_loaders.filesystem.Loader",
                                 [str(tmp_path)],
                             ),
                         ],

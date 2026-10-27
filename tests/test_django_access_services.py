@@ -5,10 +5,10 @@ from unittest.mock import Mock
 import pytest
 from django.core.exceptions import ValidationError
 
-from partitiondb.adapters.django.access_models import TenantAccessMixin
-from partitiondb.adapters.django.access_services import DjangoRoleBindingRecorder
-from partitiondb.core import Tenant
-from partitiondb.postgres_role_manager import RoleBinding
+from partitiondb.adapters.django.access_control.bindings import DjangoRoleBindingRecorder
+from partitiondb.adapters.django.access_control.policy_models import TenantAccessMixin
+from partitiondb.postgres.role_manager import RoleBinding
+from partitiondb.tenancy.identity import Tenant
 
 
 def test_recorder_requires_concrete_access_model():

@@ -36,11 +36,11 @@ Keep the root token out of screenshots, logs and application settings.
 
 ## Create and exercise tenants
 
-1. In platform admin, open **Organizations → Add**.
+1. In platform admin, open **PartitionDB tenants → Tenants → Add**.
 2. Choose **New database + tenant schema**, server `tenant_server`, name `demo`,
    schema `demo`, hostname `demo.localhost`. Leave the database name blank.
 3. Tick the provisioning confirmation and submit. The default workspace is seeded.
-4. Create an active staff user and an active organization membership.
+4. Create an active staff user and an active tenant membership with an explicit viewer/editor/admin role.
 5. Open http://demo.localhost:8000/admin/ and log in on that host.
 
 The platform manages shared accounts/memberships; the tenant admin manages its

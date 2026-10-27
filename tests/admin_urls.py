@@ -1,7 +1,7 @@
 from django.urls import path
 
 from partitiondb.adapters.django import get_domain_model, get_tenant_model
-from partitiondb.adapters.django.admin import (
+from partitiondb.adapters.django.administration.registry import (
     ControlPlaneAdminSite,
     DomainRegistryAdmin,
     TenantRegistryAdmin,

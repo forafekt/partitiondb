@@ -9,7 +9,7 @@ django.setup()
 from django.contrib.auth import get_user_model  # noqa: E402
 
 from partitiondb.adapters.django.access_control.models import DatabaseServerProfile  # noqa: E402
-from partitiondb.adapters.django.server_profiles import verify_server_profile  # noqa: E402
+from partitiondb.adapters.django.databases.profiles import verify_server_profile  # noqa: E402
 
 for name in ("control", "tenant_server"):
     row, created = DatabaseServerProfile.objects.using("default").get_or_create(

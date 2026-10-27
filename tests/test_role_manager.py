@@ -2,8 +2,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from partitiondb.core import Tenant
-from partitiondb.postgres_role_manager import PostgresRoleManager, tenant_role_name
+from partitiondb.postgres.role_manager import PostgresRoleManager, tenant_role_name
+from partitiondb.tenancy.identity import Tenant
 
 
 def test_role_name():

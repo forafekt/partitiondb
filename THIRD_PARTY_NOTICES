@@ -1,6 +1,6 @@
 Third-party attribution and license notices
 
-PartitionDB originated in Citivenue and derives in part from django-tenants,
+PartitionDB originated in Citivenue (SaaS project) and inspired in part from django-tenants,
 which in turn derives from django-tenant-schemas. Credit is retained for their
 respective authors and contributors. The current upstream license text below
 applies to retained portions of either project; it is not a claim of exclusive

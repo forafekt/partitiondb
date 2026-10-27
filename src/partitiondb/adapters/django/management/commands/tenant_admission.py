@@ -6,7 +6,7 @@ from django.core.management import BaseCommand, CommandError
 
 from partitiondb import Tenant, current_tenant
 from partitiondb.adapters.django.configuration import get_config
-from partitiondb.adapters.django.registry_lifecycle import RegistryLifecycle
+from partitiondb.adapters.django.registry.lifecycle import RegistryLifecycle
 
 
 class Command(BaseCommand):

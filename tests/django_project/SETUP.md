@@ -1,9 +1,11 @@
 # Django integration fixture
 
 This project is the runnable integration application and test migration graph.
-Library defaults own provisioning/forms/commands; its models, memberships and
-workspace seed/verification hook demonstrate application customization.
-Keep its migration history intact. Its settings contain local fixture credentials.
+Library defaults own provisioning/forms/commands and the shared Tenant, Domain and
+Membership registry. Application models and the workspace seed/verification hook
+demonstrate customization. Keep the selected migration baseline intact except when
+deliberately rebuilding the disposable development baseline in the testing guide.
+Its settings contain local fixture credentials.
 
 From the repository root:
 

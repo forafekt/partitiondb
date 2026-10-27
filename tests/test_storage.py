@@ -6,8 +6,8 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 
 from partitiondb import MissingTenant, Tenant, tenant_scope
-from partitiondb.adapters.django.storage import TenantStorage
-from partitiondb.keys import storage_prefix
+from partitiondb.adapters.django.assets.storage import TenantStorage
+from partitiondb.tenancy.keys import storage_prefix
 from tests.django_setup import configure
 
 configure()

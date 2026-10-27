@@ -11,8 +11,8 @@ from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.test import RequestFactory, override_settings
 
 from partitiondb import MissingTenant, Tenant, current_tenant, tenant_scope
-from partitiondb.adapters.django.identity import Principal, SharedIdentityMiddleware
-from partitiondb.adapters.django.middleware import TenantMiddleware
+from partitiondb.adapters.django.routing.identity import Principal, SharedIdentityMiddleware
+from partitiondb.adapters.django.routing.middleware import TenantMiddleware
 
 
 def test_identity_snapshot():
@@ -59,7 +59,7 @@ def test_cache_alias_isolation():
         "tenant": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "partitiondb-boundary-test",
-            "KEY_FUNCTION": "partitiondb.adapters.django.cache.tenant_key",
+            "KEY_FUNCTION": "partitiondb.adapters.django.assets.cache.tenant_key",
         }
     }
     with override_settings(CACHES=config):

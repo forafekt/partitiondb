@@ -3,7 +3,7 @@ from dataclasses import replace
 import pytest
 
 from partitiondb import Tenant
-from partitiondb.database_provisioning import (
+from partitiondb.provisioning.databases import (
     AmbiguousDatabaseCreation,
     DatabaseObservation,
     DatabaseProvisioner,

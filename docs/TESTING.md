@@ -47,13 +47,13 @@ docker compose -f compose.tests.yml --profile celery --profile secrets down
 
 ## Application test helpers
 
-`temporary_tenant(admin_connection)` in `partitiondb.adapters.django.testing`
+`temporary_tenant(admin_connection)` in `partitiondb.adapters.django.operations.testing`
 creates/migrates a random schema and drops only that schema on exit. Enter
 `atomic_tenant` yourself for ORM work. The leased admin connection must target the
 same disposable database as the Django alias. `migrate=False`, `tenant_id`,
 `database` and `tenant_type` are optional. Abrupt termination can leave test schemas.
 
-The opt-in `partitiondb.adapters.django.pytest_plugin` supplies `tenant_factory`
+The opt-in `partitiondb.adapters.django.operations.pytest_plugin` supplies `tenant_factory`
 and `partitiondb_admin_connection` (using `PARTITIONDB_TEST_DSN`). With pytest-django,
 use transactional tests and point the admin DSN at its actual test database.
 Django TestCase outer transactions conflict with scope ownership. `TenantClient`
@@ -90,7 +90,7 @@ Agent working evidence and release handoff are kept separately in `.codex`.
 
 ## Fresh development baseline
 
-The next release replaces the pre-production migration history with initial
+The current checkout replaces the pre-production migration history with initial
 migrations and uses `pdb_` names for concrete package model tables. Old databases
 must be rebuilt; this is not an upgrade path for existing data. Django app labels
 and the separate `pdb_provisioning` checkpoint table are unchanged.

@@ -5,11 +5,10 @@ from django.db.backends.postgresql.base import DatabaseWrapper as PostgreSQLWrap
 from django.db.backends.postgresql.introspection import DatabaseIntrospection
 from psycopg.pq import TransactionStatus
 
-from partitiondb.core import current_tenant
+from partitiondb.adapters.django.routing.tenant_types import tenant_policy
+from partitiondb.credentials.runtime import current_database_credentials
 from partitiondb.postgres import search_path
-
-from ..runtime_access import current_database_credentials
-from ..tenant_types import tenant_policy
+from partitiondb.tenancy.identity import current_tenant
 
 
 class SchemaIntrospection(DatabaseIntrospection):
