@@ -1,8 +1,10 @@
 # Django settings
 
-Use `DjangoSetup` to declare applications once and assemble the adapter settings.
-The complete runnable configuration is in
-[`tests/django_project/config/settings.py`](../tests/django_project/config/settings.py).
+> **In this guide:** [Quick start](#quick-start) · [Host guard](#host-guard) · [Configuration reference](#configuration-reference) · [Customizing components](#customizing-components) · [Validate your setup](#validate-your-setup)
+
+`DjangoSetup` declares your apps once and assembles every adapter setting for you. A complete, runnable configuration lives in [`tests/django_project/config/settings.py`](../tests/django_project/config/settings.py).
+
+## Quick start
 
 ```python
 from partitiondb.adapters.django.configuration import DjangoSetup
@@ -24,39 +26,50 @@ TENANCY = DjangoSetup(
     shared_urlconf="config.urls_platform",
     authorize="partitiondb.adapters.django.registry_app.tenancy.authorize_tenant",
 )
+
 INSTALLED_APPS = TENANCY.installed_apps
 PARTITIONDB = TENANCY.partitiondb
 MIDDLEWARE = TENANCY.middleware()
 DATABASE_ROUTERS = TENANCY.database_routers
 ROOT_URLCONF = TENANCY.tenant_urlconf
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ["*"]  # safe only with RegistryHostMiddleware first; see below
+
 DATABASES = {
     "default": TENANCY.database(
         NAME="application",
         USER="application",
-        PASSWORD=DATABASE_PASSWORD,
+        PASSWORD=DATABASE_PASSWORD,  # load from a secret store, never hard-code
         HOST="postgres",
         PORT="5432",
     )
 }
 ```
 
-Supply your password securely, create the two URLconfs, and use the built-in
-membership authorizer above or provide an application-owned callback. Django's
-other project settings are still required. Classify every installed app label
-exactly once. The optional registry app selects the built-in
-tenant/domain/membership models; custom model selection is described in [Django](DJANGO.md).
+**Checklist**
 
-`RegistryHostMiddleware` must be first with `ALLOWED_HOSTS=["*"]`; it enforces exact
-shared hosts and active registered tenant domains. Do not retain the wildcard
-without that guard. `SHARED_HOSTS` selects platform routes, not tenant login hosts.
+1. Supply the database password securely.
+2. Create the two URLconfs: one for shared/platform routes, one for tenant routes.
+3. Use the built-in membership authorizer shown above, or provide your own callback.
+4. Keep the rest of your normal Django settings.
+5. Classify **every** installed app label exactly once, as shared or tenant.
 
-## Configuration and extension points
+The optional `partitiondb_registry` app selects the built-in tenant, domain and membership models. To use your own, see [Django integration](DJANGO.md#custom-shared-models).
 
-A plain `PARTITIONDB` dictionary remains supported. Unknown keys are errors.
-`get_config()` returns a fresh effective snapshot; callback settings accept a
-callable or dotted import path. Explicit overrides, including `None`, win over
-managed defaults. Do not put secrets in settings output or share it unreviewed.
+## Host guard
+
+> [!WARNING]
+> `RegistryHostMiddleware` must be first in `MIDDLEWARE` when `ALLOWED_HOSTS=["*"]`. Never keep the wildcard without that guard.
+
+The guard enforces exact shared hosts and active registered tenant domains. `SHARED_HOSTS` selects platform routes; it does not choose tenant login hosts.
+
+## Configuration reference
+
+A plain `PARTITIONDB` dictionary remains supported.
+
+- Unknown keys are errors.
+- `get_config()` returns a fresh, effective snapshot.
+- Callback settings accept a callable **or** a dotted import path.
+- Explicit overrides (including `None`) win over managed defaults.
 
 | Group | Settings |
 | --- | --- |
@@ -71,38 +84,47 @@ managed defaults. Do not put secrets in settings output or share it unreviewed.
 | Notifications | `OPERATION_OBSERVER`, `MIGRATION_OBSERVER` |
 | Assets | `TEMPLATE_ROOTS`, `TEMPLATE_CACHE_ENTRIES`, `STATIC_ROOTS` |
 
-Selecting `TENANT_MODEL` supplies library defaults for host resolution, active
-inventory, provisioning, admission, runtime access and migration access refresh.
-No application copies of those implementations are required. Selecting registry
-models does not configure `AUTHORIZE`; membership checks still require the explicit
-callback. For built-in tenant admin login, also set `tenant_admin=True`, configure
-`TENANT_ADMIN_PERMISSIONS` with
-`partitiondb.adapters.django.registry_app.tenancy.tenant_admin_permissions`, and
-supply a tenant-local `TENANT_ADMIN_LOG_MODEL`; see [authentication](DJANGO.md#authentication).
+### What `TENANT_MODEL` gives you
 
-`DjangoComponents` customizes the host guard, tenant/identity/admin-auth middleware,
-router and backend paths. Pass it through `DjangoSetup(components=...)` and use
-application subclasses of the supplied components. `TENANCY.middleware()` accepts
-`before=`, `after_auth=` and `before_tenant=` path lists. The host guard stays
-first; shared authentication must finish before the tenant transaction.
-`TENANCY.database()` defaults to the PartitionDB backend, `CONN_MAX_AGE=0` and
-`ATOMIC_REQUESTS=False`; explicit connection keyword arguments override these
-values, so retain these defaults for tenant runtime connections.
+Selecting `TENANT_MODEL` supplies library defaults for host resolution, active inventory, provisioning, admission, runtime access and migration access refresh. You do not need to copy those implementations into your application.
 
-For provider login routes, use `tenant_admin=False`, insert the provider middleware
-through `after_auth=`, and set `TENANT_AUTH_*`; see [authentication](DJANGO.md#authentication).
-For path routing use `routing="subfolder"` with a trusted resolver. This mode omits
-`RegistryHostMiddleware`: configure an explicit Django `ALLOWED_HOSTS` list rather
-than copying the hostname example's wildcard. Built-in same-host admin login
-requires hostname routing. `DjangoSetup` enables shared identity middleware when
-an `authorize` callback is supplied; the plain dictionary configuration must
-install that middleware explicitly before the tenant boundary.
+It does **not** configure `AUTHORIZE`; membership checks still require the explicit callback.
 
-Inspect configuration and validate the integration:
+### Enabling built-in tenant admin login
+
+1. Pass `tenant_admin=True` to `DjangoSetup`.
+2. Set `TENANT_ADMIN_PERMISSIONS` to `partitiondb.adapters.django.registry_app.tenancy.tenant_admin_permissions`.
+3. Provide a tenant-local `TENANT_ADMIN_LOG_MODEL`.
+
+Details are in [Django integration → Authentication](DJANGO.md#authentication).
+
+## Customizing components
+
+`DjangoComponents` customizes the host guard, the tenant, identity and admin-auth middleware, and the router and backend paths. Pass it with `DjangoSetup(components=...)` and subclass the supplied components in your application.
+
+`TENANCY.middleware()` accepts three path lists:
+
+| Argument | Purpose |
+| --- | --- |
+| `before=` | Middleware placed before the tenancy stack |
+| `after_auth=` | Middleware placed after Django authentication (for example, a login provider) |
+| `before_tenant=` | Middleware that must finish before the tenant transaction opens |
+
+The host guard always stays first, and shared authentication must finish before the tenant transaction begins.
+
+`TENANCY.database()` defaults to the PartitionDB backend, `CONN_MAX_AGE=0` and `ATOMIC_REQUESTS=False`. Explicit keyword arguments override these, so **retain the defaults for tenant runtime connections**.
+
+### Other routing and login modes
+
+- **Provider login (for example, allauth):** use `tenant_admin=False`, insert the provider middleware via `after_auth=`, and set `TENANT_AUTH_*`. See [authentication](DJANGO.md#authentication).
+- **Subfolder routing:** use `routing="subfolder"` with a trusted resolver. This mode omits `RegistryHostMiddleware`, so configure an explicit Django `ALLOWED_HOSTS` list instead of copying the wildcard. Built-in same-host admin login requires hostname routing.
+- **Plain dictionary configuration:** `DjangoSetup` enables the shared identity middleware whenever an `authorize` callback is supplied. With a plain dictionary you must install that middleware explicitly, before the tenant boundary.
+
+## Validate your setup
 
 ```sh
 python manage.py partitiondb_settings --check
 ```
 
-This prints configured values, including provider options; keep credentials in
-external files/providers and treat the output as operator information.
+> [!WARNING]
+> This command prints configured values, including provider options. Keep credentials in external files or providers, treat the output as operator-only information, and never share it unreviewed.

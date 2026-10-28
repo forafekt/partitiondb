@@ -1,7 +1,10 @@
 # Tenant types
 
-Types select app subsets and optional URLconfs from one startup-loaded Django
-registry; they do not change `INSTALLED_APPS` per request.
+> **In this guide:** [Configure types](#configure-types) · [Creating typed tenants](#creating-typed-tenants) · [Request and routing behavior](#request-and-routing-behavior) · [Maintenance](#maintenance-of-typed-tenants) · [Limits](#limits)
+
+Tenant types let different tenants use different **subsets of your tenant apps** and, optionally, different **URLconfs**. Types come from a single Django registry loaded at startup. They do not change `INSTALLED_APPS` per request.
+
+## Configure types
 
 ```python
 PARTITIONDB["TENANT_TYPES"] = {
@@ -10,24 +13,41 @@ PARTITIONDB["TENANT_TYPES"] = {
 }
 ```
 
-Type names use canonical schema-style names. APPS contains unique labels from
-`TENANT_APPS`; the union must cover all tenant apps. Empty subsets are allowed.
-URLCONF is optional. Shared and tenant classifications remain disjoint.
+Rules:
 
-`TypedTenantMixin` adds a required type field; configure the tenant model and its
-shared migrations deliberately. Resolvers/repositories must return trusted
-`Tenant(..., tenant_type="enterprise")` identities. Missing/unknown types reject
-before database work. The stock `create_tenant` command has no `--tenant-type`
-option. Extend its `creation_options()` to supply
-`tenant_data={"tenant_type": "enterprise"}`, or pass that mapping to
-`TenantWorkflow.create()` in trusted application code. Extend the provisioning
-form for typed admin creation; configuring `TENANT_TYPES` alone adds no form field.
-Type is part of identity and cache/storage namespaces;
-untyped namespaces remain unchanged. No type is inferred from request/job text.
+- Type names use canonical schema-style names.
+- `APPS` lists unique labels from `TENANT_APPS`, and the union across all types must cover **every** tenant app. Empty subsets are allowed.
+- `URLCONF` is optional.
+- Shared and tenant app classifications remain disjoint.
 
-Requests select the configured URLconf, and model routing/migrations use the
-eligible app set. Explicit SQL/`.using()` are trusted escape hatches, not a type
-permissions system. Membership authorization is still required.
+## Creating typed tenants
+
+`TypedTenantMixin` adds a required type field. Configure your tenant model and its shared migrations deliberately.
+
+- Resolvers and repositories must return trusted identities, such as `Tenant(..., tenant_type="enterprise")`.
+- Missing or unknown types are rejected before any database work.
+- No type is ever inferred from request or job text.
+
+Configuring `TENANT_TYPES` alone adds **no** form field and no command option. Choose one of these ways to supply the type:
+
+| Where | How |
+| --- | --- |
+| `create_tenant` command | The stock command has no `--tenant-type` option. Extend its `creation_options()` to supply `tenant_data={"tenant_type": "enterprise"}` |
+| Trusted application code | Pass that same mapping to `TenantWorkflow.create()` |
+| Admin | Extend the provisioning form to add a type field |
+
+Type is part of tenant identity and of the cache and storage namespaces. Untyped namespaces remain unchanged.
+
+## Request and routing behavior
+
+- Requests select the configured URLconf for the tenant's type.
+- Model routing and migrations use the eligible app set for that type.
+- Membership authorization is still required.
+
+> [!NOTE]
+> Explicit SQL and `.using()` are trusted escape hatches. Tenant types are not a permissions system.
+
+## Maintenance of typed tenants
 
 For inactive typed maintenance, pass the full identity:
 
@@ -35,12 +55,14 @@ For inactive typed maintenance, pass the full identity:
 python manage.py migrate_tenant SCHEMA --database ALIAS --tenant-id TENANT_ID --tenant-type enterprise
 ```
 
-Without an explicit ID, inventory lookup supplies the type. Reconciliation and
-admission require matching `--confirm-type`. Upgrade checkpoint storage while
-provisioning is quiescent; old records remain untyped. Mixed old/new provisioners
-are unsupported once typed records exist.
+- Without an explicit ID, inventory lookup supplies the type.
+- Reconciliation and admission require a matching `--confirm-type`.
+- Upgrade checkpoint storage while provisioning is quiescent. Old records remain untyped, and mixed old/new provisioners are unsupported once typed records exist.
 
-Treat existing type/schema/alias and app eligibility as immutable. Django can
-record router-skipped migrations; enabling an excluded app does not replay them.
-Type conversion needs reviewed schema/data/metadata and asset migration. No
-conversion command, per-type user model or dynamic plugin installation is supplied.
+## Limits
+
+Treat a tenant's existing type, schema, alias and app eligibility as **immutable**.
+
+- Django can record router-skipped migrations, and enabling an excluded app does not replay them.
+- Type conversion needs a reviewed schema, data, metadata and asset migration.
+- Not provided: a conversion command, a per-type user model, or dynamic plugin installation.

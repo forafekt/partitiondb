@@ -1,28 +1,37 @@
 # Django integration
 
-Start with [settings](SETTINGS.md), or run the [local example](LOCAL_INFRASTRUCTURE.md).
-See [architecture](ARCHITECTURE.md) for feature packages and core/adapter boundaries.
-Shared users, memberships, domains and lifecycle records use `default`; tenant
-business models use the resolved schema/database. Cross-scope foreign keys are
-unsupported: carry shared principal IDs as scalar values.
+> **In this guide:** [Models and provisioning](#models-and-managed-provisioning) · [Requests and ORM boundaries](#requests-and-orm-boundaries) · [Authentication](#authentication) · [Subfolder routing](#subfolder-routing)
+
+**New here?** Start with [settings](SETTINGS.md) or run the [local example](LOCAL_INFRASTRUCTURE.md). For feature packages and the core/adapter split, see [architecture](ARCHITECTURE.md).
+
+## Core rules
+
+- Shared users, memberships, domains and lifecycle records live in `default`.
+- Tenant business models use the resolved schema or database.
+- **Cross-scope foreign keys are unsupported.** Carry shared principal IDs as plain scalar values instead.
 
 ## Models and managed provisioning
 
-Use the optional `partitiondb_registry` shared app for concrete Tenant, Domain and
-Membership models. Install shared auth and contenttypes (or a configured shared
-user model) for Membership’s user foreign key. Classify its app label as shared; the three model settings
-then default to these built-in models. No Organization subclass is required.
-Membership callbacks live in `partitiondb.adapters.django.registry_app.tenancy`:
-set `AUTHORIZE` to its `authorize_tenant` and `TENANT_ADMIN_PERMISSIONS` to its
-`tenant_admin_permissions`. They use active memberships and the configured tenant
-apps (including per-type app selection), with viewer/editor/admin CRUD roles.
-Shared staff identities are still required for tenant admin access.
+### Built-in models (recommended)
 
-The generic `TenantWorkflow` handles infrastructure and contains no application
-model dependencies. The runnable test project's Workspace workflow only supplies
-application seeding and verification hooks through its own settings.
+Add the optional `partitiondb_registry` shared app to get concrete Tenant, Domain and Membership models. No `Organization` subclass is required.
 
-Alternatively, define custom shared models:
+1. Install shared `auth` and `contenttypes` (or your configured shared user model), since Membership has a foreign key to the user.
+2. Classify the `partitiondb_registry` app label as shared. The three model settings then default to the built-in models.
+3. Wire the membership callbacks from `partitiondb.adapters.django.registry_app.tenancy`:
+
+| Setting | Value |
+| --- | --- |
+| `AUTHORIZE` | `authorize_tenant` |
+| `TENANT_ADMIN_PERMISSIONS` | `tenant_admin_permissions` |
+
+These callbacks use active memberships and the configured tenant apps (including per-type app selection), with **viewer / editor / admin** CRUD roles. Shared staff identities are still required for tenant admin access.
+
+The generic `TenantWorkflow` handles infrastructure and has no application-model dependencies. In the runnable test project, the Workspace workflow only supplies application seeding and verification hooks through its own settings.
+
+### Custom shared models
+
+Define your own models with the provided mixins:
 
 ```python
 from django.db import models
@@ -40,18 +49,29 @@ class Domain(DomainModelMixin):
         pass
 ```
 
-Set `TENANT_MODEL="organizations.Organization"` and
-`DOMAIN_MODEL="organizations.Domain"`. Preserve the mixin's `Meta` constraints,
-as shown above, when defining a concrete domain model. For custom memberships,
-subclass `MembershipModelMixin` from the same module, bind its `tenant` foreign key
-to your tenant model, and set `MEMBERSHIP_MODEL` to the concrete Django model label.
-Select registry models before initial migrations; changing these settings does not
-move existing data. `TenantModelMixin` supplies name, creation timestamp, routing,
-active state and access fields. `TenantBaseMixin` is the smaller
-metadata base; `TypedTenantMixin` adds tenant type. `DomainModelMixin` normalizes
-hostnames and constrains uniqueness and primary domains.
+Then point the settings at them:
 
-Resolve models through the public helpers in reusable code and tests:
+```python
+TENANT_MODEL = "organizations.Organization"
+DOMAIN_MODEL = "organizations.Domain"
+```
+
+- Keep the mixin's `Meta` constraints, as shown above.
+- For custom memberships, subclass `MembershipModelMixin` from the same module, bind its `tenant` foreign key to your tenant model, and set `MEMBERSHIP_MODEL` to the concrete model label.
+
+> [!WARNING]
+> Select registry models **before** your initial migrations. Changing these settings later does not move existing data.
+
+| Mixin | Provides |
+| --- | --- |
+| `TenantModelMixin` | Name, creation timestamp, routing, active state and access fields (includes `TenantAccessMixin`) |
+| `TenantBaseMixin` | Smaller metadata-only base |
+| `TypedTenantMixin` | Adds a tenant type (see [tenant types](TENANT_TYPES.md)) |
+| `DomainModelMixin` | Hostname normalization, uniqueness and primary-domain constraints |
+
+If you use the supplied workflow with a custom tenant model, it must include `TenantAccessMixin`.
+
+### Resolving models in reusable code
 
 ```python
 from partitiondb.adapters.django import get_tenant_model, get_domain_model
@@ -60,43 +80,50 @@ TenantModelClass = get_tenant_model()
 DomainModelClass = get_domain_model()
 ```
 
-They validate configuration without querying the database. Ordinary model saves
-never create infrastructure. Routing is immutable through ordinary saves; bulk
-updates and raw SQL bypass those protections and require reviewed maintenance.
+These validate configuration without querying the database.
 
-Register `partitiondb.adapters.django.administration.managed.TenantAdmin` on the configured
-tenant model, and `partitiondb.adapters.django.administration.registry.DomainRegistryAdmin` on its
-domain model. The optional registry app registers its defaults automatically.
-The library supplies the provisioning form/template, access inspection and recovery.
-Additional form fields are passed as `tenant_data` to the workflow.
+> [!IMPORTANT]
+> Ordinary model saves **never** create infrastructure, and routing is immutable through ordinary saves. Bulk updates and raw SQL bypass these protections and require reviewed maintenance.
 
-Customize `TenantWorkflow.seed(tenant)` and `verify_tenant(tenant)` for business
-setup and set `TENANT_WORKFLOW` to the subclass. Seed must be restartable; verification
-should not mutate data. Both run in privileged tenant scopes. Other hooks include
-`tenant_values`, `credentials`, `open_connection` and `migration_context`. When
-using the supplied workflow, custom tenant models must also include
-`TenantAccessMixin`; `TenantModelMixin` already includes it.
-When extra fields are needed, subclass `TenantProvisionForm` from
-`partitiondb.adapters.django.registry.forms` and set `provisioning_form_class`
-on `TenantAdmin`.
-For management-command customization, subclass `create_tenant.Command`, add
-application arguments and override `creation_options()` to pass `tenant_data`.
-Admin hooks include `get_provisioning_form_class`,
-`get_provisioning_fieldsets`, `provisioning_template_name` and `get_workflow`.
+### Admin and customization
+
+Register these admins on your models (the optional registry app registers its defaults automatically):
+
+| Admin class | Register on |
+| --- | --- |
+| `partitiondb.adapters.django.administration.managed.TenantAdmin` | Tenant model |
+| `partitiondb.adapters.django.administration.registry.DomainRegistryAdmin` | Domain model |
+
+The library supplies the provisioning form and template, access inspection and recovery. Extra form fields are passed to the workflow as `tenant_data`.
+
+| To customize... | Do this |
+| --- | --- |
+| Business setup and verification | Subclass `TenantWorkflow`, override `seed(tenant)` and `verify_tenant(tenant)`, and set `TENANT_WORKFLOW` |
+| Extra admin form fields | Subclass `TenantProvisionForm` (from `partitiondb.adapters.django.registry.forms`) and set `provisioning_form_class` on `TenantAdmin` |
+| The `create_tenant` command | Subclass `create_tenant.Command`, add arguments, and override `creation_options()` to pass `tenant_data` |
+| Admin behavior | Override `get_provisioning_form_class`, `get_provisioning_fieldsets`, `provisioning_template_name` or `get_workflow` |
+
+`seed` must be **restartable**, and `verify_tenant` must **not mutate data**. Both run in privileged tenant scopes. Other workflow hooks: `tenant_values`, `credentials`, `open_connection` and `migration_context`.
 
 ## Requests and ORM boundaries
 
-The managed resolver uses fresh active-only registry/domain lookups. A low-level
-`partitiondb.adapters.django.registry.DjangoRegistry(model, domain_model=...)`
-also supplies `resolve_host`, `get` and
-`list_tenants`; lookups run outside tenant scope. Unknown/inactive hosts fail
-closed. The host guard does not verify DNS ownership or issue TLS certificates.
+### Tenant resolution
 
-`AUTHORIZE(request, tenant)` runs in shared context and must return literal `True`.
-Use `request.principal` for the eagerly captured user ID, global permissions and
-staff flags; global permissions do not establish tenant membership. The original
-Django user remains available, but lazy shared ORM queries inside tenant scope
-are rejected. Keep Django auth, contenttypes and sessions shared.
+The managed resolver uses fresh, active-only registry and domain lookups. Unknown or inactive hosts **fail closed**. The low-level `DjangoRegistry(model, domain_model=...)` (in `partitiondb.adapters.django.registry`) also provides `resolve_host`, `get` and `list_tenants`; lookups run outside tenant scope.
+
+> [!NOTE]
+> The host guard does not verify DNS ownership or issue TLS certificates.
+
+### Authorization
+
+`AUTHORIZE(request, tenant)` runs in shared context and must return the literal `True`.
+
+- Use `request.principal` for the eagerly captured user ID, global permissions and staff flags.
+- Global permissions do **not** establish tenant membership.
+- The original Django user remains available, but lazy shared-ORM queries inside tenant scope are rejected.
+- Keep Django auth, contenttypes and sessions shared.
+
+### Tenant scope
 
 ```python
 from partitiondb.adapters.django.routing.scope import atomic_tenant
@@ -105,42 +132,54 @@ with atomic_tenant(trusted_tenant):
     rows = list(Project.objects.values("id", "name"))
 ```
 
-The request middleware opens this boundary, rolls back responses with status
-400 or above, renders templates inside it and closes the connection. Streaming
-responses are unsupported. Finish querysets, file reads and model work before
-exit; never move ORM instances/cursors between tenants. `atomic_tenant` itself
-accepts a trusted identity; it does not query active registry status or check
-membership. Explicit services and jobs must resolve active identity and authorize
-their caller before entering it. For async views, wrap the
-whole synchronous service with `sync_to_async(thread_sensitive=True)`.
+The request middleware opens this boundary for you. It rolls back responses with status 400 or above, renders templates inside the boundary, and closes the connection.
 
-Use direct PostgreSQL or session-mode pooling. Driver/transaction/statement
-pooling, nested tenant transactions and manual search-path changes are unsupported.
-A shared runtime role can still access other granted schemas through qualified SQL;
-use [restricted roles](ACCESS.md) when database-enforced separation is required.
+**Rules to follow**
+
+- Streaming responses are unsupported.
+- Finish querysets, file reads and model work before leaving the scope.
+- Never move ORM instances or cursors between tenants.
+- `atomic_tenant` accepts a *trusted* identity. It does not check registry active status or membership, so explicit services and jobs must resolve an active identity and authorize their caller first.
+- For async views, wrap the whole synchronous service with `sync_to_async(thread_sensitive=True)`.
+
+### Connection requirements
+
+- Use direct PostgreSQL connections or **session-mode** pooling.
+- Transaction/statement pooling, driver-level pooling, nested tenant transactions and manual search-path changes are unsupported.
+- A shared runtime role can still reach other granted schemas through qualified SQL. When you need database-enforced separation, use [restricted roles](ACCESS.md).
 
 ## Authentication
 
-The example uses login on each tenant host. `tenant_admin=True` installs the
-built-in shared-account admin login boundary. Create an active staff account and
-an active membership with an explicit viewer/editor/admin role. The permissions
-callback maps that role to the eligible tenant models' CRUD permissions. Staff or
-superuser status alone does not grant tenant access. Host-only sessions (`SESSION_COOKIE_DOMAIN=None`)
-require a separate login at `demo.localhost` even after login at `localhost`.
-Login/logout run outside the tenant transaction with normal CSRF protection.
+### Built-in tenant login
 
-For tenant business administration, use `TenantAdminSite` and `TenantModelMixinAdmin`
-from `partitiondb.adapters.django.administration.tenant`. Configure
-`TENANT_ADMIN_PERMISSIONS(request, tenant)` to return permission strings and
-`TENANT_ADMIN_LOG_MODEL` to a tenant-local `TenantAdminAuditMixin` subclass
-from `partitiondb.adapters.django.registry.models`.
-Mount this site in the tenant URLconf; mount Django's platform admin only in the
-shared URLconf. Keep shared models off the tenant site.
+The example uses a login on each tenant host. Passing `tenant_admin=True` installs the built-in shared-account admin login boundary.
 
-Allauth and other providers remain application integrations. Disable
-`TenantAdminAuthMiddleware` (`tenant_admin=False` with `DjangoSetup`) so the built-in
-password form cannot bypass provider verification/MFA. Add the provider middleware
-after Django authentication and before shared identity, then configure:
+To grant someone access, create:
+
+1. An active staff account, and
+2. An active membership with an explicit viewer / editor / admin role.
+
+The permissions callback maps that role to CRUD permissions on the eligible tenant models. Staff or superuser status alone does **not** grant tenant access.
+
+- Host-only sessions (`SESSION_COOKIE_DOMAIN=None`) mean a separate login is needed at `demo.localhost`, even after logging in at `localhost`.
+- Login and logout run outside the tenant transaction, with normal CSRF protection.
+
+### Tenant business admin
+
+Use `TenantAdminSite` and `TenantModelMixinAdmin` from `partitiondb.adapters.django.administration.tenant`.
+
+1. Set `TENANT_ADMIN_PERMISSIONS(request, tenant)` to return permission strings.
+2. Set `TENANT_ADMIN_LOG_MODEL` to a tenant-local subclass of `TenantAdminAuditMixin` (from `partitiondb.adapters.django.registry.models`).
+3. Mount the site in the **tenant** URLconf, and Django's platform admin only in the **shared** URLconf.
+4. Keep shared models off the tenant site.
+
+### Third-party providers (for example, allauth)
+
+Provider integrations remain your application's responsibility. To use one:
+
+1. Disable `TenantAdminAuthMiddleware` with `tenant_admin=False` on `DjangoSetup`, so the built-in password form cannot bypass provider verification or MFA.
+2. Add the provider middleware after Django authentication and before shared identity.
+3. Configure the auth routes:
 
 ```python
 PARTITIONDB.update(
@@ -150,21 +189,27 @@ PARTITIONDB.update(
 )
 ```
 
-The dedicated auth URLconf contains only shared account/provider routes. Redirect
-the admin login/logout paths to that provider; preserve POST/CSRF protection for
-logout. Auth prefixes must end in `/`; `/` is rejected. Unknown/inactive tenant
-hosts cannot reach these routes. Provider apps/migrations are shared; install and
-validate provider-specific verification/MFA separately. No native allauth adapter
-or cross-domain SSO is supplied. An absolute `TENANT_ADMIN_LOGIN_URL` redirects to
-a shared login host but needs a provider-supported session handoff for tenant cookies.
+Notes:
+
+- The dedicated auth URLconf contains only shared account and provider routes.
+- Redirect the admin login/logout paths to the provider, and preserve POST/CSRF protection for logout.
+- Auth prefixes must end in `/`; `/` itself is rejected.
+- Unknown or inactive tenant hosts cannot reach these routes.
+- Provider apps and migrations are shared; install and validate provider-specific verification/MFA separately.
+- **Not provided:** a native allauth adapter or cross-domain SSO. An absolute `TENANT_ADMIN_LOGIN_URL` redirects to a shared login host but needs a provider-supported session handoff for tenant cookies.
 
 ## Subfolder routing
 
-Choose `TenantSubfolderMiddleware` instead of the hostname tenant boundary, or
-`DjangoSetup(routing="subfolder", resolver=...)`. Configure `SUBFOLDER_PREFIX="t"`
-and a trusted `SUBFOLDER_RESOLVER` for `/t/<key>/...`. Missing keys fail closed;
-view paths have the prefix removed and URL reversing restores it. Context and
-script-prefix state are restored on exit. Membership checks and transaction limits
-still apply; use exactly one tenant boundary. Subfolder mode uses Django's normal
-`ALLOWED_HOSTS` validation and does not install the registry host guard. Declare
-the deployment's trusted hostnames explicitly.
+Path-based routing (`/t/<key>/...`) is an alternative to hostname routing.
+
+1. Use `TenantSubfolderMiddleware` instead of the hostname tenant boundary, or `DjangoSetup(routing="subfolder", resolver=...)`.
+2. Set `SUBFOLDER_PREFIX="t"` and a trusted `SUBFOLDER_RESOLVER`.
+
+Behavior:
+
+- Missing keys fail closed.
+- View paths have the prefix removed; URL reversing restores it.
+- Context and script-prefix state are restored on exit.
+- Membership checks and transaction limits still apply.
+- Use **exactly one** tenant boundary.
+- Subfolder mode uses Django's normal `ALLOWED_HOSTS` validation and does not install the registry host guard, so declare your trusted hostnames explicitly.
