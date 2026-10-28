@@ -7,16 +7,14 @@ from contextlib import nullcontext
 import pytest
 from psycopg import sql
 
-from partitiondb.access_evidence import (
-    PostgresRecoveryEvidenceProvider,
-    PsycopgCredentialAuthentication,
-    RoleOwnershipReceipt,
-)
-from partitiondb.access_recovery import AccessRecoveryService, RecoveryDecision
-from partitiondb.core import Tenant
-from partitiondb.postgres_role_inspection import PostgresRoleInspector
-from partitiondb.postgres_role_manager import PostgresRoleManager, tenant_role_name
+from partitiondb.access.evidence import RoleOwnershipReceipt
+from partitiondb.access.recovery import AccessRecoveryService, RecoveryDecision
+from partitiondb.postgres.authentication import PsycopgCredentialAuthentication
+from partitiondb.postgres.evidence import PostgresRecoveryEvidenceProvider
+from partitiondb.postgres.role_inspection import PostgresRoleInspector
+from partitiondb.postgres.role_manager import PostgresRoleManager, tenant_role_name
 from partitiondb.provisioning import Provisioner, ProvisioningRecord, Stage
+from partitiondb.tenancy.identity import Tenant
 
 
 class Secrets:

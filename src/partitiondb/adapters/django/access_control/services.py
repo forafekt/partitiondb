@@ -8,59 +8,19 @@ from hashlib import sha256
 
 from django.core.exceptions import PermissionDenied
 
-from partitiondb.access_evidence import PostgresRecoveryEvidenceProvider
-from partitiondb.access_operations import OperationState
-from partitiondb.access_recovery import AccessRecoveryService, RecoveryDecision, RecoveryEvidence
-from partitiondb.adapters.django.access_boundary import durable_control_plane, require_control_plane
-from partitiondb.adapters.django.access_evidence_store import (
+from partitiondb.access.operations import OperationState
+from partitiondb.access.recovery import AccessRecoveryService, RecoveryDecision
+from partitiondb.adapters.django.access_control.bindings import DjangoRoleBindingRecorder
+from partitiondb.adapters.django.access_control.boundary import durable_control_plane, require_control_plane
+from partitiondb.adapters.django.access_control.evidence_store import (
     DjangoOwnershipReceiptStore,
     DjangoRecoveryAuditSink,
 )
-from partitiondb.adapters.django.access_operation_store import DjangoAccessOperationJournal
-from partitiondb.adapters.django.access_recovery import DjangoAccessReconciliationService
-from partitiondb.adapters.django.access_services import DjangoRoleBindingRecorder
-from partitiondb.postgres_role_inspection import RoleState
-from partitiondb.postgres_role_manager import RoleBinding, tenant_role_name
-
-from .models import AccessOperation, AccessRecoveryAudit, RoleOwnershipReceipt
-
-
-class JournalBoundRecoveryEvidence:
-    """Only accept a receipt that belongs to a durable provisioning intent.
-
-    A journal record is not by itself ownership evidence. The receipt OID and
-    fresh credential authentication are still mandatory for READY.
-    """
-
-    def __init__(self, journal, receipts, credential_authentication):
-        self.journal = journal
-        self.receipts = receipts
-        self.authentication = credential_authentication
-        self.provider = PostgresRecoveryEvidenceProvider(receipts, credential_authentication)
-
-    def __call__(self, tenant, inspection):
-
-        operation = self.journal.get(tenant) or self.journal.get(tenant, include_cleaned=True)
-        receipt = self.receipts.get(tenant)
-        if operation is None or operation.role != tenant_role_name(tenant) or operation.tenant != tenant:
-            return RecoveryEvidence()
-        if inspection.state == RoleState.ABSENT and inspection.role == operation.role:
-            return RecoveryEvidence(absence_verified=self.authentication.absent(operation.credential_ref) is True)
-        if receipt is None:
-            return RecoveryEvidence()
-        if (
-            operation.operation_id != receipt.operation_id
-            or operation.credential_ref != receipt.credential_ref
-            or operation.role != receipt.role
-            or operation.state
-            not in (
-                OperationState.ROLE_CREATED,
-                OperationState.RECEIPT_RECORDED,
-                OperationState.COMPLETED,
-            )
-        ):
-            return RecoveryEvidence()
-        return self.provider(tenant, inspection)
+from partitiondb.adapters.django.access_control.models import AccessOperation, AccessRecoveryAudit, RoleOwnershipReceipt
+from partitiondb.adapters.django.access_control.operation_store import DjangoAccessOperationJournal
+from partitiondb.adapters.django.access_control.recovery import DjangoAccessReconciliationService
+from partitiondb.postgres.evidence import JournalBoundRecoveryEvidence
+from partitiondb.postgres.role_manager import RoleBinding
 
 
 class AuditedDjangoReconciliationService:
@@ -177,11 +137,11 @@ def django_durable_provisioning_callback(
     MUST use a real cross-process provisioning lock, a durable secret provider,
     and a dedicated role-administration connection. Never call from save().
     """
-    from partitiondb.access_operations import RestrictedAccessCoordinator
-    from partitiondb.adapters.django.access_services import DjangoRoleBindingRecorder
-    from partitiondb.adapters.django.access_workflow import DjangoAccessResolver
-    from partitiondb.postgres_role_manager import PostgresRoleManager
-    from partitiondb.postgres_role_oid import postgres_role_oid
+    from partitiondb.access.operations import RestrictedAccessCoordinator
+    from partitiondb.adapters.django.access_control.bindings import DjangoRoleBindingRecorder
+    from partitiondb.adapters.django.access_control.workflow import DjangoAccessResolver
+    from partitiondb.postgres.role_manager import PostgresRoleManager
+    from partitiondb.postgres.role_oid import postgres_role_oid
 
     return RestrictedAccessCoordinator(
         DjangoAccessResolver(registry_model, using=using),
@@ -197,7 +157,7 @@ class DjangoAccessReadiness:
     """Require completed durable bookkeeping and fresh authentication at admission."""
 
     def __init__(self, registry_model, *, inspect, credential_authentication, using="default"):
-        from partitiondb.adapters.django.access_workflow import DjangoAccessResolver
+        from partitiondb.adapters.django.access_control.workflow import DjangoAccessResolver
 
         self.resolve = DjangoAccessResolver(registry_model, using=using)
         self.model, self.using, self.inspect = registry_model, using, inspect

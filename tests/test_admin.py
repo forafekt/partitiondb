@@ -10,9 +10,11 @@ from partitiondb import Tenant, tenant_scope
 from tests.django_setup import configure
 
 configure()
-from apps.organizations.models import Domain, Organization  # noqa: E402
+from partitiondb.adapters.django import get_domain_model, get_tenant_model  # noqa: E402
+from partitiondb.adapters.django.administration.registry import DomainRegistryAdmin, TenantRegistryAdmin  # noqa: E402
 
-from partitiondb.adapters.django.admin import DomainRegistryAdmin, TenantRegistryAdmin  # noqa: E402
+Organization = get_tenant_model()
+Domain = get_domain_model()
 
 
 def test_registry_admin_locks_routing_and_activation_and_denies_tenant_scope():

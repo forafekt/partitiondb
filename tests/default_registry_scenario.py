@@ -18,17 +18,25 @@ def main():
     urls.urlpatterns = []
     sys.modules[urls.__name__] = urls
     with tempfile.TemporaryDirectory() as directory:
+        credential_config = {
+            "CREDENTIAL_PROVIDER": "partitiondb.adapters.django.databases.credentials.development_credentials",
+            "DEVELOPMENT_CREDENTIALS_DIR": directory,
+        }
+        if os.environ.get("PARTITIONDB_DEFAULT_REGISTRY_OPENBAO") == "1":
+            credential_config = {"CREDENTIAL_PROVIDER": "tests.openbao_support.credentials"}
         settings.configure(
             SECRET_KEY="test-only",
             ROOT_URLCONF=urls.__name__,
             DEFAULT_AUTO_FIELD="django.db.models.BigAutoField",
             INSTALLED_APPS=[
+                "django.contrib.auth",
+                "django.contrib.contenttypes",
                 "partitiondb.adapters.django.apps.PartitionDBConfig",
                 "partitiondb.adapters.django.registry_app.apps.PartitionDBRegistryConfig",
                 "partitiondb.adapters.django.access_control.apps.PartitionDBAccessControlConfig",
                 "apps.workspaces.apps.WorkspacesConfig",
             ],
-            MIDDLEWARE=["partitiondb.adapters.django.middleware.TenantMiddleware"],
+            MIDDLEWARE=["partitiondb.adapters.django.routing.middleware.TenantMiddleware"],
             DATABASES={
                 "default": {
                     "ENGINE": "partitiondb.adapters.django.backend",
@@ -49,10 +57,9 @@ def main():
                 "test_base": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
             },
             PARTITIONDB={
-                "SHARED_APPS": ["partitiondb_registry", "partitiondb_access_control"],
+                "SHARED_APPS": ["auth", "contenttypes", "partitiondb_registry", "partitiondb_access_control"],
                 "TENANT_APPS": ["workspaces"],
-                "CREDENTIAL_PROVIDER": "partitiondb.adapters.django.credentials.development_credentials",
-                "DEVELOPMENT_CREDENTIALS_DIR": directory,
+                **credential_config,
             },
         )
         import django
@@ -62,8 +69,8 @@ def main():
         from django.core.management import call_command
 
         from partitiondb.adapters.django import get_domain_model, get_tenant_model
-        from partitiondb.adapters.django.scope import atomic_tenant
-        from partitiondb.adapters.django.workflow import access_context, get_workflow, resolve_host
+        from partitiondb.adapters.django.registry.workflow import access_context, get_workflow, resolve_host
+        from partitiondb.adapters.django.routing.scope import atomic_tenant
 
         call_command("makemigrations", check=True, dry_run=True, verbosity=0)
         call_command("migrate", verbosity=0, interactive=False)
@@ -94,6 +101,7 @@ def main():
             with access_context(tenant.id) as context:
                 context.admin_connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(record.access_role)))
                 context.admin_connection.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(record.access_role)))
+                context.credentials.delete(record.credential_ref)
             connections.close_all()
         print("BUILT-IN REGISTRY, WORKFLOW, COMMAND AND RESTRICTED RUNTIME PASSED")
 

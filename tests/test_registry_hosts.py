@@ -9,9 +9,9 @@ from partitiondb import Tenant
 from tests.django_setup import configure
 
 configure()
-from partitiondb.adapters.django.hosts import RegistryHostMiddleware  # noqa: E402
+from partitiondb.adapters.django.routing.hosts import RegistryHostMiddleware  # noqa: E402
 
-GUARD = "partitiondb.adapters.django.hosts.RegistryHostMiddleware"
+GUARD = "partitiondb.adapters.django.routing.hosts.RegistryHostMiddleware"
 
 
 def test_registered_hosts_are_allowed_without_settings_mutation():

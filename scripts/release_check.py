@@ -52,8 +52,25 @@ def gates(report_dir):
             [python, "scripts/check_artifacts.py", "--dist-dir", str(report_dir / "artifacts")],
         ),
         ("matrix", [python, "scripts/matrix.py"]),
-        ("postgres_acceptance", ["docker", "compose", "run", "--rm", "--build", "acceptance"]),
-        ("celery_acceptance", ["docker", "compose", "run", "--rm", "celery_acceptance"]),
+        (
+            "postgres_acceptance",
+            ["docker", "compose", "-f", "compose.tests.yml", "run", "--rm", "--build", "acceptance"],
+        ),
+        ("celery_acceptance", ["docker", "compose", "-f", "compose.tests.yml", "run", "--rm", "celery_acceptance"]),
+        (
+            "openbao_acceptance",
+            [
+                "docker",
+                "compose",
+                "-f",
+                "compose.tests.yml",
+                "--profile",
+                "secrets",
+                "run",
+                "--rm",
+                "openbao_acceptance",
+            ],
+        ),
     ]
 
 
@@ -65,7 +82,7 @@ def run_gate(name, command, report_dir):
             environment = dict(os.environ)
             # Every matrix container installs this exact built wheel from the
             # existing read-only /package mount, rather than rebuilding source.
-            if name in {"matrix", "postgres_acceptance", "celery_acceptance"}:
+            if name in {"matrix", "postgres_acceptance", "celery_acceptance", "openbao_acceptance"}:
                 wheel = next((report_dir / "artifacts").glob("*.whl"), None)
                 if wheel is None:
                     return {

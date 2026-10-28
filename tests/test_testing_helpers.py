@@ -1,8 +1,8 @@
 import pytest
 
 from partitiondb import current_tenant
-from partitiondb.adapters.django.scope import atomic_tenant
-from partitiondb.adapters.django.testing import TenantClient, temporary_tenant
+from partitiondb.adapters.django.operations.testing import TenantClient, temporary_tenant
+from partitiondb.adapters.django.routing.scope import atomic_tenant
 from tests.django_setup import configure
 
 configure()

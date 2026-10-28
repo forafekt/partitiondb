@@ -1,4 +1,4 @@
-from partitiondb.adapters.django.tenant_admin import TenantModelAdmin
+from partitiondb.adapters.django.administration.tenant import TenantModelAdmin
 
 
 class WorkspaceAdmin(TenantModelAdmin):

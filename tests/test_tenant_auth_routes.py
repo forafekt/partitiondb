@@ -13,7 +13,7 @@ from tests.django_setup import configure
 
 configure()
 
-from partitiondb.adapters.django.middleware import TenantMiddleware  # noqa: E402
+from partitiondb.adapters.django.routing.middleware import TenantMiddleware  # noqa: E402
 from tests.test_shared_admin import configuration  # noqa: E402
 
 
@@ -116,7 +116,7 @@ def test_checks_reject_missing_account_urlconf_and_dual_login_handlers():
         assert "partitiondb.E029" in {error.id for error in check_configuration(None)}
     with override_settings(
         PARTITIONDB={**config(), "TENANT_AUTH_PATHS": ["/admin/login/"]},
-        MIDDLEWARE=["partitiondb.adapters.django.admin_auth.TenantAdminAuthMiddleware"],
+        MIDDLEWARE=["partitiondb.adapters.django.administration.authentication.TenantAdminAuthMiddleware"],
     ):
         assert "partitiondb.E029" in {error.id for error in check_configuration(None)}
 
@@ -129,7 +129,7 @@ def test_shared_identity_check_requires_a_tenant_boundary():
         MIDDLEWARE=[
             "django.contrib.sessions.middleware.SessionMiddleware",
             "django.contrib.auth.middleware.AuthenticationMiddleware",
-            "partitiondb.adapters.django.identity.SharedIdentityMiddleware",
+            "partitiondb.adapters.django.routing.identity.SharedIdentityMiddleware",
         ],
     ):
         assert "partitiondb.E011" in {error.id for error in check_configuration(None)}

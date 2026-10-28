@@ -26,9 +26,9 @@ def worker():
     from django.test import RequestFactory
 
     from partitiondb import Tenant, current_tenant
-    from partitiondb.adapters.django.identity import SharedIdentityMiddleware
-    from partitiondb.adapters.django.middleware import TenantMiddleware
-    from partitiondb.adapters.django.scope import atomic_tenant
+    from partitiondb.adapters.django.routing.identity import SharedIdentityMiddleware
+    from partitiondb.adapters.django.routing.middleware import TenantMiddleware
+    from partitiondb.adapters.django.routing.scope import atomic_tenant
 
     data = json.loads(os.environ["PARTITIONDB_RESTRICTED_SCENARIO"])
     tenants = [Tenant(str(i), schema) for i, schema in enumerate(data["schemas"])]
@@ -101,7 +101,7 @@ def main():
     from django.db import connections
 
     from partitiondb import Tenant
-    from partitiondb.adapters.django.scope import atomic_tenant
+    from partitiondb.adapters.django.routing.scope import atomic_tenant
     from partitiondb.postgres import SchemaManager
 
     user_table = get_user_model()._meta.db_table

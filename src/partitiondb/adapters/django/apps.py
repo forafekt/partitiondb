@@ -7,7 +7,7 @@ class PartitionDBConfig(AppConfig):
     verbose_name = "PartitionDB"
 
     def ready(self):
-        from . import checks  # noqa: F401
-        from .signals import connect
+        from partitiondb.adapters.django import checks  # noqa: F401
+        from partitiondb.adapters.django.routing.signals import connect
 
         connect()

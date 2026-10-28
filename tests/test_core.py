@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from partitiondb import MissingTenant, Tenant, current_tenant, tenant_scope
-from partitiondb.core import validate_schema
+from partitiondb.tenancy.identity import validate_schema
 
 
 @pytest.mark.parametrize(

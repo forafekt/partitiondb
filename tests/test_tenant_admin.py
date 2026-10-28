@@ -12,7 +12,7 @@ def test_snapshot_does_not_inherit_global_superuser_permissions():
     from tests.django_setup import configure
 
     configure()
-    from partitiondb.adapters.django.tenant_admin import TenantAdminUser
+    from partitiondb.adapters.django.administration.tenant import TenantAdminUser
 
     user = TenantAdminUser("1", "operator", frozenset({"workspaces.view_workspace"}))
     assert not user.is_superuser

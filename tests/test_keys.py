@@ -1,7 +1,7 @@
 import pytest
 
 from partitiondb import Tenant
-from partitiondb.keys import cache_key, namespace, storage_prefix
+from partitiondb.tenancy.keys import cache_key, namespace, storage_prefix
 
 
 def test_namespaces_include_all_routing_dimensions():

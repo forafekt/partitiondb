@@ -12,8 +12,8 @@ import pytest
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
-from partitiondb.core import Tenant
-from partitiondb.postgres_role_manager import PostgresRoleManager, tenant_role_name
+from partitiondb.postgres.role_manager import PostgresRoleManager, tenant_role_name
+from partitiondb.tenancy.identity import Tenant
 
 
 class MemoryCredentials:

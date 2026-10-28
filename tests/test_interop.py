@@ -1,7 +1,7 @@
 import pytest
 
-from partitiondb.core import Tenant
-from partitiondb.interop import CONTRACT_VERSION, export_tenant
+from partitiondb.tenancy.identity import Tenant
+from partitiondb.tenancy.interop import CONTRACT_VERSION, export_tenant
 
 
 def test_export_tenant():

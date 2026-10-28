@@ -9,16 +9,19 @@ from django.core.management import CommandError, call_command
 from django.test import override_settings
 
 from partitiondb import Tenant, tenant_scope
-from partitiondb.adapters.django.registry_lifecycle import RegistryLifecycle, RegistryState
+from partitiondb.adapters.django.registry.lifecycle import RegistryLifecycle, RegistryState
 from partitiondb.provisioning import ProvisioningRecord, Stage
 from tests.django_setup import configure
 from tests.test_provisioning import Store
 
 configure()
-from apps.organizations.models import Organization  # noqa: E402
+from partitiondb.adapters.django import get_tenant_model  # noqa: E402
+
+Organization = get_tenant_model()
+
 
 TENANT = Tenant("one", "alpha")
-MODULE = "partitiondb.adapters.django.registry_lifecycle"
+MODULE = "partitiondb.adapters.django.registry.lifecycle"
 
 
 @pytest.mark.parametrize("stage", [None, Stage.NEW, Stage.MIGRATED, Stage.ACTIVE])
@@ -114,8 +117,8 @@ def test_durable_registry_admission_preserves_tenant_data(tenant_factory, partit
     from apps.workspaces.models import Workspace
     from django.db import transaction
 
-    from partitiondb.adapters.django.scope import atomic_tenant
-    from partitiondb.provisioning_postgres import PostgresProvisioningStore
+    from partitiondb.adapters.django.routing.scope import atomic_tenant
+    from partitiondb.postgres.provisioning import PostgresProvisioningStore
 
     call_command("migrate", interactive=False, verbosity=0)
     schema = tenant_factory()
@@ -204,7 +207,7 @@ def test_admission_rejects_competing_provisioning_session_lock(tenant_factory, p
 
     import psycopg
 
-    from partitiondb.provisioning_postgres import PostgresProvisioningStore
+    from partitiondb.postgres.provisioning import PostgresProvisioningStore
 
     call_command("migrate", interactive=False, verbosity=0)
     schema = tenant_factory(migrate=False)

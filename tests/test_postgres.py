@@ -18,8 +18,8 @@ def test_path():
 def test_checkpoint_store_explicit_upgrade_preserves_untyped_and_typed_identity(conn, tenants, layout):
     from dataclasses import replace
 
+    from partitiondb.postgres.provisioning import PostgresProvisioningStore
     from partitiondb.provisioning import Stage
-    from partitiondb.provisioning_postgres import PostgresProvisioningStore
 
     store = PostgresProvisioningStore(conn, schema=tenants[0].schema)
     # Cover both historical layouts and the original constrained installer.
@@ -224,8 +224,8 @@ def test_async_transactions_restore_path_after_cancellation(conn, tenants):
 
 @pytest.mark.postgres
 def test_durable_provisioning_store_and_exclusion(conn, tenants):
+    from partitiondb.postgres.provisioning import PostgresProvisioningStore
     from partitiondb.provisioning import Provisioner, ProvisioningRecord, Stage
-    from partitiondb.provisioning_postgres import PostgresProvisioningStore
 
     # Metadata table is isolated within a disposable fixture schema.
     store = PostgresProvisioningStore(conn, schema=tenants[0].schema)
@@ -248,7 +248,7 @@ def test_durable_provisioning_store_and_exclusion(conn, tenants):
             # Checkpoints are visible before the advisory lock is released.
             row = other.execute(
                 psycopg.sql.SQL("SELECT stage FROM {} WHERE tenant_id = %s").format(
-                    psycopg.sql.Identifier(tenants[0].schema, "partitiondb_provisioning")
+                    psycopg.sql.Identifier(tenants[0].schema, "pdb_provisioning")
                 ),
                 (tenant.id,),
             ).fetchone()
@@ -263,7 +263,7 @@ def test_durable_provisioning_store_and_exclusion(conn, tenants):
 
 @pytest.mark.postgres
 def test_checkpoint_store_upgrade_failure_preserves_existing_table(conn, tenants):
-    from partitiondb.provisioning_postgres import PostgresProvisioningStore
+    from partitiondb.postgres.provisioning import PostgresProvisioningStore
 
     store = PostgresProvisioningStore(conn, schema=tenants[0].schema)
     conn.execute(
@@ -284,7 +284,7 @@ def test_checkpoint_store_upgrade_failure_preserves_existing_table(conn, tenants
     assert (
         conn.execute(
             "SELECT column_name FROM information_schema.columns WHERE table_schema = %s "
-            "AND table_name = 'partitiondb_provisioning' AND column_name = 'tenant_type'",
+            "AND table_name = 'pdb_provisioning' AND column_name = 'tenant_type'",
             (tenants[0].schema,),
         ).fetchall()
         == []
@@ -294,8 +294,8 @@ def test_checkpoint_store_upgrade_failure_preserves_existing_table(conn, tenants
 @pytest.mark.postgres
 @pytest.mark.parametrize("prepare_database", [False, True])
 def test_checkpoint_store_persists_access_stages_before_callbacks(conn, tenants, prepare_database):
+    from partitiondb.postgres.provisioning import PostgresProvisioningStore
     from partitiondb.provisioning import Provisioner, Stage
-    from partitiondb.provisioning_postgres import PostgresProvisioningStore
 
     store = PostgresProvisioningStore(conn, schema=tenants[0].schema)
     store.install()

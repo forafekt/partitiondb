@@ -10,7 +10,7 @@ from django.core.management import CommandError, call_command
 from django.test import override_settings
 
 from partitiondb import Tenant
-from partitiondb.adapters.django.migration_progress import MigrationProgress, ObservedMigrateCommand
+from partitiondb.adapters.django.operations.migrations import MigrationProgress, ObservedMigrateCommand
 from tests.django_setup import configure
 
 configure()
@@ -59,7 +59,7 @@ import django
 django.setup()
 from django.core.management import call_command
 from partitiondb import Tenant
-from partitiondb.adapters.django.migration_progress import ObservedMigrateCommand
+from partitiondb.adapters.django.operations.migrations import ObservedMigrateCommand
 seen=[]
 command=ObservedMigrateCommand(Tenant("one", "alpha"), seen.append)
 call_command(command, verbosity=0, interactive=False)
@@ -86,7 +86,7 @@ assert not seen
 
 
 def test_progress_signal_bridge():
-    from partitiondb.adapters.django.events import migration_progress, publish_migration_progress
+    from partitiondb.adapters.django.operations.events import migration_progress, publish_migration_progress
 
     received = []
 

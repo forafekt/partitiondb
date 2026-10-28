@@ -14,4 +14,4 @@ def pytest_configure(config):
         raise pytest.UsageError("--require-postgres needs PARTITIONDB_TEST_DSN")
 
 
-pytest_plugins = ["partitiondb.adapters.django.pytest_plugin"]
+pytest_plugins = ["partitiondb.adapters.django.operations.pytest_plugin"]

@@ -31,12 +31,12 @@ def configure():
 
 def crash_worker():
     configure()
-    from partitiondb.adapters.django.workflow import access_context
+    from partitiondb.adapters.django.registry.workflow import access_context
 
     with access_context(os.environ["PARTITIONDB_CRASH_TENANT"]) as context:
         # The role, secret and receipt must survive abrupt process termination.
         with patch(
-            "partitiondb.adapters.django.access_services.DjangoRoleBindingRecorder.__call__",
+            "partitiondb.adapters.django.access_control.bindings.DjangoRoleBindingRecorder.__call__",
             side_effect=lambda *_: os._exit(71),
         ):
             context.provisioner.run(os.environ["PARTITIONDB_CRASH_TENANT"])
@@ -49,24 +49,29 @@ def main():
     with tempfile.TemporaryDirectory() as directory:
         os.environ["PARTITIONDB_DEMO_CREDENTIALS_DIR"] = str(Path(directory) / "secrets")
         configure()
-        from apps.organizations.models import Domain, Membership, Organization
+        # Application-specific membership/auth integration is intentional.
         from apps.workspaces.models import Workspace
         from django.contrib.auth import get_user_model
         from django.core.management import CommandError, call_command
         from django.db import connections, transaction
         from django.test import Client, RequestFactory, override_settings
 
+        from partitiondb.adapters.django import get_domain_model, get_tenant_model
         from partitiondb.adapters.django.access_control.models import (
             AccessOperation,
             AccessRecoveryAudit,
             RoleOwnershipReceipt,
         )
         from partitiondb.adapters.django.access_control.services import AuditedDjangoReconciliationService
-        from partitiondb.adapters.django.scope import atomic_tenant
-        from partitiondb.adapters.django.workflow import access_context, registry_lifecycle_factory
-        from partitiondb.postgres_role_manager import tenant_role_name
+        from partitiondb.adapters.django.registry.workflow import access_context, registry_lifecycle_factory
+        from partitiondb.adapters.django.registry_app.models import Membership
+        from partitiondb.adapters.django.routing.scope import atomic_tenant
+        from partitiondb.postgres.provisioning import PostgresProvisioningStore
+        from partitiondb.postgres.role_manager import tenant_role_name
         from partitiondb.provisioning import Stage
-        from partitiondb.provisioning_postgres import PostgresProvisioningStore
+
+        Organization = get_tenant_model()
+        Domain = get_domain_model()
 
         call_command("migrate", verbosity=0, interactive=False)
         root = get_user_model().objects.create_superuser("access-operator", password="test-only")
@@ -121,7 +126,7 @@ def main():
             assert not AccessRecoveryAudit.objects.exists()
 
             # A completed operation is historical; status must still test the current secret.
-            status_url = f"/admin/organizations/organization/{normal.pk}/access-status/"
+            status_url = f"/admin/partitiondb_registry/tenant/{normal.pk}/access-status/"
             page = client.get(status_url)
             assert page.status_code == 200
             assert "Verified — fresh password connection succeeded".encode() in page.content
@@ -341,7 +346,7 @@ def main():
             assert RoleOwnershipReceipt.objects.filter(operation_id=operation.operation_id).exists()
             interrupted.refresh_from_db()
             assert not interrupted.access_role and not interrupted.active
-            page = client.get(f"/admin/organizations/organization/{tenant.id}/access-status/")
+            page = client.get(f"/admin/partitiondb_registry/tenant/{tenant.id}/access-status/")
             assert page.status_code == 200 and b"access_provisioning" in page.content
             with access_context(tenant.id) as context:
                 assert context.credentials.get(interrupted.credential_ref).encode() not in page.content
@@ -364,7 +369,7 @@ def main():
                         raise AssertionError("Recovery bypassed tenant lock")
             assert not AccessRecoveryAudit.objects.exists()
             response = client.post(
-                f"/admin/organizations/organization/{tenant.id}/reconcile-access/",
+                f"/admin/partitiondb_registry/tenant/{tenant.id}/reconcile-access/",
                 {"decision": "ready", "confirm_tenant_id": tenant.id},
             )
             assert response.status_code == 302
@@ -390,7 +395,7 @@ def main():
                     raise AssertionError("Cross-tenant query succeeded")
                 try:
                     with transaction.atomic(), connections[tenant.database].cursor() as cursor:
-                        cursor.execute("SELECT * FROM public.partitiondb_access_operation")
+                        cursor.execute("SELECT * FROM public.pdb_access_operation")
                 except Exception as error:
                     assert getattr(error.__cause__, "sqlstate", None) == "42501"
                 else:
@@ -401,7 +406,7 @@ def main():
                 assert cursor.fetchone()[0] != interrupted.access_role
 
             staff = get_user_model().objects.create_user("tenant-staff", password="test-only", is_staff=True)
-            Membership.objects.create(user=staff, organization=interrupted, role="admin")
+            Membership.objects.create(user=staff, tenant=interrupted, role="admin")
             tenant_client = Client(HTTP_HOST="interrupted.localhost")
             assert (
                 tenant_client.post("/admin/login/", {"username": "tenant-staff", "password": "test-only"}).status_code
@@ -473,7 +478,7 @@ def main():
             with access_context(retry_tenant.id) as context:
                 try:
                     with patch(
-                        "partitiondb.postgres_role_manager.PostgresRoleManager.provision",
+                        "partitiondb.postgres.role_manager.PostgresRoleManager.provision",
                         side_effect=RuntimeError("injected"),
                     ):
                         context.provisioner.run(retry_tenant.id)
@@ -513,7 +518,7 @@ def main():
                         sql.Identifier(role), sql.Literal(secret)
                     )
                 )
-                from partitiondb.postgres_roles import provision_restricted_role
+                from partitiondb.postgres.roles import provision_restricted_role
 
                 provision_restricted_role(context.admin_connection, normal.as_tenant(), role)
             # The migration path also rejects replacement roles before refreshing grants.

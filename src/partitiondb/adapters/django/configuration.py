@@ -15,11 +15,16 @@ from django.utils.module_loading import import_string
 DEFAULTS = {
     "TENANT_MODEL": None,
     "DOMAIN_MODEL": None,
-    "TENANT_WORKFLOW": "partitiondb.adapters.django.workflow.TenantWorkflow",
+    "MEMBERSHIP_MODEL": None,
+    "TENANT_WORKFLOW": "partitiondb.adapters.django.registry.workflow.TenantWorkflow",
     "CREDENTIAL_PROVIDER": None,
+    "CREDENTIAL_PROVIDER_OPTIONS": {},
     "DEVELOPMENT_CREDENTIALS_DIR": None,
     "DATABASE_PROVISIONING": {},
-    "PROVISIONING_CONNECTION_PARAMS": "partitiondb.adapters.django.workflow.provisioning_connection_params",
+    "DATABASE_PROFILES": None,
+    "DATABASE_PROFILE_REGISTRY": False,
+    "DATABASE_SERVER_ONLY_ALIASES": [],
+    "PROVISIONING_CONNECTION_PARAMS": "partitiondb.adapters.django.registry.workflow.provisioning_connection_params",
     "SHARED_APPS": [],
     "TENANT_APPS": [],
     "TENANT_TYPES": {},
@@ -81,10 +86,14 @@ class PartitionDBSettings(Mapping):
         if unknown:
             raise ImproperlyConfigured("Unknown PARTITIONDB settings: " + ", ".join(sorted(map(str, unknown))))
         self._values = {**deepcopy(DEFAULTS), **values}
-        if "partitiondb_registry" in self._values["SHARED_APPS"] and "TENANT_MODEL" not in values:
+        if "partitiondb_registry" in self._values["SHARED_APPS"] and (
+            "TENANT_MODEL" not in values or values["TENANT_MODEL"] == "partitiondb_registry.Tenant"
+        ):
             self._values["TENANT_MODEL"] = "partitiondb_registry.Tenant"
             if "DOMAIN_MODEL" not in values:
                 self._values["DOMAIN_MODEL"] = "partitiondb_registry.Domain"
+            if "MEMBERSHIP_MODEL" not in values:
+                self._values["MEMBERSHIP_MODEL"] = "partitiondb_registry.Membership"
         if self._values["TENANT_MODEL"]:
             # Explicit None/custom values still win over the managed defaults.
             for key, name in {
@@ -96,7 +105,7 @@ class PartitionDBSettings(Mapping):
                 "MIGRATION_CONTEXT": "migration_context",
             }.items():
                 if key not in values:
-                    self._values[key] = "partitiondb.adapters.django.workflow." + name
+                    self._values[key] = "partitiondb.adapters.django.registry.workflow." + name
 
     def __getitem__(self, key):
         return self._values[key]
@@ -154,11 +163,11 @@ def middleware_order(paths, bases):
 class DjangoComponents:
     """Dotted paths to built-in classes or application subclasses."""
 
-    host_guard: str = "partitiondb.adapters.django.hosts.RegistryHostMiddleware"
-    tenant_middleware: str = "partitiondb.adapters.django.middleware.TenantMiddleware"
-    identity_middleware: str = "partitiondb.adapters.django.identity.SharedIdentityMiddleware"
-    admin_auth_middleware: str = "partitiondb.adapters.django.admin_auth.TenantAdminAuthMiddleware"
-    router: str = "partitiondb.adapters.django.router.TenantRouter"
+    host_guard: str = "partitiondb.adapters.django.routing.hosts.RegistryHostMiddleware"
+    tenant_middleware: str = "partitiondb.adapters.django.routing.middleware.TenantMiddleware"
+    identity_middleware: str = "partitiondb.adapters.django.routing.identity.SharedIdentityMiddleware"
+    admin_auth_middleware: str = "partitiondb.adapters.django.administration.authentication.TenantAdminAuthMiddleware"
+    router: str = "partitiondb.adapters.django.routing.router.TenantRouter"
     backend: str = "partitiondb.adapters.django.backend"
 
 
@@ -237,7 +246,7 @@ class DjangoSetup:
         c = self.components
         boundary = c.tenant_middleware
         if self.routing == "subfolder" and boundary == DjangoComponents.tenant_middleware:
-            boundary = "partitiondb.adapters.django.subfolder.TenantSubfolderMiddleware"
+            boundary = "partitiondb.adapters.django.routing.subfolder.TenantSubfolderMiddleware"
         return [
             *([c.host_guard] if self.routing == "host" else []),
             *before,

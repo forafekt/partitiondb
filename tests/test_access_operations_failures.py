@@ -4,13 +4,13 @@ from unittest.mock import Mock
 
 import pytest
 
-from partitiondb.access import AccessPolicy, TenantAccess
-from partitiondb.access_operations import OperationState, RestrictedAccessCoordinator
-from partitiondb.core import Tenant
-from partitiondb.postgres_role_manager import RoleBinding
+from partitiondb.access import AccessPolicyEnum, TenantAccess
+from partitiondb.access.operations import OperationState, RestrictedAccessCoordinator
+from partitiondb.postgres.role_manager import RoleBinding
+from partitiondb.tenancy.identity import Tenant
 
 TENANT = Tenant("tenant-1", "org_demo")
-ACCESS = TenantAccess(TENANT, AccessPolicy.RESTRICTED, "secret/tenant-1")
+ACCESS = TenantAccess(TENANT, AccessPolicyEnum.RESTRICTED, "secret/tenant-1")
 BINDING = RoleBinding("pdb_org_demo", "secret/tenant-1")
 
 

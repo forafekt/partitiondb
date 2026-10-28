@@ -4,8 +4,8 @@ from django.core.checks import Error, register
 from django.core.exceptions import ImproperlyConfigured
 from django.urls import get_resolver
 
-from .configuration import get_config, middleware_matches, middleware_order, subclass_path
-from .tenant_types import type_policies
+from partitiondb.adapters.django.configuration import get_config, middleware_matches, middleware_order, subclass_path
+from partitiondb.adapters.django.routing.tenant_types import type_policies
 
 
 @register()
@@ -16,9 +16,12 @@ def check_configuration(app_configs, **kwargs):
         return [Error(str(error), id="partitiondb.E008")]
     errors = []
     try:
-        from .database_settings import database_provisioning_targets
+        from partitiondb.adapters.django.databases.routes import database_profiles, tenant_database_aliases
+        from partitiondb.adapters.django.databases.settings import database_provisioning_targets
 
         database_provisioning_targets()
+        database_profiles(include_registered=False)
+        tenant_database_aliases()
     except ImproperlyConfigured as error:
         errors.append(Error(str(error), id="partitiondb.E033"))
     hosts = config.get("SHARED_HOSTS", [])
@@ -43,14 +46,14 @@ def check_configuration(app_configs, **kwargs):
                     id="partitiondb.E023",
                 )
             )
-    from .middleware import tenant_admin_login_url, tenant_auth_routes
+    from partitiondb.adapters.django.routing.middleware import tenant_admin_login_url, tenant_auth_routes
 
     try:
         paths, auth_urlconf = tenant_auth_routes(config)
         tenant_admin_login_url(config)
         if auth_urlconf:
             _ = get_resolver(auth_urlconf).url_patterns
-        builtin_auth = "partitiondb.adapters.django.admin_auth.TenantAdminAuthMiddleware"
+        builtin_auth = "partitiondb.adapters.django.administration.authentication.TenantAdminAuthMiddleware"
         admin_path = config.get("TENANT_ADMIN_PATH", "/admin/")
         if (
             not isinstance(admin_path, str)
@@ -82,11 +85,12 @@ def check_configuration(app_configs, **kwargs):
             )
         )
     if not any(
-        subclass_path(path, "partitiondb.adapters.django.router.TenantRouter") for path in settings.DATABASE_ROUTERS
+        subclass_path(path, "partitiondb.adapters.django.routing.router.TenantRouter")
+        for path in settings.DATABASE_ROUTERS
     ):
         errors.append(Error("Install TenantRouter in DATABASE_ROUTERS", id="partitiondb.E004"))
     middleware = list(getattr(settings, "MIDDLEWARE", []))
-    host_guard = "partitiondb.adapters.django.hosts.RegistryHostMiddleware"
+    host_guard = "partitiondb.adapters.django.routing.hosts.RegistryHostMiddleware"
     if middleware_matches(middleware, host_guard) and (
         not subclass_path(middleware[0], host_guard) or list(settings.ALLOWED_HOSTS) != ["*"]
     ):
@@ -96,8 +100,8 @@ def check_configuration(app_configs, **kwargs):
                 id="partitiondb.E026",
             )
         )
-    hostname_boundary = "partitiondb.adapters.django.middleware.TenantMiddleware"
-    path_boundary = "partitiondb.adapters.django.subfolder.TenantSubfolderMiddleware"
+    hostname_boundary = "partitiondb.adapters.django.routing.middleware.TenantMiddleware"
+    path_boundary = "partitiondb.adapters.django.routing.subfolder.TenantSubfolderMiddleware"
     boundary = path_boundary if middleware_matches(middleware, path_boundary) else hostname_boundary
     if len(middleware_matches(middleware, hostname_boundary)) > 1:
         errors.append(Error("Choose one tenant request boundary", id="partitiondb.E015"))
@@ -125,20 +129,28 @@ def check_configuration(app_configs, **kwargs):
         except ImproperlyConfigured as error:
             errors.append(Error(str(error), id="partitiondb.E030"))
     if config["TENANT_MODEL"]:
-        from .model_registry import get_domain_model, get_tenant_model
+        from partitiondb.adapters.django.registry.lookup import get_domain_model, get_tenant_model
+        from partitiondb.adapters.django.registry.workflow import provisioner_factory, resolve_host
 
         try:
             get_tenant_model()
-            if config["PROVISIONER_FACTORY"] == "partitiondb.adapters.django.workflow.provisioner_factory":
+            if config.callback("PROVISIONER_FACTORY") is provisioner_factory:
                 if "partitiondb_access_control" not in config["SHARED_APPS"]:
                     raise ImproperlyConfigured("Managed tenants require partitiondb_access_control in SHARED_APPS")
-            if config["DOMAIN_MODEL"] or config["RESOLVER"] == "partitiondb.adapters.django.workflow.resolve_host":
+            if config["DOMAIN_MODEL"] or config.callback("RESOLVER") is resolve_host:
                 get_domain_model()
             for name in ("TENANT_WORKFLOW", "CREDENTIAL_PROVIDER", "PROVISIONING_CONNECTION_PARAMS"):
                 config.callback(name)
         except ImproperlyConfigured as error:
             errors.append(Error(str(error), id="partitiondb.E031"))
-    identity = "partitiondb.adapters.django.identity.SharedIdentityMiddleware"
+    if config["MEMBERSHIP_MODEL"]:
+        from partitiondb.adapters.django.registry.lookup import get_membership_model
+
+        try:
+            get_membership_model()
+        except ImproperlyConfigured as error:
+            errors.append(Error(str(error), id="partitiondb.E034"))
+    identity = "partitiondb.adapters.django.routing.identity.SharedIdentityMiddleware"
     if middleware_matches(middleware, identity):
         expected = [
             "django.contrib.sessions.middleware.SessionMiddleware",
@@ -181,7 +193,7 @@ def check_configuration(app_configs, **kwargs):
                 )
             )
         try:
-            from .models import TenantAdminAuditMixin
+            from partitiondb.adapters.django.registry.models import TenantAdminAuditMixin
 
             audit = apps.get_model(config.get("TENANT_ADMIN_LOG_MODEL", ""))
             if not issubclass(audit, TenantAdminAuditMixin) or audit._meta.app_label not in tenant:
@@ -194,7 +206,7 @@ def check_configuration(app_configs, **kwargs):
                 )
             )
 
-    admin_auth = "partitiondb.adapters.django.admin_auth.TenantAdminAuthMiddleware"
+    admin_auth = "partitiondb.adapters.django.administration.authentication.TenantAdminAuthMiddleware"
     if middleware_matches(middleware, admin_auth):
         expected = [
             "django.contrib.sessions.middleware.SessionMiddleware",
@@ -220,7 +232,7 @@ def check_configuration(app_configs, **kwargs):
 
     def contains_tenant_loader(value):
         if isinstance(value, str):
-            return value.startswith("partitiondb.adapters.django.template_loaders.")
+            return value.startswith("partitiondb.adapters.django.assets.template_loaders.")
         return isinstance(value, (list, tuple)) and any(contains_tenant_loader(v) for v in value)
 
     def unsafe_cache(value):

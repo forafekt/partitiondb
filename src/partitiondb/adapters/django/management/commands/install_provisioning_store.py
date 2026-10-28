@@ -2,9 +2,9 @@
 
 from django.core.management import BaseCommand, CommandError
 
-from partitiondb.adapters.django.access_boundary import require_control_plane
-from partitiondb.adapters.django.workflow import get_workflow
-from partitiondb.provisioning_postgres import PostgresProvisioningStore
+from partitiondb.adapters.django.access_control.boundary import require_control_plane
+from partitiondb.adapters.django.registry.workflow import get_workflow
+from partitiondb.postgres.provisioning import PostgresProvisioningStore
 
 
 class Command(BaseCommand):

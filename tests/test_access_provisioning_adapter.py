@@ -2,10 +2,10 @@ from unittest.mock import Mock
 
 import pytest
 
-from partitiondb.access import AccessPolicy, TenantAccess
-from partitiondb.access_provisioning import AccessProvisioningAdapter
-from partitiondb.core import Tenant
-from partitiondb.postgres_role_manager import RoleBinding
+from partitiondb.access import AccessPolicyEnum, TenantAccess
+from partitiondb.access.provisioning import AccessProvisioningAdapter
+from partitiondb.postgres.role_manager import RoleBinding
+from partitiondb.tenancy.identity import Tenant
 
 TENANT = Tenant("1", "org_demo", "default")
 
@@ -22,7 +22,7 @@ def test_restricted_creates_role_and_persists_binding():
     binding = RoleBinding("pdb_org_demo", "secrets/1")
     manager.provision.return_value = binding
     AccessProvisioningAdapter(
-        lambda tenant: TenantAccess(tenant, AccessPolicy.RESTRICTED, "secrets/1"),
+        lambda tenant: TenantAccess(tenant, AccessPolicyEnum.RESTRICTED, "secrets/1"),
         manager,
         on_provisioned=saved,
     )(TENANT)
@@ -44,7 +44,7 @@ def test_persistence_failure_propagates():
     manager = Mock()
     manager.provision.return_value = RoleBinding("pdb_org_demo", "secrets/1")
     adapter = AccessProvisioningAdapter(
-        lambda tenant: TenantAccess(tenant, AccessPolicy.RESTRICTED, "secrets/1"),
+        lambda tenant: TenantAccess(tenant, AccessPolicyEnum.RESTRICTED, "secrets/1"),
         manager,
         on_provisioned=Mock(side_effect=RuntimeError("storage unavailable")),
     )

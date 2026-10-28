@@ -1,6 +1,6 @@
 import pytest
 
-from partitiondb.domains import normalize_hostname
+from partitiondb.tenancy.domains import normalize_hostname
 
 
 @pytest.mark.parametrize(

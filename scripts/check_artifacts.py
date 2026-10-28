@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def check_names(names):
-    forbidden = {"legacy", "__pycache__", ".git", ".venv", ".env", ".secrets"}
+    forbidden = {"_compat", "legacy", "__pycache__", ".git", ".venv", ".env", ".secrets"}
     for name in names:
         path = PurePosixPath(name)
         if path.is_absolute() or ".." in path.parts or forbidden.intersection(path.parts):
@@ -46,33 +46,51 @@ def main():
         ):
             archive.getinfo("partitiondb/adapters/django/templates/partitiondb/admin/" + template)
         for module in (
-            "database_models.py",
-            "database_store.py",
-            "database_settings.py",
+            "databases/models.py",
+            "databases/routes.py",
+            "databases/credentials.py",
+            "registry/models.py",
+            "registry/workflow.py",
+            "administration/registry.py",
+            "administration/tenant.py",
+            "routing/middleware.py",
+            "assets/storage.py",
+            "assets/template_loaders/filesystem.py",
+            "operations/inventory.py",
+            "access_control/bindings.py",
+            "access_control/migrations/0001_initial.py",
             "management/commands/tenant_database.py",
             "management/commands/install_provisioning_store.py",
-            "access_control/migrations/0003_database_provisioning.py",
-            "forms.py",
-            "workflow.py",
-            "model_registry.py",
-            "managed_admin.py",
-            "credentials.py",
             "management/commands/create_tenant.py",
             "registry_app/models.py",
             "registry_app/apps.py",
             "registry_app/migrations/0001_initial.py",
         ):
             archive.getinfo("partitiondb/adapters/django/" + module)
-        for module in ("database_provisioning.py", "postgres_database.py"):
+        for module in (
+            "tenancy/identity.py",
+            "tenancy/assets.py",
+            "access/membership.py",
+            "access/evidence.py",
+            "credentials/__init__.py",
+            "credentials/runtime.py",
+            "credentials/development.py",
+            "credentials/openbao.py",
+            "provisioning/__init__.py",
+            "provisioning/databases.py",
+            "postgres/__init__.py",
+            "postgres/evidence.py",
+            "postgres/authentication.py",
+        ):
             archive.getinfo("partitiondb/" + module)
         metadata = email.message_from_bytes(archive.read(f"partitiondb-{version}.dist-info/METADATA"))
         if metadata["Name"] != "partitiondb" or metadata["Version"] != version:
             raise ValueError("Wheel metadata does not match project metadata")
         if metadata["License-Expression"] != "MIT":
             raise ValueError("Wheel must declare the MIT license")
-        if set(metadata.get_all("License-File", [])) != {"LICENSE", "THIRD_PARTY_NOTICES"}:
-            raise ValueError("Wheel must declare both project and upstream notices")
-        for name in ("LICENSE", "THIRD_PARTY_NOTICES"):
+        if set(metadata.get_all("License-File", [])) != {"LICENSE"}:
+            raise ValueError("Wheel must declare the project license file")
+        for name in ("LICENSE",):
             packaged = archive.read(f"partitiondb-{version}.dist-info/licenses/{name}")
             if packaged != (ROOT / name).read_bytes():
                 raise ValueError(f"Wheel license file differs from source: {name}")
@@ -91,7 +109,7 @@ def main():
             raise ValueError("Source archive must declare the MIT license")
         for name in ("README.md", "pyproject.toml", "docs/MIGRATION.md"):
             archive.getmember(prefix + name)
-        for name in ("LICENSE", "THIRD_PARTY_NOTICES"):
+        for name in ("LICENSE",):
             stream = archive.extractfile(prefix + name)
             if stream is None or stream.read() != (ROOT / name).read_bytes():
                 raise ValueError(f"Source archive license file differs: {name}")
@@ -101,6 +119,12 @@ def main():
 import sys
 sys.path.insert(0, sys.argv[1])
 import partitiondb
+from partitiondb.access.membership import role_actions
+from partitiondb.credentials.development import DevelopmentCredentials
+from partitiondb.credentials.runtime import TenantDatabaseCredentials
+from partitiondb.tenancy.assets import tenant_path
+from partitiondb.provisioning import Provisioner
+from partitiondb.provisioning.databases import DatabaseProvisioner
 from partitiondb import Tenant, current_tenant, tenant_scope
 assert partitiondb.__version__ == sys.argv[2]
 tenant = Tenant('artifact-check', 'artifact_check')

@@ -1,0 +1,5 @@
+# Default application stack. Keep its implementation in one place.
+# Requires Docker Compose v2.20+ (include support).
+name: partitiondb-local
+include:
+  - compose.local.yml

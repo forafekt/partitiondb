@@ -22,9 +22,9 @@ def main():
     from django.test import RequestFactory
 
     from partitiondb import Tenant, current_tenant
-    from partitiondb.adapters.django.identity import SharedIdentityMiddleware
-    from partitiondb.adapters.django.middleware import TenantMiddleware
-    from partitiondb.adapters.django.scope import atomic_tenant
+    from partitiondb.adapters.django.routing.identity import SharedIdentityMiddleware
+    from partitiondb.adapters.django.routing.middleware import TenantMiddleware
+    from partitiondb.adapters.django.routing.scope import atomic_tenant
     from partitiondb.postgres import SchemaManager
 
     call_command("migrate", verbosity=0, interactive=False)

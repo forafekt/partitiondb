@@ -2,10 +2,10 @@ from unittest.mock import Mock
 
 import pytest
 
-from partitiondb.access import AccessPolicy, TenantAccess
-from partitiondb.access_operations import OperationState, RestrictedAccessCoordinator
-from partitiondb.core import Tenant
-from partitiondb.postgres_role_manager import RoleBinding
+from partitiondb.access import AccessPolicyEnum, TenantAccess
+from partitiondb.access.operations import OperationState, RestrictedAccessCoordinator
+from partitiondb.postgres.role_manager import RoleBinding
+from partitiondb.tenancy.identity import Tenant
 
 TENANT = Tenant("1", "org_demo")
 
@@ -40,7 +40,9 @@ def test_restricted_records_intent_before_role_creation():
     )[1]
     receipts.record.side_effect = lambda receipt: events.append("receipt")
     saved.side_effect = lambda *a: events.append("binding")
-    coordinator(TenantAccess(TENANT, AccessPolicy.RESTRICTED, "secret/1"), manager, journal, receipts, saved)(TENANT)
+    coordinator(TenantAccess(TENANT, AccessPolicyEnum.RESTRICTED, "secret/1"), manager, journal, receipts, saved)(
+        TENANT
+    )
     assert events == ["intent", "role", "receipt", "binding"]
     assert journal.advance.call_count == 3
     assert journal.advance.call_args.args[-1] == OperationState.COMPLETED
@@ -50,7 +52,7 @@ def test_journal_failure_prevents_role_side_effects():
     manager, journal = Mock(), Mock()
     journal.begin.side_effect = RuntimeError("database unavailable")
     with pytest.raises(RuntimeError, match="database unavailable"):
-        coordinator(TenantAccess(TENANT, AccessPolicy.RESTRICTED, "secret/1"), manager, journal)(TENANT)
+        coordinator(TenantAccess(TENANT, AccessPolicyEnum.RESTRICTED, "secret/1"), manager, journal)(TENANT)
     manager.provision.assert_not_called()
 
 
@@ -59,7 +61,7 @@ def test_receipt_failure_prevents_binding_and_completion():
     receipts.record.side_effect = RuntimeError("receipt failure")
     with pytest.raises(RuntimeError, match="receipt failure"):
         coordinator(
-            TenantAccess(TENANT, AccessPolicy.RESTRICTED, "secret/1"),
+            TenantAccess(TENANT, AccessPolicyEnum.RESTRICTED, "secret/1"),
             journal=journal,
             receipts=receipts,
             saved=saved,
@@ -72,7 +74,7 @@ def test_bad_role_oid_fails_closed():
     receipts = Mock()
     with pytest.raises(ValueError, match="OID"):
         coordinator(
-            TenantAccess(TENANT, AccessPolicy.RESTRICTED, "secret/1"),
+            TenantAccess(TENANT, AccessPolicyEnum.RESTRICTED, "secret/1"),
             receipts=receipts,
             oid=lambda *_: None,
         )(TENANT)

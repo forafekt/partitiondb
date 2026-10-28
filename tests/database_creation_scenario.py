@@ -17,17 +17,19 @@ def main():
         if "--crash" not in sys.argv:
             os.environ["PARTITIONDB_DEMO_CREDENTIALS_DIR"] = str(Path(directory) / "secrets")
         configure()
-        from apps.organizations.models import Organization
         from django.core.management import CommandError, call_command
         from django.db import connections
 
+        from partitiondb.adapters.django import get_tenant_model
         from partitiondb.adapters.django.access_control.models import DatabaseOperation, DatabaseRecoveryAudit
-        from partitiondb.adapters.django.workflow import get_workflow
-        from partitiondb.postgres_role_manager import tenant_role_name
+        from partitiondb.adapters.django.registry.workflow import get_workflow
+        from partitiondb.postgres.role_manager import tenant_role_name
+
+        Organization = get_tenant_model()
 
         if "--crash" in sys.argv:
             with patch(
-                "partitiondb.adapters.django.database_store.DjangoDatabaseJournal.receipt",
+                "partitiondb.adapters.django.databases.store.DjangoDatabaseJournal.receipt",
                 side_effect=lambda *_: os._exit(73),
             ):
                 call_command(
@@ -92,7 +94,7 @@ def main():
             # Fail after audit insertion: the transaction must roll back both
             # the audit and the transition, leaving recovery repeatable.
             with patch(
-                "partitiondb.adapters.django.database_store.DjangoDatabaseJournal._transition",
+                "partitiondb.adapters.django.databases.store.DjangoDatabaseJournal._transition",
                 side_effect=RuntimeError("injected"),
             ):
                 try:

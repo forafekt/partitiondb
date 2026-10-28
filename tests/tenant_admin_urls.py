@@ -1,7 +1,7 @@
 from apps.workspaces.models import Workspace
 from django.urls import path
 
-from partitiondb.adapters.django.tenant_admin import TenantAdminSite, TenantModelAdmin
+from partitiondb.adapters.django.administration.tenant import TenantAdminSite, TenantModelAdmin
 
 site = TenantAdminSite(name="tenant_admin")
 

@@ -3,7 +3,7 @@ from threading import Event, Lock
 import pytest
 
 from partitiondb import Tenant, current_tenant, tenant_scope
-from partitiondb.fleet import run_fleet
+from partitiondb.provisioning.fleet import run_fleet
 
 TENANTS = [Tenant(str(i), f"tenant_{i}") for i in range(5)]
 

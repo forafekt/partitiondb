@@ -1,9 +1,9 @@
 """Create and provision through the configured built-in tenant workflow."""
 
 from django.core.management import BaseCommand, CommandError
-from django.db import connections
 
-from partitiondb.adapters.django.workflow import get_workflow
+from partitiondb.adapters.django.databases.routes import tenant_database_aliases
+from partitiondb.adapters.django.registry.workflow import get_workflow
 
 
 class Command(BaseCommand):
@@ -13,7 +13,10 @@ class Command(BaseCommand):
         parser.add_argument("--name", required=True)
         parser.add_argument("--schema", required=True)
         parser.add_argument("--hostname", required=True)
-        parser.add_argument("--database", choices=list(connections), default="default")
+        parser.add_argument("--database", choices=tenant_database_aliases(), default="default")
+        parser.add_argument("--new-database", action="store_true", help="Create and persist a new database route")
+        parser.add_argument("--database-name", help="New database name; generated automatically when omitted")
+        parser.add_argument("--database-profile", help="Trusted server profile; defaults to the default server")
         parser.add_argument("--access-policy", choices=["shared", "restricted"], default="shared")
 
     def handle(self, *args, **options):
@@ -27,4 +30,16 @@ class Command(BaseCommand):
 
     def creation_options(self, options):
         """Override to map application-specific command arguments to tenant_data."""
-        return {key: options[key] for key in ("name", "schema", "hostname", "database", "access_policy")}
+        return {
+            key: options[key]
+            for key in (
+                "name",
+                "schema",
+                "hostname",
+                "database",
+                "access_policy",
+                "new_database",
+                "database_name",
+                "database_profile",
+            )
+        }
