@@ -3,4 +3,4 @@
 from partitiondb.tenancy.identity import MissingTenant, Tenant, current_tenant, tenant_scope
 
 __all__ = ["MissingTenant", "Tenant", "current_tenant", "tenant_scope"]
-__version__ = "0.2.0a37"
+__version__ = "0.2.0a38"

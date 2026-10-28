@@ -49,7 +49,7 @@ The local stack runs the example project in `tests/django_project` with two Post
 Install from GitHub, pinning the tag you have validated:
 
 ```sh
-pip install 'partitiondb[django] @ git+https://github.com/forafekt/partitiondb.git@v0.2.0a37'
+pip install 'partitiondb[django] @ git+https://github.com/forafekt/partitiondb.git@v0.2.0a38'
 ```
 
 | Extra | Adds |
@@ -61,7 +61,7 @@ pip install 'partitiondb[django] @ git+https://github.com/forafekt/partitiondb.g
 | `dev` | Test, lint, typing and build tools. Install `django,dev` together; `dev` alone does not install Django or psycopg |
 
 > [!NOTE]
-> GitHub is the release path for this project. The checkout declares `0.2.0a37` and includes unreleased changes, so these guides describe the working tree. A pinned release may not include every documented feature. See [development setup](docs/TESTING.md#development-environment).
+> GitHub is the release path for this project. The checkout declares `0.2.0a38` and includes unreleased changes, so these guides describe the working tree. A pinned release may not include every documented feature. See [development setup](docs/TESTING.md#development-environment).
 
 ## Quick look
 
