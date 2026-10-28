@@ -17,7 +17,12 @@ URLCONF is optional. Shared and tenant classifications remain disjoint.
 `TypedTenantMixin` adds a required type field; configure the tenant model and its
 shared migrations deliberately. Resolvers/repositories must return trusted
 `Tenant(..., tenant_type="enterprise")` identities. Missing/unknown types reject
-before database work. Type is part of identity and cache/storage namespaces;
+before database work. The stock `create_tenant` command has no `--tenant-type`
+option. Extend its `creation_options()` to supply
+`tenant_data={"tenant_type": "enterprise"}`, or pass that mapping to
+`TenantWorkflow.create()` in trusted application code. Extend the provisioning
+form for typed admin creation; configuring `TENANT_TYPES` alone adds no form field.
+Type is part of identity and cache/storage namespaces;
 untyped namespaces remain unchanged. No type is inferred from request/job text.
 
 Requests select the configured URLconf, and model routing/migrations use the

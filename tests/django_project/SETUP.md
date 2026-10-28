@@ -15,5 +15,6 @@ docker compose up --build -d
 
 Follow the [local application guide](../../docs/LOCAL_INFRASTRUCTURE.md) for tenant
 creation, host login, worker checks and OpenBao UI access. For disposable automated
-validation use [testing](../../docs/TESTING.md). For a consuming application start
+validation and host development dependencies use
+[testing](../../docs/TESTING.md#development-environment). For a consuming application start
 with [settings](../../docs/SETTINGS.md) and [Django integration](../../docs/DJANGO.md).

@@ -4,9 +4,10 @@ Explicit PostgreSQL tenancy for Python, with optional Django and Celery adapters
 Use tenant schemas in a shared database, restricted PostgreSQL roles, or a database
 per tenant. Shared identity and lifecycle metadata stay in the control plane.
 
-The core has no runtime dependencies. Python 3.11+ is supported; Django 6.x needs
-Python 3.12+. PostgreSQL 16 is the integration target. This is alpha software;
-validate your application and deployment before upgrading.
+The core has no runtime dependencies. The test matrix covers Python 3.11–3.14
+with Django 5.2, and Python 3.12–3.14 with Django 6.0/6.1. PostgreSQL 16 is the
+integration target. This is alpha software; validate your application and
+deployment before upgrading.
 
 ## Try the application
 
@@ -30,7 +31,10 @@ pip install 'partitiondb[django] @ git+https://github.com/forafekt/partitiondb.g
 The checkout metadata declares `0.2.0a37` and includes unreleased changes.
 These guides describe the working tree; a pinned release may not include every
 documented feature. Extras: `postgres`, `django`, `celery`,
-`testing`, and `dev`. GitHub installation remains the release path for this project.
+`testing`, and `dev`. Install `django,dev` together for the full development
+toolchain; `dev` alone does not install Django or psycopg. See
+[development setup](docs/TESTING.md#development-environment). GitHub installation
+remains the release path for this project.
 
 ## Execution boundaries
 
@@ -57,7 +61,8 @@ the built-in authorizer checks active membership. Shared users, domains,
 memberships, database routes and lifecycle evidence remain on `default`.
 
 `atomic_tenant` resolves the database route and runtime credentials, enters tenant
-scope and owns the transaction. The backend selects the tenant schema. Each tenant
+scope and owns the transaction. It accepts a trusted identity and does not itself
+check active status or membership. The backend selects the tenant schema. Each tenant
 has a schema, either in the shared database or a dedicated database. Dedicated
 databases require restricted PostgreSQL roles; shared-database tenants can use
 shared or restricted roles. Restricted roles provide database-enforced separation;

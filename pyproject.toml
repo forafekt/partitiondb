@@ -8,7 +8,7 @@ version = "0.2.0a37"
 description = "Explicit PostgreSQL tenant scopes with optional framework adapters"
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE", "THIRD_PARTY_NOTICES"]
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Jonny Doyle" }]
 dependencies = []

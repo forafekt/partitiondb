@@ -29,7 +29,8 @@ tenant_signature(rebuild_report, args=(42,), tenant_id="customer-42").apply_asyn
 
 The registry/report functions above are application integration points. The
 repository's `get(id)` must return a current active `Tenant` or `None`; the factory
-owns cleanup. `DjangoRegistry` can supply the repository implementation. The task
+owns cleanup. `partitiondb.adapters.django.registry.DjangoRegistry` can supply the repository
+implementation; wrap its construction in the context-manager factory above. The task
 decorator is outermost; bound synchronous tasks are supported. Coroutine and
 generator tasks are rejected.
 

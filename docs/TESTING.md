@@ -4,6 +4,27 @@ Run tests only against disposable infrastructure. The test administrator needs
 CREATEDB/CREATEROLE; tests create and clean their own databases/roles. Never point
 these commands at production.
 
+## Development environment
+
+Run these commands from the repository root with a supported Python interpreter:
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install '.[django,dev]'
+```
+
+On Python 3.11, select Django 5.2 explicitly:
+
+```sh
+python -m pip install '.[django,dev]' 'Django>=5.2,<5.3'
+```
+
+The `dev` extra supplies test, lint, typing and build tools; the `django` extra
+also installs Django and psycopg. `testing` supplies pytest only. The runnable
+application is a source-checkout fixture, separate from the installed library.
+The Compose runners install their dependencies inside their containers.
+
 ## Separate Compose test stack
 
 `compose.tests.yml` uses project `partitiondb-tests`, separate from persistent
@@ -29,16 +50,19 @@ For host-run tests:
 ```sh
 docker compose -f compose.tests.yml --profile secrets up -d --wait postgres openbao
 PARTITIONDB_TEST_DSN=postgresql://partitiondb:test-only@127.0.0.1:55432/partitiondb \
-  poetry run pytest -q
+  python -m pytest --require-postgres -q
 PARTITIONDB_TEST_DSN=postgresql://partitiondb:test-only@127.0.0.1:55432/partitiondb \
 PARTITIONDB_OPENBAO_TEST_ADDR=http://127.0.0.1:58200 \
-  poetry run pytest tests/test_openbao_live.py -q
+  python -m pytest tests/test_openbao_live.py --require-postgres -q
 ```
 
 OpenBao's disposable fixture is in-memory and HTTP-loopback-only. Its fixed test
 token is unrelated to the persistent local UI's generated root token. Optional
 live tests skip without explicit endpoints; the release acceptance runner requires
-them. `PARTITIONDB_TEST_DEDICATED_DSN` selects a second disposable server for database
+them. To run the OpenBao gate from the host, export both endpoint variables above
+and run `python -m scripts.openbao_acceptance` from the repository root. The runner checks
+installed-package identity before live tests and disallows missing endpoints.
+`PARTITIONDB_TEST_DEDICATED_DSN` selects a second disposable server for database
 routing scenarios. Stop only the test project when finished:
 
 ```sh
@@ -64,10 +88,10 @@ reserved for explicit business/auth integration fixtures.
 ## Release gates
 
 ```sh
-poetry run ruff check .
-poetry run ruff format --check .
-poetry run python tests/django_project/manage.py makemigrations --check --dry-run
-poetry run python scripts/release_check.py
+python -m ruff check .
+python -m ruff format --check .
+python tests/django_project/manage.py makemigrations --check --dry-run
+python scripts/release_check.py
 ```
 
 The runner checks lint, format, configured typing, build, artifact contents,
@@ -88,6 +112,21 @@ No script tags or publishes. `technical_passed` describes its exact artifacts;
 requires affected checks again; historical pass counts do not validate a new tree.
 Agent working evidence and release handoff are kept separately in `.codex`.
 
+## GitHub CI
+
+`.github/workflows/ci.yml` runs the ten Python/Django combinations above against
+PostgreSQL 16, including lint, format, configured typing, installed-package
+validation, builds and artifact checks. A separate OpenBao job builds a candidate
+wheel and passes its exact path through `PARTITIONDB_PACKAGE` to the Compose gate.
+The full PostgreSQL production checks and RabbitMQ/prefork acceptance run through
+`release_check.py`; they are not separate jobs in the current GitHub workflow.
+
+Keep repository runners in `scripts/` tracked, including `__init__.py`,
+`openbao_acceptance.py` and its `validate.py` dependency. CI invokes the OpenBao
+runner as a module from `/package`; these helpers belong to the checkout, not the
+installed library wheel. The explicit package prevents an installed package named
+`scripts` from hiding local runners.
+
 ## Fresh development baseline
 
 The current checkout replaces the pre-production migration history with initial
@@ -98,8 +137,8 @@ and the separate `pdb_provisioning` checkpoint table are unchanged.
 Preview repository-owned migration deletion (third-party migrations are excluded):
 
 ```sh
-poetry run python scripts/reset_migrations.py
-poetry run python scripts/reset_migrations.py --apply --regenerate
+python scripts/reset_migrations.py
+python scripts/reset_migrations.py --apply --regenerate
 ```
 
 The second command deletes local migration files, preserves `__init__.py`, clears
@@ -111,8 +150,8 @@ Stop application and worker processes before resetting databases. Set
 selected targets, then repeat with the confirmation flags to execute:
 
 ```sh
-poetry run python scripts/purge_databases.py --database example_tenant
-poetry run python scripts/purge_databases.py --database example_tenant --apply --confirm "DELETE DEVELOPMENT DATA"
+python scripts/purge_databases.py --database example_tenant
+python scripts/purge_databases.py --database example_tenant --apply --confirm "DELETE DEVELOPMENT DATA"
 ```
 
 Repeat `--database` for every database to remove, including the control database
@@ -133,7 +172,7 @@ same list format. `PDB_RESET_DSNS` takes precedence when nonempty. For example:
 
 ```sh
 export PDB_RESET_DSNS='postgresql://localhost:55433/postgres,postgresql://localhost:55434/postgres'
-poetry run python scripts/purge_databases.py --database example_tenant
+python scripts/purge_databases.py --database example_tenant
 ```
 
 The same database/schema targets must exist on every connection. All connections
@@ -147,8 +186,8 @@ partial reset because drops cannot be rolled back across servers. Connect to
 Preview all custom roles on the configured servers:
 
 ```sh
-poetry run python scripts/purge_databases.py --purge-roles
-poetry run python scripts/purge_databases.py --purge-roles --apply --confirm "DELETE DEVELOPMENT DATA"
+python scripts/purge_databases.py --purge-roles
+python scripts/purge_databases.py --purge-roles --apply --confirm "DELETE DEVELOPMENT DATA"
 ```
 
 Built-in `pg_` roles, `postgres`, `partitiondb`, every connected user and session
@@ -159,5 +198,4 @@ in each supplied database before cluster-wide role deletion. Include every datab
 with role dependencies in the DSN list. Dependencies in omitted databases cause
 role deletion to fail; earlier changes may already have committed. Prefer a
 role-only invocation when supplying multiple databases with different schemas.
-Secrets and uploaded files are unaffected. No reset commands were run as part of
-adding this option.
+Secrets and uploaded files are unaffected.

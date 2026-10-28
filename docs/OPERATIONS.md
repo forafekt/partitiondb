@@ -113,8 +113,10 @@ subprocesses and bounded concurrency. Failure stops new scheduling unless
 `--keep-going`; in-flight children finish. This is not a durable fleet journal.
 For core-only execution, `partitiondb.provisioning.fleet.run_fleet` returns ordered outcomes.
 
-Wrapper options precede the inner command. The inner command owns transactions;
-nested migration/wrapper commands are rejected. If it has a `--database` option,
+Wrapper options precede the inner command. These wrappers enter identity scope
+without resolving tenant runtime credentials or opening `atomic_tenant`; they are
+trusted administrative tools, not an application request/job boundary. The inner
+command owns transactions; nested migration/wrapper commands are rejected. If it has a `--database` option,
 select the same alias explicitly. `--manage` selects the fleet entry-point script.
 
 ## Operating boundaries

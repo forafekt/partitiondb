@@ -1,9 +1,32 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
 from scripts import openbao_acceptance
+
+
+def test_module_runner_uses_repository_scripts_over_installed_package(tmp_path):
+    installed_scripts = tmp_path / "scripts"
+    installed_scripts.mkdir()
+    (installed_scripts / "__init__.py").write_text("", encoding="utf-8")
+    env = dict(os.environ, PYTHONPATH=str(tmp_path))
+    env.pop("PARTITIONDB_OPENBAO_TEST_ADDR", None)
+    env.pop("PARTITIONDB_TEST_DSN", None)
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.openbao_acceptance"],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "skipping is not allowed" in result.stderr
+    assert "No module named" not in result.stderr
 
 
 def test_missing_service_endpoints_cannot_silently_skip_release_acceptance(monkeypatch):

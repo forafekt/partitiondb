@@ -85,12 +85,18 @@ router and backend paths. Pass it through `DjangoSetup(components=...)` and use
 application subclasses of the supplied components. `TENANCY.middleware()` accepts
 `before=`, `after_auth=` and `before_tenant=` path lists. The host guard stays
 first; shared authentication must finish before the tenant transaction.
-`TENANCY.database()` sets the backend, `CONN_MAX_AGE=0` and `ATOMIC_REQUESTS=False`.
+`TENANCY.database()` defaults to the PartitionDB backend, `CONN_MAX_AGE=0` and
+`ATOMIC_REQUESTS=False`; explicit connection keyword arguments override these
+values, so retain these defaults for tenant runtime connections.
 
 For provider login routes, use `tenant_admin=False`, insert the provider middleware
 through `after_auth=`, and set `TENANT_AUTH_*`; see [authentication](DJANGO.md#authentication).
-For path routing use `routing="subfolder"` with a trusted resolver; built-in
-same-host admin login requires hostname routing.
+For path routing use `routing="subfolder"` with a trusted resolver. This mode omits
+`RegistryHostMiddleware`: configure an explicit Django `ALLOWED_HOSTS` list rather
+than copying the hostname example's wildcard. Built-in same-host admin login
+requires hostname routing. `DjangoSetup` enables shared identity middleware when
+an `authorize` callback is supplied; the plain dictionary configuration must
+install that middleware explicitly before the tenant boundary.
 
 Inspect configuration and validate the integration:
 

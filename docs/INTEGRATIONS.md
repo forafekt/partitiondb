@@ -48,14 +48,16 @@ Set `TEMPLATE_ROOTS` to trusted deployment directories and place overrides benea
 `storage_prefix(tenant)`. Use `APP_DIRS=False` and these loaders:
 
 ```python
-TEMPLATES[0]["OPTIONS"]["loaders"] = [(
-    "partitiondb.adapters.django.assets.template_loaders.cached.Loader",
-    [
-        "partitiondb.adapters.django.assets.template_loaders.filesystem.Loader",
-        "django.template.loaders.filesystem.Loader",
-        "django.template.loaders.app_directories.Loader",
-    ],
-)]
+TEMPLATES[0]["OPTIONS"]["loaders"] = [
+    (
+        "partitiondb.adapters.django.assets.template_loaders.cached.Loader",
+        [
+            "partitiondb.adapters.django.assets.template_loaders.filesystem.Loader",
+            "django.template.loaders.filesystem.Loader",
+            "django.template.loaders.app_directories.Loader",
+        ],
+    )
+]
 ```
 
 Shared directories must be separate from tenant roots. Includes, inheritance,

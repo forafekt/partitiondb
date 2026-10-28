@@ -76,14 +76,19 @@ should not mutate data. Both run in privileged tenant scopes. Other hooks includ
 `tenant_values`, `credentials`, `open_connection` and `migration_context`. When
 using the supplied workflow, custom tenant models must also include
 `TenantAccessMixin`; `TenantModelMixin` already includes it.
-Subclass `TenantProvisionForm` and set `provisioning_form_class` on `TenantAdmin`
-when extra fields are needed. Admin hooks include `get_provisioning_form_class`,
+When extra fields are needed, subclass `TenantProvisionForm` from
+`partitiondb.adapters.django.registry.forms` and set `provisioning_form_class`
+on `TenantAdmin`.
+For management-command customization, subclass `create_tenant.Command`, add
+application arguments and override `creation_options()` to pass `tenant_data`.
+Admin hooks include `get_provisioning_form_class`,
 `get_provisioning_fieldsets`, `provisioning_template_name` and `get_workflow`.
 
 ## Requests and ORM boundaries
 
 The managed resolver uses fresh active-only registry/domain lookups. A low-level
-`DjangoRegistry(model, domain_model=...)` also supplies `resolve_host`, `get` and
+`partitiondb.adapters.django.registry.DjangoRegistry(model, domain_model=...)`
+also supplies `resolve_host`, `get` and
 `list_tenants`; lookups run outside tenant scope. Unknown/inactive hosts fail
 closed. The host guard does not verify DNS ownership or issue TLS certificates.
 
@@ -103,7 +108,10 @@ with atomic_tenant(trusted_tenant):
 The request middleware opens this boundary, rolls back responses with status
 400 or above, renders templates inside it and closes the connection. Streaming
 responses are unsupported. Finish querysets, file reads and model work before
-exit; never move ORM instances/cursors between tenants. For async views, wrap the
+exit; never move ORM instances/cursors between tenants. `atomic_tenant` itself
+accepts a trusted identity; it does not query active registry status or check
+membership. Explicit services and jobs must resolve active identity and authorize
+their caller before entering it. For async views, wrap the
 whole synchronous service with `sync_to_async(thread_sensitive=True)`.
 
 Use direct PostgreSQL or session-mode pooling. Driver/transaction/statement
@@ -124,7 +132,8 @@ Login/logout run outside the tenant transaction with normal CSRF protection.
 For tenant business administration, use `TenantAdminSite` and `TenantModelMixinAdmin`
 from `partitiondb.adapters.django.administration.tenant`. Configure
 `TENANT_ADMIN_PERMISSIONS(request, tenant)` to return permission strings and
-`TENANT_ADMIN_LOG_MODEL` to a tenant-local `TenantAdminAuditMixin` subclass.
+`TENANT_ADMIN_LOG_MODEL` to a tenant-local `TenantAdminAuditMixin` subclass
+from `partitiondb.adapters.django.registry.models`.
 Mount this site in the tenant URLconf; mount Django's platform admin only in the
 shared URLconf. Keep shared models off the tenant site.
 
@@ -156,4 +165,6 @@ Choose `TenantSubfolderMiddleware` instead of the hostname tenant boundary, or
 and a trusted `SUBFOLDER_RESOLVER` for `/t/<key>/...`. Missing keys fail closed;
 view paths have the prefix removed and URL reversing restores it. Context and
 script-prefix state are restored on exit. Membership checks and transaction limits
-still apply; use exactly one tenant boundary.
+still apply; use exactly one tenant boundary. Subfolder mode uses Django's normal
+`ALLOWED_HOSTS` validation and does not install the registry host guard. Declare
+the deployment's trusted hostnames explicitly.

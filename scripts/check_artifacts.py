@@ -88,9 +88,9 @@ def main():
             raise ValueError("Wheel metadata does not match project metadata")
         if metadata["License-Expression"] != "MIT":
             raise ValueError("Wheel must declare the MIT license")
-        if set(metadata.get_all("License-File", [])) != {"LICENSE", "THIRD_PARTY_NOTICES"}:
-            raise ValueError("Wheel must declare both project and upstream notices")
-        for name in ("LICENSE", "THIRD_PARTY_NOTICES"):
+        if set(metadata.get_all("License-File", [])) != {"LICENSE"}:
+            raise ValueError("Wheel must declare the project license file")
+        for name in ("LICENSE",):
             packaged = archive.read(f"partitiondb-{version}.dist-info/licenses/{name}")
             if packaged != (ROOT / name).read_bytes():
                 raise ValueError(f"Wheel license file differs from source: {name}")
@@ -109,7 +109,7 @@ def main():
             raise ValueError("Source archive must declare the MIT license")
         for name in ("README.md", "pyproject.toml", "docs/MIGRATION.md"):
             archive.getmember(prefix + name)
-        for name in ("LICENSE", "THIRD_PARTY_NOTICES"):
+        for name in ("LICENSE",):
             stream = archive.extractfile(prefix + name)
             if stream is None or stream.read() != (ROOT / name).read_bytes():
                 raise ValueError(f"Source archive license file differs: {name}")
