@@ -13,6 +13,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils.module_loading import import_string
 
 DEFAULTS = {
+    "ADMIN": {},
+    "ROUTING": None,
     "TENANT_MODEL": None,
     "DOMAIN_MODEL": None,
     "MEMBERSHIP_MODEL": None,
@@ -159,6 +161,21 @@ def middleware_order(paths, bases):
     return roles == list(range(len(bases)))
 
 
+def validate_routing_mode(config, resolver_setting):
+    """Validate a request boundary after imports are safe, including custom subclasses."""
+    mode = config["ROUTING"]
+    if mode is None:
+        return  # Plain dictionaries may continue to infer routing from middleware.
+    if not isinstance(mode, str) or mode not in {"host", "subfolder"}:
+        raise ImproperlyConfigured("PARTITIONDB.ROUTING must be host, subfolder, or None")
+    expected = "RESOLVER" if mode == "host" else "SUBFOLDER_RESOLVER"
+    if resolver_setting != expected:
+        raise ImproperlyConfigured(
+            f"PARTITIONDB.ROUTING={mode!r} requires a tenant middleware using {expected}; "
+            f"the configured middleware uses {resolver_setting}"
+        )
+
+
 @dataclass(frozen=True)
 class DjangoComponents:
     """Dotted paths to built-in classes or application subclasses."""
@@ -193,7 +210,7 @@ class DjangoSetup:
         components=None,
         **options,
     ):
-        if routing not in {"host", "subfolder"}:
+        if not isinstance(routing, str) or routing not in {"host", "subfolder"}:
             raise ImproperlyConfigured("routing must be host or subfolder")
         for name, apps in (("shared_apps", shared_apps), ("tenant_apps", tenant_apps)):
             if not isinstance(apps, Mapping) or not all(
@@ -210,6 +227,21 @@ class DjangoSetup:
             raise ImproperlyConfigured("Built-in tenant admin login requires an authorize callback")
         if not isinstance(tenant_urlconf, str) or not tenant_urlconf:
             raise ImproperlyConfigured("tenant_urlconf must be a dotted URLconf module path")
+        if not isinstance(shared_hosts, (list, tuple)) or any(
+            not isinstance(host, str)
+            or not host
+            or host != host.lower().rstrip(".")
+            or any(character in host for character in "/:*\\")
+            or any(character.isspace() for character in host)
+            for host in shared_hosts
+        ):
+            raise ImproperlyConfigured(
+                "shared_hosts must be a list or tuple of exact lowercase hostnames without ports"
+            )
+        if bool(shared_hosts) != bool(shared_urlconf) or (
+            shared_urlconf is not None and (not isinstance(shared_urlconf, str) or not shared_urlconf)
+        ):
+            raise ImproperlyConfigured("Configure shared_hosts and a nonempty shared_urlconf together")
         self.components = components if components is not None else DjangoComponents()
         if not isinstance(self.components, DjangoComponents):
             raise ImproperlyConfigured("components must be DjangoComponents")
@@ -226,6 +258,7 @@ class DjangoSetup:
         ]
         self.database_routers = [self.components.router]
         values = {
+            "ROUTING": routing,
             "SHARED_APPS": list(shared_apps),
             "TENANT_APPS": list(tenant_apps),
             "RESOLVER" if routing == "host" else "SUBFOLDER_RESOLVER": resolver,
@@ -239,8 +272,15 @@ class DjangoSetup:
             values.pop("RESOLVER" if routing == "host" else "SUBFOLDER_RESOLVER", None)
         self.partitiondb = PartitionDBSettings({**values, **options}).as_dict()
 
-    def middleware(self, *, before=(), after_auth=(), before_tenant=()):
-        for name, paths in (("before", before), ("after_auth", after_auth), ("before_tenant", before_tenant)):
+    def middleware(self, *, before=(), after_security=(), after_sessions=(), after_auth=(), before_tenant=()):
+        """Insert application middleware at explicit points outside the tenant transaction."""
+        for name, paths in (
+            ("before", before),
+            ("after_security", after_security),
+            ("after_sessions", after_sessions),
+            ("after_auth", after_auth),
+            ("before_tenant", before_tenant),
+        ):
             if not isinstance(paths, (list, tuple)) or not all(isinstance(path, str) and path for path in paths):
                 raise ImproperlyConfigured(f"{name} must be a list or tuple of middleware import paths")
         c = self.components
@@ -251,7 +291,9 @@ class DjangoSetup:
             *([c.host_guard] if self.routing == "host" else []),
             *before,
             "django.middleware.security.SecurityMiddleware",
+            *after_security,
             "django.contrib.sessions.middleware.SessionMiddleware",
+            *after_sessions,
             "django.middleware.common.CommonMiddleware",
             "django.middleware.csrf.CsrfViewMiddleware",
             "django.contrib.auth.middleware.AuthenticationMiddleware",

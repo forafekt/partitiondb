@@ -166,7 +166,8 @@ The permissions callback maps that role to CRUD permissions on the eligible tena
 
 ### Tenant business admin
 
-Use `TenantAdminSite` and `TenantModelMixinAdmin` from `partitiondb.adapters.django.administration.tenant`.
+Use `TenantAdminSite` and `TenantModelAdmin` from `partitiondb.adapters.django.admin`.
+The existing imports from `partitiondb.adapters.django.administration.tenant` also remain supported.
 
 1. Set `TENANT_ADMIN_PERMISSIONS(request, tenant)` to return permission strings.
 2. Set `TENANT_ADMIN_LOG_MODEL` to a tenant-local subclass of `TenantAdminAuditMixin` (from `partitiondb.adapters.django.registry.models`).
@@ -188,6 +189,68 @@ PARTITIONDB.update(
     TENANT_ADMIN_LOGIN_URL="/accounts/login/",
 )
 ```
+
+### Provider settings example
+
+This example uses application-owned tenant models and audit logging. Adapt their
+paths and classify every additional installed app, including provider extensions,
+exactly once. Install the provider and static-file packages separately and retain
+their authentication backend, adapter, verification, MFA and storage settings.
+
+```python
+from partitiondb.adapters.django.configuration import DjangoSetup
+
+TENANCY = DjangoSetup(
+    shared_apps={
+        "partitiondb_registry": "partitiondb.adapters.django.registry_app",
+        "partitiondb_access_control": "partitiondb.adapters.django.access_control",
+        "accounts": "apps.accounts.apps.AccountsConfig",
+        "admin": "partitiondb.adapters.django.administration.apps.PartitionDBAdminConfig",
+        "auth": "django.contrib.auth",
+        "contenttypes": "django.contrib.contenttypes",
+        "sessions": "django.contrib.sessions",
+        "messages": "django.contrib.messages",
+        "staticfiles": "django.contrib.staticfiles",
+        "allauth": "allauth",
+        "account": "allauth.account",
+    },
+    tenant_apps={"workspaces": "apps.workspaces", "audit": "apps.audit"},
+    tenant_urlconf="config.urls",
+    shared_hosts=["localhost", "127.0.0.1"],
+    shared_urlconf="config.urls_platform",
+    authorize="partitiondb.adapters.django.registry_app.tenancy.authorize_tenant",
+    tenant_admin=False,  # The provider owns login; tenant admin remains available.
+    TENANT_ADMIN_PERMISSIONS="partitiondb.adapters.django.registry_app.tenancy.tenant_admin_permissions",
+    TENANT_ADMIN_LOG_MODEL="audit.AdminAudit",
+    TENANT_AUTH_PATHS=["/accounts/", "/_allauth/", "/api/auth/", "/admin/login/", "/admin/logout/"],
+    TENANT_AUTH_URLCONF="config.urls_auth",
+    TENANT_ADMIN_LOGIN_URL="/accounts/login/",
+)
+
+INSTALLED_APPS = TENANCY.installed_apps
+PARTITIONDB = TENANCY.partitiondb
+DATABASE_ROUTERS = TENANCY.database_routers
+ROOT_URLCONF = TENANCY.tenant_urlconf
+AUTH_USER_MODEL = "accounts.User"
+ALLOWED_HOSTS = ["*"]  # The generated hostname guard stays first.
+
+MIDDLEWARE = TENANCY.middleware(
+    after_security=["whitenoise.middleware.WhiteNoiseMiddleware"],
+    after_sessions=["django.middleware.locale.LocaleMiddleware"],
+    after_auth=["allauth.account.middleware.AccountMiddleware"],
+)
+```
+
+Declare only account route prefixes that your application actually mounts in
+`config.urls_auth`; `/_allauth/` and `/api/auth/` are optional application choices.
+That URLconf must also implement the admin login/logout redirects listed above.
+The middleware hooks keep this order: host guard, SecurityMiddleware, WhiteNoise,
+sessions, locale, CommonMiddleware, CSRF, Django authentication, provider middleware,
+shared identity, messages, clickjacking protection, then the tenant boundary.
+
+Keep this as the only `MIDDLEWARE` assignment. Replacing it with a handwritten list
+removes the generated boundaries and can cause `partitiondb.E024`; see
+[settings troubleshooting](SETTINGS.md#troubleshooting).
 
 Notes:
 
@@ -213,3 +276,6 @@ Behavior:
 - Membership checks and transaction limits still apply.
 - Use **exactly one** tenant boundary.
 - Subfolder mode uses Django's normal `ALLOWED_HOSTS` validation and does not install the registry host guard, so declare your trusted hostnames explicitly.
+
+See [admin customization](ADMIN_CUSTOMIZATION.md) for independent shared/tenant
+site and model-admin configuration and the reusable admin mixins.

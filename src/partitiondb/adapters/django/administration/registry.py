@@ -93,7 +93,7 @@ class DomainRegistryAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
         return errors
 
 
-class ControlPlaneAdminSite(admin.AdminSite):
+class ControlPlaneAdminSiteMixin:
     """Shared-only site with a scoped app inventory and disabled tenant entries."""
 
     index_template = "partitiondb/admin/index.html"
@@ -109,6 +109,10 @@ class ControlPlaneAdminSite(admin.AdminSite):
         shared, _ = app_sets()
         if any(model._meta.app_label not in shared for model in models):
             raise ImproperlyConfigured("ControlPlaneAdminSite accepts only shared models")
+        if admin_class is None:
+            from .configuration import get_model_admin_class
+
+            admin_class = get_model_admin_class("SHARED")
         return super().register(models, admin_class, **options)
 
     def get_app_list(self, request, app_label=None):
@@ -242,3 +246,11 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
                 "provisioning_failed": failed,
             },
         )
+
+
+class ControlPlaneAdminSite(ControlPlaneAdminSiteMixin, admin.AdminSite):
+    """Native Django shared administration site."""
+
+
+class ControlPlaneModelAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
+    """Native Django shared model administration."""

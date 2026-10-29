@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.http import Http404
 
-from partitiondb.adapters.django.configuration import get_config
+from partitiondb.adapters.django.configuration import get_config, validate_routing_mode
 from partitiondb.adapters.django.routing.scope import atomic_tenant
 from partitiondb.adapters.django.routing.tenant_types import request_urlconf, tenant_policy
 from partitiondb.tenancy.identity import Tenant, tenant_scope
@@ -70,6 +70,7 @@ class TenantMiddleware:
 
     def __init__(self, get_response):
         self.get_response = get_response
+        validate_routing_mode(get_config(), self.resolver_setting)
         self.resolve = get_config().callback(self.resolver_setting, required=True)
         self.authorize = get_config().callback("AUTHORIZE")
         self.auth_paths, self.auth_urlconf = tenant_auth_routes(get_config())

@@ -4,7 +4,13 @@ from django.core.checks import Error, register
 from django.core.exceptions import ImproperlyConfigured
 from django.urls import get_resolver
 
-from partitiondb.adapters.django.configuration import get_config, middleware_matches, middleware_order, subclass_path
+from partitiondb.adapters.django.configuration import (
+    get_config,
+    middleware_matches,
+    middleware_order,
+    subclass_path,
+    validate_routing_mode,
+)
 from partitiondb.adapters.django.routing.tenant_types import type_policies
 
 
@@ -106,6 +112,10 @@ def check_configuration(app_configs, **kwargs):
     if len(middleware_matches(middleware, hostname_boundary)) > 1:
         errors.append(Error("Choose one tenant request boundary", id="partitiondb.E015"))
     resolver_name = "SUBFOLDER_RESOLVER" if boundary == path_boundary else "RESOLVER"
+    try:
+        validate_routing_mode(config, resolver_name)
+    except ImproperlyConfigured as error:
+        errors.append(Error(str(error), id="partitiondb.E035"))
     try:
         config.callback(resolver_name, required=True)
     except ImproperlyConfigured as error:
