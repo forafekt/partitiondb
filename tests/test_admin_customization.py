@@ -144,7 +144,7 @@ def test_configured_default_site_precedes_django_autodiscovery():
     import subprocess
     import sys
 
-    source = '''
+    source = """
 from django.conf import settings
 settings.configure(
     SECRET_KEY="test",
@@ -166,7 +166,7 @@ from tests.custom_shared_admin import CustomSharedSite
 assert isinstance(admin.site, CustomSharedSite)
 assert admin.site.is_registered(User)
 assert admin.site.is_registered(Group)
-'''
+"""
     subprocess.run([sys.executable, "-c", source], check=True, timeout=30)
 
 

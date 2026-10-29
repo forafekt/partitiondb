@@ -65,8 +65,10 @@ def get_model_admin_class(scope="TENANT"):
 
 
 def create_admin_site(scope="TENANT", *, site_class=None, **kwargs):
-    candidate = resolve_admin_class(scope, "SITE_CLASS") if site_class is None else validate_admin_class(
-        site_class, scope, "SITE_CLASS"
+    candidate = (
+        resolve_admin_class(scope, "SITE_CLASS")
+        if site_class is None
+        else validate_admin_class(site_class, scope, "SITE_CLASS")
     )
     return candidate(**kwargs)
 

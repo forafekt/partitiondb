@@ -33,18 +33,24 @@ In `myproject/admin_ui.py`, compose with the UI library's documented Django base
 ```python
 from external_admin_library import AdminSite as UISite, ModelAdmin as UIModelAdmin
 from partitiondb.adapters.django.admin import (
-    TenantAdminSiteMixin, TenantModelAdminMixin,
-    ControlPlaneAdminSiteMixin, ControlPlaneAdminMixin,
+    TenantAdminSiteMixin,
+    TenantModelAdminMixin,
+    ControlPlaneAdminSiteMixin,
+    ControlPlaneAdminMixin,
 )
+
 
 class TenantSite(TenantAdminSiteMixin, UISite):
     pass
 
+
 class TenantModelAdmin(TenantModelAdminMixin, UIModelAdmin):
     pass
 
+
 class SharedSite(ControlPlaneAdminSiteMixin, UISite):
     pass
+
 
 class SharedModelAdmin(ControlPlaneAdminMixin, UIModelAdmin):
     pass
