@@ -38,7 +38,7 @@ def permissions(request, tenant):
     )
 
 
-def main(postgres=False):
+def main(postgres=False, custom_ui=False):
     with tempfile.TemporaryDirectory() as folder:
         databases = {
             alias: {
@@ -113,6 +113,10 @@ def main(postgres=False):
         import django
 
         django.setup()
+        if custom_ui:
+            from tests.custom_admin_scenario import install_custom_urls
+
+            install_custom_urls()
         from apps.workspaces.models import Workspace
         from django.contrib.auth import get_user_model
         from django.core.management import call_command

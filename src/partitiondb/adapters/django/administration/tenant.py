@@ -64,7 +64,7 @@ def audit_model():
     return model
 
 
-class TenantModelAdmin(admin.ModelAdmin):
+class TenantModelAdminMixin:
     """All standard CRUD logs go to the configured tenant-local audit table."""
 
     def has_module_permission(self, request):
@@ -173,7 +173,7 @@ class TenantModelAdmin(admin.ModelAdmin):
         )
 
 
-class TenantAdminSite(admin.AdminSite):
+class TenantAdminSiteMixin:
     """Only explicitly registered tenant models, never shared users/groups."""
 
     user_class = TenantAdminUser
@@ -187,9 +187,11 @@ class TenantAdminSite(admin.AdminSite):
         tenant_apps = set(get_config()["TENANT_APPS"])
         if any(model._meta.app_label not in tenant_apps for model in models):
             raise ImproperlyConfigured("TenantAdminSite accepts only tenant models")
-        admin_class = admin_class or TenantModelAdmin
-        if not issubclass(admin_class, TenantModelAdmin):
-            raise ImproperlyConfigured("Tenant admin registrations must extend TenantModelAdmin")
+        from .configuration import get_model_admin_class, validate_admin_class
+
+        if admin_class is None:
+            admin_class = get_model_admin_class("TENANT")
+        validate_admin_class(admin_class, "TENANT", "MODEL_ADMIN_CLASS")
         return super().register(models, admin_class, **options)
 
     def has_permission(self, request):
@@ -271,3 +273,11 @@ class TenantAdminSite(admin.AdminSite):
 
     def logout(self, request, extra_context=None):
         raise PermissionDenied("Sign out through the shared account endpoint")
+
+
+class TenantModelAdmin(TenantModelAdminMixin, admin.ModelAdmin):
+    """Native Django implementation of tenant model administration."""
+
+
+class TenantAdminSite(TenantAdminSiteMixin, admin.AdminSite):
+    """Native Django implementation of tenant site administration."""
