@@ -1,11 +1,11 @@
 from django.contrib import admin
 
 from partitiondb import current_tenant
-from partitiondb.adapters.django.administration.managed import TenantAdmin
-from partitiondb.adapters.django.administration.registry import ControlPlaneAdminMixin, DomainRegistryAdmin
+from partitiondb.adapters.django.administration.managed import ManagedTenantAdmin
+from partitiondb.adapters.django.administration.registry import DomainRegistryAdmin, SharedModelAdminMixin
 from partitiondb.adapters.django.registry_app.models import Domain, Membership, Tenant
 
-admin.site.register(Tenant, TenantAdmin)
+admin.site.register(Tenant, ManagedTenantAdmin)
 
 
 @admin.register(Domain)
@@ -15,7 +15,7 @@ class DomainAdmin(DomainRegistryAdmin):
 
 
 @admin.register(Membership)
-class MembershipAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
+class MembershipAdmin(SharedModelAdminMixin, admin.ModelAdmin):
     list_display = ("user", "tenant", "role", "active")
     list_filter = ("role", "active")
     search_fields = ("user__username", "tenant__name")

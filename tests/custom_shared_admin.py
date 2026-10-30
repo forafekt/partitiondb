@@ -2,8 +2,8 @@
 
 from django.contrib import admin
 
-from partitiondb.adapters.django.admin import ControlPlaneAdminSiteMixin
+from partitiondb.adapters.django.admin import SharedAdminSiteMixin
 
 
-class CustomSharedSite(ControlPlaneAdminSiteMixin, admin.AdminSite):
+class CustomSharedSite(SharedAdminSiteMixin, admin.AdminSite):
     site_title = "Application UI"

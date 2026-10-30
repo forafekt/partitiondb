@@ -194,7 +194,7 @@ def test_tenant_manifest_combination_is_rejected(tmp_path):
 def test_tenant_asset_path_normalizes_django_safe_strings(tmp_path):
     from django.utils.safestring import SafeString
 
-    from partitiondb.adapters.django.assets import tenant_path
+    from partitiondb.adapters.django.assets.paths import tenant_path
 
     name = SafeString("nested/base.html")
     assert tenant_path(tmp_path, A, name) == tmp_path / storage_prefix(A) / "nested/base.html"

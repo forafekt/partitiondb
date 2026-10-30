@@ -11,17 +11,17 @@ from partitiondb.adapters.django.configuration import get_config
 
 def _defaults():
     from .registry import (
-        ControlPlaneAdminMixin,
-        ControlPlaneAdminSite,
-        ControlPlaneAdminSiteMixin,
-        ControlPlaneModelAdmin,
+        SharedAdminSite,
+        SharedAdminSiteMixin,
+        SharedModelAdmin,
+        SharedModelAdminMixin,
     )
     from .tenant import TenantAdminSite, TenantAdminSiteMixin, TenantModelAdmin, TenantModelAdminMixin
 
     return {
         "SHARED": {
-            "SITE_CLASS": (ControlPlaneAdminSite, ControlPlaneAdminSiteMixin, admin.AdminSite),
-            "MODEL_ADMIN_CLASS": (ControlPlaneModelAdmin, ControlPlaneAdminMixin, admin.ModelAdmin),
+            "SITE_CLASS": (SharedAdminSite, SharedAdminSiteMixin, admin.AdminSite),
+            "MODEL_ADMIN_CLASS": (SharedModelAdmin, SharedModelAdminMixin, admin.ModelAdmin),
         },
         "TENANT": {
             "SITE_CLASS": (TenantAdminSite, TenantAdminSiteMixin, admin.AdminSite),
@@ -64,7 +64,7 @@ def get_model_admin_class(scope="TENANT"):
     return resolve_admin_class(scope, "MODEL_ADMIN_CLASS")
 
 
-def create_admin_site(scope="TENANT", *, site_class=None, **kwargs):
+def create_admin_site[S: admin.AdminSite](scope="TENANT", *, site_class: type[S] | None = None, **kwargs) -> S:
     candidate = (
         resolve_admin_class(scope, "SITE_CLASS")
         if site_class is None
@@ -73,6 +73,18 @@ def create_admin_site(scope="TENANT", *, site_class=None, **kwargs):
     return candidate(**kwargs)
 
 
-def shared_admin_site(**kwargs):
+def shared_admin_site(**kwargs) -> admin.AdminSite:
     """Django AdminConfig.default_site factory, invoked lazily before autodiscovery."""
     return create_admin_site("SHARED", **kwargs)
+
+
+def compose_model_admin(scope, admin_class=None):
+    """Preserve registration overrides while inheriting the configured UI base."""
+    configured = get_model_admin_class(scope)
+    if admin_class is None or issubclass(configured, admin_class):
+        return configured
+    if scope == "TENANT":
+        validate_admin_class(admin_class, scope, "MODEL_ADMIN_CLASS")
+    if issubclass(admin_class, configured):
+        return admin_class
+    return type(admin_class.__name__, (admin_class, configured), {"__module__": admin_class.__module__})

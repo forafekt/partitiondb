@@ -20,3 +20,7 @@
   </form>
 </div>
 {% endblock %}
+
+{# Only the provisioning form's dedicated submit button may trigger creation. #}
+{% block submit_buttons_top %}{% endblock %}
+{% block submit_buttons_bottom %}{% endblock %}

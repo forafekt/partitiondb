@@ -15,11 +15,7 @@ python -m venv .venv
 python -m pip install '.[django,dev]'
 ```
 
-On Python 3.11, select Django 5.2 explicitly:
-
-```sh
-python -m pip install '.[django,dev]' 'Django>=5.2,<5.3'
-```
+Python 3.12 or newer is required.
 
 | Extra | Installs |
 | --- | --- |
@@ -135,7 +131,6 @@ python scripts/release_check.py
 
 | Python | Django | PostgreSQL |
 | --- | --- | --- |
-| 3.11 | 5.2 | 16 |
 | 3.12 – 3.14 | 5.2, 6.0, 6.1 | 16 |
 
 - All container release gates install the **same built wheel**.

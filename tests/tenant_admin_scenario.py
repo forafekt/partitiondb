@@ -199,6 +199,19 @@ def main(postgres=False, custom_ui=False):
             response = client.get("/admin/")
             assert response.status_code == 200, response.content[:1000]
             from django.contrib.contenttypes.models import ContentType
+            from django.template import Context, Template
+
+            from tests.tenant_admin_urls import site
+
+            # Custom dashboards may invoke Django's filtered admin-log tag even
+            # when the native tenant sidebar hides recent shared actions.
+            with tenant_scope(resolve("alpha.test")):
+                entries = site.get_log_entries(None)
+                result = Template(
+                    "{% load log %}{% get_admin_log 20 as recent for_user user %}{{ recent|length }}"
+                ).render(Context({"log_entries": entries, "user": user}))
+                assert result == "0"
+                assert list(entries.filter(user__pk=user.pk)[:20]) == []
 
             ContentType.objects.clear_cache()
             form_response = client.get("/admin/workspaces/workspace/add/")

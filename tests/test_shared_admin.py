@@ -16,8 +16,8 @@ from apps.workspaces.models import Workspace  # noqa: E402
 
 from partitiondb.adapters.django import get_tenant_model  # noqa: E402
 from partitiondb.adapters.django.administration.registry import (  # noqa: E402
-    ControlPlaneAdminSite,
     ProvisioningTenantAdmin,
+    SharedAdminSite,
 )
 from partitiondb.adapters.django.routing.middleware import TenantMiddleware  # noqa: E402
 
@@ -72,15 +72,13 @@ def test_shared_streaming_is_rejected():
             middleware(RequestFactory().get("/", HTTP_HOST="platform.test"))
 
 
-def test_shared_admin_rejects_tenant_registration_and_lists_disabled_models():
-    site = ControlPlaneAdminSite()
+def test_shared_admin_rejects_tenant_registration_and_hides_tenant_models():
+    site = SharedAdminSite()
     with pytest.raises(ImproperlyConfigured):
         site.register(Workspace)
     request = RequestFactory().get("/admin/")
     request.user = SimpleNamespace(is_superuser=True, is_active=True, is_staff=True)
-    tenant_app = next(app for app in site.get_app_list(request) if app["app_label"] == "workspaces")
-    assert "disabled" in tenant_app["name"]
-    assert all(model["admin_url"] is None for model in tenant_app["models"])
+    assert not site.get_app_list(request)
     with tenant_scope(Tenant("one", "alpha")):
         assert not site.has_permission(request)
 
@@ -95,7 +93,7 @@ def test_provisioning_form_failure_is_retained_and_permission_checked(caplog):
         def provision_tenant(self, request, cleaned_data):
             raise RuntimeError("private failure details")
 
-    site = ControlPlaneAdminSite()
+    site = SharedAdminSite()
     site.each_context = lambda request: {}
     model_admin = ModelAdmin(Organization, site)
     request = RequestFactory().post("/admin/add/", {"name": "Example"})
@@ -146,7 +144,7 @@ def test_provisioning_success_calls_service_and_audits(monkeypatch):
             assert cleaned_data == {"name": "Example"}
             return Organization(pk=123, schema_name="example")
 
-    site = ControlPlaneAdminSite(name="registry")
+    site = SharedAdminSite(name="registry")
     model_admin = ModelAdmin(Organization, site)
     model_admin.log_addition = Mock()
     model_admin.message_user = Mock()
@@ -156,3 +154,31 @@ def test_provisioning_success_calls_service_and_audits(monkeypatch):
     assert response.status_code == 302
     assert response.url.endswith("/123/change/")
     model_admin.log_addition.assert_called_once()
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_provisioning_context_supports_standard_submit_row_without_generic_save(fail):
+    from django.contrib.admin.templatetags.admin_modify import submit_row
+    from django.template import Context
+
+    class Form(forms.Form):
+        name = forms.CharField()
+
+    class ModelAdmin(ProvisioningTenantAdmin):
+        provisioning_form_class = Form
+
+        def provision_tenant(self, request, cleaned_data):
+            raise RuntimeError("simulated provisioning failure")
+
+    site = SharedAdminSite()
+    site.each_context = lambda request: {}
+    model_admin = ModelAdmin(Organization, site)
+    request = RequestFactory().post("/admin/add/", {"name": "Example"}) if fail else RequestFactory().get("/admin/add/")
+    request.user = SimpleNamespace(is_superuser=True, has_perm=lambda permission: True)
+    response = model_admin.add_view(request)
+    context = response.context_data
+    buttons = submit_row(Context(context))
+    assert not buttons["show_save"]
+    assert not buttons["show_save_and_continue"]
+    assert not buttons["show_save_and_add_another"]
+    assert context["provisioning_failed"] is fail

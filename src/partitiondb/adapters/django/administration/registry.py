@@ -9,7 +9,7 @@ from partitiondb.adapters.django.registry.models import DomainModelMixin, Tenant
 from partitiondb.adapters.django.routing.router import app_sets
 
 
-class ControlPlaneAdminMixin:
+class SharedModelAdminMixin:
     def _require_control_plane(self):
         if current_tenant(required=False) is not None:
             raise PermissionDenied("Registry administration requires control-plane context")
@@ -43,7 +43,7 @@ class ControlPlaneAdminMixin:
         return current_tenant(required=False) is None and super().has_change_permission(request, obj)
 
 
-class TenantRegistryAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
+class TenantRegistryAdmin(SharedModelAdminMixin, admin.ModelAdmin):
     list_display = ("pk", "schema_name", "database_alias", "active")
     list_filter = ("active", "database_alias")
     search_fields = ("schema_name",)
@@ -71,7 +71,7 @@ class TenantRegistryAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
         return errors
 
 
-class DomainRegistryAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
+class DomainRegistryAdmin(SharedModelAdminMixin, admin.ModelAdmin):
     list_display = ("hostname", "tenant", "is_primary")
     list_filter = ("is_primary",)
     search_fields = ("hostname",)
@@ -93,8 +93,8 @@ class DomainRegistryAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
         return errors
 
 
-class ControlPlaneAdminSiteMixin:
-    """Shared-only site with a scoped app inventory and disabled tenant entries."""
+class SharedAdminSiteMixin:
+    """Shared-only site with a scoped app inventory."""
 
     index_template = "partitiondb/admin/index.html"
     app_index_template = "partitiondb/admin/app_index.html"
@@ -108,45 +108,14 @@ class ControlPlaneAdminSiteMixin:
         models = [model_or_iterable] if hasattr(model_or_iterable, "_meta") else list(model_or_iterable)
         shared, _ = app_sets()
         if any(model._meta.app_label not in shared for model in models):
-            raise ImproperlyConfigured("ControlPlaneAdminSite accepts only shared models")
-        if admin_class is None:
-            from .configuration import get_model_admin_class
+            raise ImproperlyConfigured("SharedAdminSite accepts only shared models")
+        from .configuration import compose_model_admin
 
-            admin_class = get_model_admin_class("SHARED")
-        return super().register(models, admin_class, **options)
+        return super().register(models, compose_model_admin("SHARED", admin_class), **options)
 
     def get_app_list(self, request, app_label=None):
-        from django.apps import apps
-
-        result = super().get_app_list(request, app_label)
-        for app in result:
-            app["name"] = f"{app['name']} — Shared"
-        _, tenant_apps = app_sets()
-        for label in sorted(tenant_apps):
-            if app_label is not None and app_label != label:
-                continue
-            if not (request.user.is_superuser or request.user.has_module_perms(label)):
-                continue
-            config = apps.get_app_config(label)
-            result.append(
-                {
-                    "name": f"{config.verbose_name} — Tenant (disabled in shared admin)",
-                    "app_label": label,
-                    "app_url": None,
-                    "has_module_perms": True,
-                    "models": [
-                        {
-                            "name": model._meta.verbose_name_plural,
-                            "object_name": model._meta.object_name,
-                            "admin_url": None,
-                            "add_url": None,
-                            "perms": {},
-                        }
-                        for model in config.get_models()
-                    ],
-                }
-            )
-        return sorted(result, key=lambda app: str(app["name"]).lower())
+        allowed = app_sets()[0]
+        return [app for app in super().get_app_list(request, app_label) if app["app_label"] in allowed]
 
 
 class ProvisioningTenantAdmin(TenantRegistryAdmin):
@@ -241,6 +210,17 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
                 "add": True,
                 "change": False,
                 "is_popup": False,
+                "save_as": False,
+                "save_on_top": False,
+                "has_change_permission": self.has_change_permission(request),
+                "has_delete_permission": False,
+                "has_editable_inline_admin_formsets": False,
+                "inline_admin_formsets": [],
+                "has_file_field": form.is_multipart(),
+                # Provisioning has its own submit button and recovery contract.
+                "show_save": False,
+                "show_save_and_continue": False,
+                "show_save_and_add_another": False,
                 "has_view_permission": self.has_view_permission(request),
                 "has_add_permission": True,
                 "provisioning_failed": failed,
@@ -248,9 +228,9 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
         )
 
 
-class ControlPlaneAdminSite(ControlPlaneAdminSiteMixin, admin.AdminSite):
+class SharedAdminSite(SharedAdminSiteMixin, admin.AdminSite):
     """Native Django shared administration site."""
 
 
-class ControlPlaneModelAdmin(ControlPlaneAdminMixin, admin.ModelAdmin):
+class SharedModelAdmin(SharedModelAdminMixin, admin.ModelAdmin):
     """Native Django shared model administration."""

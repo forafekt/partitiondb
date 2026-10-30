@@ -21,13 +21,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.11', '3.12', '3.13', '3.14']
+        python: ['3.12', '3.13', '3.14']
         django: ['>=5.2,<5.3', '>=6.0,<6.1', '>=6.1,<6.2']
-        exclude:
-          - python: '3.11'
-            django: '>=6.0,<6.1'
-          - python: '3.11'
-            django: '>=6.1,<6.2'
 
     services:
       postgres:

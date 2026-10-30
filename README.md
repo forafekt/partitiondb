@@ -3,7 +3,7 @@
 **Explicit PostgreSQL multi-tenancy for Python**, with optional Django and Celery adapters.
 
 [![CI](https://github.com/forafekt/partitiondb/actions/workflows/ci.yml/badge.svg)](https://github.com/forafekt/partitiondb/actions/workflows/ci.yml)
-![Python 3.11–3.14](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)
+![Python 3.12–3.14](https://img.shields.io/badge/python-3.12%E2%80%933.14-blue)
 ![Django 5.2 | 6.0 | 6.1](https://img.shields.io/badge/django-5.2%20%7C%206.0%20%7C%206.1-0C4B33)
 ![PostgreSQL 16](https://img.shields.io/badge/postgresql-16-336791)
 ![Status: alpha](https://img.shields.io/badge/status-alpha-orange)
@@ -132,7 +132,6 @@ Details: [settings](docs/SETTINGS.md) · [database choices](docs/DATABASES.md) �
 
 | Python | Django | PostgreSQL |
 | --- | --- | --- |
-| 3.11 | 5.2 | 16 |
 | 3.12 – 3.14 | 5.2, 6.0, 6.1 | 16 |
 
 The core has no runtime dependencies. PostgreSQL 16 is the integration target.
