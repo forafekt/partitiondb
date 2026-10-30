@@ -37,7 +37,8 @@ def main(sqlite_name=None):
         dashboard = client.get(reverse("registry:index"))
         assert dashboard.status_code == 200
         assert b"Shared control plane" in dashboard.content
-        assert b"Tenant (disabled in shared admin)" in dashboard.content
+        assert b"Tenant (disabled in shared admin)" not in dashboard.content
+        assert b"Workspaces" not in dashboard.content
         assert b"/admin/workspaces/workspace/" not in dashboard.content
         schema = "admin_" + uuid.uuid4().hex
         response = client.post(

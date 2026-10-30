@@ -91,7 +91,7 @@ Register these admins on your models (the optional registry app registers its de
 
 | Admin class | Register on |
 | --- | --- |
-| `partitiondb.adapters.django.administration.managed.TenantAdmin` | Tenant model |
+| `partitiondb.adapters.django.administration.managed.ManagedTenantAdmin` | Tenant model |
 | `partitiondb.adapters.django.administration.registry.DomainRegistryAdmin` | Domain model |
 
 The library supplies the provisioning form and template, access inspection and recovery. Extra form fields are passed to the workflow as `tenant_data`.
@@ -99,7 +99,7 @@ The library supplies the provisioning form and template, access inspection and r
 | To customize... | Do this |
 | --- | --- |
 | Business setup and verification | Subclass `TenantWorkflow`, override `seed(tenant)` and `verify_tenant(tenant)`, and set `TENANT_WORKFLOW` |
-| Extra admin form fields | Subclass `TenantProvisionForm` (from `partitiondb.adapters.django.registry.forms`) and set `provisioning_form_class` on `TenantAdmin` |
+| Extra admin form fields | Subclass `TenantProvisionForm` (from `partitiondb.adapters.django.registry.forms`) and set `provisioning_form_class` on `ManagedTenantAdmin` |
 | The `create_tenant` command | Subclass `create_tenant.Command`, add arguments, and override `creation_options()` to pass `tenant_data` |
 | Admin behavior | Override `get_provisioning_form_class`, `get_provisioning_fieldsets`, `provisioning_template_name` or `get_workflow` |
 

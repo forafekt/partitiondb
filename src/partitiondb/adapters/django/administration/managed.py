@@ -19,7 +19,7 @@ from partitiondb.adapters.django.registry.workflow import get_workflow
 from partitiondb.provisioning import Stage
 
 
-class TenantAdmin(TenantAccessRegistryAdmin, ProvisioningTenantAdmin):
+class ManagedTenantAdmin(TenantAccessRegistryAdmin, ProvisioningTenantAdmin):
     provisioning_form_class = TenantProvisionForm
 
     list_display = (
@@ -103,7 +103,7 @@ class TenantAdmin(TenantAccessRegistryAdmin, ProvisioningTenantAdmin):
         errors = super().check(**kwargs)
         try:
             if self.model is not get_tenant_model():
-                raise ImproperlyConfigured("TenantAdmin must be registered on TENANT_MODEL")
+                raise ImproperlyConfigured("ManagedTenantAdmin must be registered on TENANT_MODEL")
         except ImproperlyConfigured as error:
             errors.append(Error(str(error), obj=self.__class__, id="partitiondb.E032"))
         return errors

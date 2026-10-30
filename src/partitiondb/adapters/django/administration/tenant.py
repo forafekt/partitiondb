@@ -187,12 +187,9 @@ class TenantAdminSiteMixin:
         tenant_apps = set(get_config()["TENANT_APPS"])
         if any(model._meta.app_label not in tenant_apps for model in models):
             raise ImproperlyConfigured("TenantAdminSite accepts only tenant models")
-        from .configuration import get_model_admin_class, validate_admin_class
+        from .configuration import compose_model_admin
 
-        if admin_class is None:
-            admin_class = get_model_admin_class("TENANT")
-        validate_admin_class(admin_class, "TENANT", "MODEL_ADMIN_CLASS")
-        return super().register(models, admin_class, **options)
+        return super().register(models, compose_model_admin("TENANT", admin_class), **options)
 
     def has_permission(self, request):
         tenant = current_tenant(required=False)
@@ -234,13 +231,16 @@ class TenantAdminSiteMixin:
         return guarded
 
     def get_log_entries(self, request):
-        # Django's default reads shared admin.LogEntry and auth relations.
-        return []
+        from django.contrib.admin.models import LogEntry
+
+        # Admin templates filter and slice this value. An explicitly bound empty
+        # queryset preserves that contract without routing or reading shared logs.
+        return LogEntry.objects.using("default").none()
 
     def get_app_list(self, request, app_label=None):
         allowed = app_sets()[1]
         result = super().get_app_list(request, app_label)
-        return [dict(app, name=f"{app['name']} — Tenant") for app in result if app["app_label"] in allowed]
+        return [app for app in result if app["app_label"] in allowed]
 
     def get_urls(self):
         # Password changes use shared account endpoints, not tenant views.

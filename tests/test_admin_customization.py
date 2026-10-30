@@ -13,8 +13,8 @@ from apps.workspaces.models import Workspace  # noqa: E402
 from django.conf import settings  # noqa: E402
 
 from partitiondb.adapters.django.admin import (  # noqa: E402
-    ControlPlaneAdminMixin,
-    ControlPlaneAdminSiteMixin,
+    SharedAdminSiteMixin,
+    SharedModelAdminMixin,
     TenantAdminSite,
     TenantAdminSiteMixin,
     TenantModelAdmin,
@@ -43,11 +43,11 @@ class CustomTenantAdmin(TenantModelAdminMixin, UIModelAdmin):
     pass
 
 
-class CustomSharedSite(ControlPlaneAdminSiteMixin, UISite):
+class CustomSharedSite(SharedAdminSiteMixin, UISite):
     pass
 
 
-class CustomSharedAdmin(ControlPlaneAdminMixin, UIModelAdmin):
+class CustomSharedAdmin(SharedModelAdminMixin, UIModelAdmin):
     pass
 
 
@@ -73,7 +73,8 @@ def test_independent_classes_and_registration_precedence():
         assert site._registry[Workspace].list_per_page == 17
         site.unregister(Workspace)
         site.register(Workspace, TenantModelAdmin)
-        assert type(site._registry[Workspace]) is TenantModelAdmin
+        assert isinstance(site._registry[Workspace], TenantModelAdmin)
+        assert isinstance(site._registry[Workspace], CustomTenantAdmin)
         assert type(create_admin_site("SHARED")) is CustomSharedSite
         assert get_model_admin_class("SHARED") is CustomSharedAdmin
         assert type(create_admin_site(site_class=TenantAdminSite)) is TenantAdminSite
@@ -186,3 +187,33 @@ def test_shared_classes_require_control_plane_behavior(kind):
 
         with pytest.raises(ImproperlyConfigured):
             resolve_admin_class("SHARED", kind)
+
+
+def test_shared_explicit_admin_keeps_behavior_and_configured_ui():
+    from partitiondb.adapters.django import get_tenant_model
+    from partitiondb.adapters.django.administration.configuration import compose_model_admin
+    from partitiondb.adapters.django.administration.managed import ManagedTenantAdmin
+    from partitiondb.adapters.django.administration.registry import DomainRegistryAdmin
+
+    with config(SHARED={"MODEL_ADMIN_CLASS": CustomSharedAdmin}):
+        site = create_admin_site("SHARED")
+        model = get_tenant_model()
+        site.register(model, ManagedTenantAdmin)
+        registered = site._registry[model]
+        assert isinstance(registered, ManagedTenantAdmin)
+        assert isinstance(registered, CustomSharedAdmin)
+        assert registered.list_per_page == 17
+        assert registered.provisioning_form_class is ManagedTenantAdmin.provisioning_form_class
+        assert issubclass(compose_model_admin("SHARED", DomainRegistryAdmin), UIModelAdmin)
+
+
+def test_shared_public_class_relationships():
+    from partitiondb.adapters.django.admin import (
+        SharedAdminSite,
+        SharedAdminSiteMixin,
+        SharedModelAdmin,
+        SharedModelAdminMixin,
+    )
+
+    assert issubclass(SharedAdminSite, SharedAdminSiteMixin)
+    assert issubclass(SharedModelAdmin, SharedModelAdminMixin)

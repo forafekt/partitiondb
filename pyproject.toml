@@ -9,7 +9,7 @@ description = "Explicit PostgreSQL tenant scopes with optional framework adapter
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [{ name = "Jonny Doyle" }]
 dependencies = []
 
@@ -34,7 +34,7 @@ exclude = ["/dist", "/release_reports", "/.codex", "**/.secrets"]
 packages = ["src/partitiondb"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 files = [
     "src/partitiondb/tenancy/identity.py",
@@ -53,6 +53,7 @@ pythonpath = ["src", "."]
 testpaths = ["tests"]
 
 [tool.ruff]
+target-version = "py312"
 line-length = 120
 extend-exclude = ["**/migrations/*"]
 
