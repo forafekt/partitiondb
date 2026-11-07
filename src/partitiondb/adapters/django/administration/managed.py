@@ -18,8 +18,20 @@ from partitiondb.adapters.django.registry.lookup import get_tenant_model
 from partitiondb.adapters.django.registry.workflow import get_workflow
 from partitiondb.provisioning import Stage
 
+from .database_recovery import DatabaseRecoveryAdminMixin
+from .provisioning import TenantCreationAdminMixin
+from .recovery import AccessCleanupAdminMixin
+from .recovery_links import RecoveryLinksMixin
 
-class ManagedTenantAdmin(TenantAccessRegistryAdmin, ProvisioningTenantAdmin):
+
+class ManagedTenantAdmin(
+    AccessCleanupAdminMixin,
+    DatabaseRecoveryAdminMixin,
+    TenantCreationAdminMixin,
+    RecoveryLinksMixin,
+    TenantAccessRegistryAdmin,
+    ProvisioningTenantAdmin,
+):
     provisioning_form_class = TenantProvisionForm
 
     list_display = (
@@ -30,12 +42,16 @@ class ManagedTenantAdmin(TenantAccessRegistryAdmin, ProvisioningTenantAdmin):
         "active",
         "access_policy",
         "access_role",
+        "tenant_recovery",
+        "database_recovery",
     )
     search_fields = ("name", "schema_name")
     ordering = ("name",)
 
     def get_readonly_fields(self, request, obj=None):
         fields = super().get_readonly_fields(request, obj)
+        if obj is not None:
+            fields += ("tenant_recovery", "database_recovery")
         if obj is not None and "database_location" not in fields:
             return (*fields, "database_location")
         return fields

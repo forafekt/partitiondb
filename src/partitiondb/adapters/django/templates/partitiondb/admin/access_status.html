@@ -1,28 +1,55 @@
 {% extends "admin/base_site.html" %}
+{% load static i18n %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'partitiondb/admin/operations.css' %}">{% endblock %}
 {% block content %}
-<h1>{{ original }} — database access</h1>
-<dl>
-<dt>Provisioning stage</dt><dd>{{ status.stage }}</dd>
-<dt>PostgreSQL role</dt><dd>{{ status.inspection.role }}</dd>
-<dt>Role structure</dt><dd>{{ status.inspection.state }}: {{ status.inspection.reason }}</dd>
-<dt>Operation</dt><dd>{{ status.operation.operation_id|default:"None" }} — {{ status.operation.state }}</dd>
-<dt>Ownership receipt</dt><dd>{{ status.receipt.operation_id|default:"None" }}{% if status.receipt %} (role OID {{ status.receipt.role_oid }}){% endif %}</dd>
-{% if status.restricted %}
-<dt>Ownership evidence</dt><dd>{% if status.evidence.ownership_verified %}Verified — journal, receipt and current role OID match{% else %}Not verified{% endif %}</dd>
-<dt>Credential authentication</dt><dd>{% if status.evidence.credential_verified %}Verified — fresh password connection succeeded{% else %}Not verified — credential unavailable, authentication failed, or ownership evidence incomplete{% endif %}</dd>
-<dt>Registry binding</dt><dd>{% if status.binding_verified %}Verified — registry matches completed operation{% else %}Not verified{% endif %}</dd>
-{% endif %}
-</dl>
-<p>This is a point-in-time check. Correct role structure alone does not verify ownership or credentials.</p>
-<p>These records describe database credentials, not user memberships. Passwords are never displayed.</p>
-{% if status.can_reconcile %}
-<p>Inspect the evidence before continuing. READY verifies the existing role and completes interrupted bookkeeping.
-RETRY requires the expected role and its secret to be absent. An unexplained role must be investigated manually.</p>
-<form method="post" action="{{ reconcile_url }}">{% csrf_token %}
-<label>Confirm tenant ID <input name="confirm_tenant_id" required autocomplete="off"></label>
-<p>Enter {{ original.pk }} exactly.</p>
-<label>Decision <select name="decision"><option value="ready">READY — verify and finish provisioning</option><option value="retry">RETRY — verify cleanup and start a new attempt</option></select></label>
-<button type="submit">Verify, recover and activate</button>
-</form>
-{% else %}<p>No ambiguous access operation requires recovery.</p>{% endif %}
+<div class="pdb-panel">
+    <h1 class="text-xl font-semibold mb-4">{{ original }} — {% translate "Database access recovery" %}</h1>
+    <p class="mb-6">{% translate "Inspect the current evidence, then choose a verified recovery decision. A successful recovery records your account, resumes provisioning and activates the existing tenant." %}</p>
+    <div class="rounded-default border border-base-200 p-4 dark:border-base-800 mb-6">
+        <dl class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <dt>{% translate "Provisioning stage" %}</dt><dd>{{ status.stage }}</dd>
+            <dt>{% translate "PostgreSQL role" %}</dt><dd>{{ status.inspection.role }}</dd>
+            <dt>{% translate "Role state" %}</dt><dd>{{ status.inspection.state }} — {{ status.inspection.reason }}</dd>
+            <dt>{% translate "Access operation" %}</dt><dd>{{ status.operation.operation_id|default:"None" }} — {{ status.operation.state|default:"None" }}</dd>
+            <dt>{% translate "Ownership receipt" %}</dt><dd>{{ status.receipt.operation_id|default:"None" }}{% if status.receipt %} (OID {{ status.receipt.role_oid }}){% endif %}</dd>
+            <dt>{% translate "Ownership verified" %}</dt><dd>{{ status.evidence.ownership_verified|yesno:"Yes,No" }}</dd>
+            <dt>{% translate "Fresh credential authentication verified" %}</dt><dd>{{ status.evidence.credential_verified|yesno:"Yes,No" }}</dd>
+            <dt>{% translate "Role and credential absence verified" %}</dt><dd>{{ status.evidence.absence_verified|yesno:"Yes,No" }}</dd>
+            <dt>{% translate "Registry binding verified" %}</dt><dd>{{ status.binding_verified|yesno:"Yes,No" }}</dd>
+        </dl>
+    </div>
+    {% if status.can_reconcile %}
+        {% if status.evidence.ownership_verified and status.evidence.credential_verified or status.evidence.absence_verified %}
+            <form class="pdb-form" method="post" action="{{ reconcile_url }}" class="rounded-default border border-base-200 p-4 dark:border-base-800">
+                {% csrf_token %}
+                <h2 class="font-semibold mb-3">{% translate "Recover the existing tenant" %}</h2>
+                <label class="block mb-4">{% translate "Decision" %}
+                    <select name="decision" required class="block border rounded-default p-2 mt-2 bg-white dark:bg-base-900">
+                        {% if status.evidence.ownership_verified and status.evidence.credential_verified %}
+                            <option value="ready">{% translate "READY — verify existing access and finish provisioning" %}</option>
+                        {% endif %}
+                        {% if status.evidence.absence_verified %}
+                            <option value="retry">{% translate "RETRY — verify cleanup and start a new access attempt" %}</option>
+                        {% endif %}
+                    </select>
+                </label>
+                <label class="block mb-4">{% translate "Confirm tenant ID" %}: <strong>{{ original.pk }}</strong>
+                    <input name="confirm_tenant_id" required autocomplete="off" class="block border rounded-default p-2 mt-2 bg-white dark:bg-base-900">
+                </label>
+                <button type="submit" class="pdb-button">{% translate "Verify, recover and activate" %}</button>
+            </form>
+        {% else %}
+            <div class="rounded-default border border-base-200 p-4 dark:border-base-800">
+                <h2 class="font-semibold mb-2">{% translate "Recovery needs investigation" %}</h2>
+                <p>{% translate "READY requires verified ownership and working credentials. RETRY requires the expected role and credential to be absent. Fix the underlying issue and inspect any remaining role before retrying." %}</p>
+                <p class="mt-2">{% translate "Refresh this page after correcting the issue to recheck the evidence." %}</p>
+                {% if cleanup_url and status.inspection.state == "disabled" %}
+                    <a href="{{ cleanup_url }}" class="inline-block mt-4 bg-primary-600 text-white rounded-default px-4 py-2">{% translate "Inspect cleanup eligibility" %}</a>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% else %}
+        <p>{% translate "No ambiguous access operation requires recovery." %}</p>
+    {% endif %}
+</div>
 {% endblock %}

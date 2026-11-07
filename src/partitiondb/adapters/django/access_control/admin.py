@@ -11,6 +11,7 @@ from partitiondb.adapters.django.access_control.models import (
     RoleOwnershipReceipt,
     TenantDatabaseTarget,
 )
+from partitiondb.adapters.django.administration.recovery_links import RecoveryLinksMixin
 
 
 class ReadOnlyEvidenceAdmin(admin.ModelAdmin):
@@ -28,8 +29,10 @@ class ReadOnlyEvidenceAdmin(admin.ModelAdmin):
 
 
 @admin.register(AccessOperation)
-class AccessOperationAdmin(ReadOnlyEvidenceAdmin):
-    list_display = ("operation_id", "tenant_id", "database_alias", "state", "created_at")
+class AccessOperationAdmin(RecoveryLinksMixin, ReadOnlyEvidenceAdmin):
+    readonly_fields = ("tenant_recovery",)
+    change_form_template = "partitiondb/admin/recovery_evidence.html"
+    list_display = ("operation_id", "tenant_id", "database_alias", "state", "created_at", "tenant_recovery")
     search_fields = ("operation_id", "tenant_id", "role_name")
 
 
@@ -40,20 +43,34 @@ class RoleOwnershipReceiptAdmin(ReadOnlyEvidenceAdmin):
 
 
 @admin.register(AccessRecoveryAudit)
-class AccessRecoveryAuditAdmin(ReadOnlyEvidenceAdmin):
-    list_display = ("tenant_id", "actor_id", "decision", "observed_state", "created_at")
+class AccessRecoveryAuditAdmin(RecoveryLinksMixin, ReadOnlyEvidenceAdmin):
+    readonly_fields = ("tenant_recovery",)
+    change_form_template = "partitiondb/admin/recovery_evidence.html"
+    list_display = ("tenant_id", "actor_id", "decision", "observed_state", "created_at", "tenant_recovery")
     search_fields = ("tenant_id", "operation_id", "actor_id")
 
 
 @admin.register(DatabaseOperation)
-class DatabaseOperationAdmin(ReadOnlyEvidenceAdmin):
-    list_display = ("operation_id", "tenant_id", "database_alias", "database_name", "state", "database_oid")
+class DatabaseOperationAdmin(RecoveryLinksMixin, ReadOnlyEvidenceAdmin):
+    readonly_fields = ("database_creation",)
+    change_form_template = "partitiondb/admin/recovery_evidence.html"
+    list_display = (
+        "operation_id",
+        "tenant_id",
+        "database_alias",
+        "database_name",
+        "state",
+        "database_oid",
+        "database_creation",
+    )
     search_fields = ("tenant_id", "operation_id", "database_name")
 
 
 @admin.register(DatabaseRecoveryAudit)
-class DatabaseRecoveryAuditAdmin(ReadOnlyEvidenceAdmin):
-    list_display = ("operation_id", "tenant_id", "actor_id", "decision", "created_at")
+class DatabaseRecoveryAuditAdmin(RecoveryLinksMixin, ReadOnlyEvidenceAdmin):
+    readonly_fields = ("database_creation",)
+    change_form_template = "partitiondb/admin/recovery_evidence.html"
+    list_display = ("operation_id", "tenant_id", "actor_id", "decision", "created_at", "database_creation")
     search_fields = ("tenant_id", "operation_id", "actor_id")
 
 

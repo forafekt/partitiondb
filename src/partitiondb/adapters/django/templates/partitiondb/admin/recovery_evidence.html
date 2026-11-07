@@ -1,0 +1,9 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block field_sets %}
+    <div class="mb-6 rounded-default border border-base-200 p-4 dark:border-base-800">
+        <p>{% translate "This record is immutable history. Inspect the associated tenant to verify its current state and perform an audited recovery." %}</p>
+    </div>
+    {{ block.super }}
+{% endblock %}

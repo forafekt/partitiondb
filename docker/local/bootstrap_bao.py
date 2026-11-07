@@ -81,7 +81,11 @@ valid = False
 if token_path.exists():
     try:
         details = request("auth/token/lookup", {"token": token_path.read_text().strip()}, root)["data"]
-        valid = details.get("ttl", 0) > 300 and details.get("period", 0) == 3600
+        valid = (
+            set(details.get("policies", ())) == {"partitiondb-local"}
+            and details.get("ttl", 0) > 300
+            and details.get("period", 0) == 3600
+        )
     except HTTPError as error:
         if error.code not in {400, 403, 404}:
             raise

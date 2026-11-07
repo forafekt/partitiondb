@@ -1,26 +1,16 @@
-{% extends "admin/change_form.html" %}
-{% load i18n %}
+{% extends "admin/change_form.html" %}{% load static i18n %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'partitiondb/admin/operations.css' %}">{% endblock %}
 {% block content %}
-<div id="content-main">
-  <p>Select where this tenant's data will live. An automatic database target is created before its schema and application tables. Failures preserve resources for inspection.</p>
-  <form method="post" id="{{ opts.model_name }}_form" novalidate>
-    {% csrf_token %}
-    {% if form.errors %}
-      <p class="errornote">{% translate "Please correct the errors below." %}</p>
-    {% endif %}
-    {{ form.non_field_errors }}
-    {% for fieldset in adminform %}
-      {% include "admin/includes/fieldset.html" with heading_level=2 prefix="provisioning" id_prefix=0 id_suffix=forloop.counter0 %}
-    {% endfor %}
-    {% if not provisioning_failed %}
-      <div class="submit-row">
-        <input type="submit" class="default" value="{% translate 'Create and provision' %}">
-      </div>
-    {% endif %}
-  </form>
-</div>
+<div class="pdb-actions"><a href="{{ schema_url }}">{% translate "Schema tenant" %}</a><a href="{{ database_url }}">{% translate "Database tenant" %}</a></div>
+<div class="pdb-panel" x-data="{ activeTab: 'general' }">
+<h1>{% if creation_kind == 'database' %}{% translate "Create database tenant" %}{% else %}{% translate "Create schema tenant" %}{% endif %}</h1>
+<p>{% if creation_kind == 'database' %}{% translate "Create a dedicated database on a verified server. A restricted PostgreSQL role is provisioned automatically." %}{% else %}{% translate "Create the tenant schema inside an existing database." %}{% endif %}</p>
+<form method="post" id="{{ opts.model_name }}_form" class="pdb-form" novalidate>{% csrf_token %}
+{% if form.errors %}<p class="errornote">{% translate "Please correct the errors below." %}</p>{% endif %}
+{{ form.non_field_errors }}{% for field in form.hidden_fields %}{{ field }}{{ field.errors }}{% endfor %}
+{% for fieldset in adminform %}{% include "admin/includes/fieldset.html" with heading_level=2 prefix="provisioning" id_prefix=0 id_suffix=forloop.counter0 %}{% endfor %}
+{% if not provisioning_failed %}<div class="pdb-actions"><button type="submit">{% translate "Create and provision" %}</button></div>
+{% else %}<p class="pdb-notice pdb-danger">{% translate "Inspect the existing tenant's recovery pages before any further attempt. Existing resources have been preserved." %}</p>{% endif %}
+</form></div>
 {% endblock %}
-
-{# Only the provisioning form's dedicated submit button may trigger creation. #}
-{% block submit_buttons_top %}{% endblock %}
-{% block submit_buttons_bottom %}{% endblock %}
+{% block submit_buttons_top %}{% endblock %}{% block submit_buttons_bottom %}{% endblock %}

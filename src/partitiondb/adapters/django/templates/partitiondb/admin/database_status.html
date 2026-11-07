@@ -1,0 +1,15 @@
+{% extends "admin/base_site.html" %}{% load static i18n %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'partitiondb/admin/operations.css' %}">{% endblock %}
+{% block content %}<div class="pdb-panel"><h1>{{ original }} — {% translate "Database creation recovery" %}</h1>
+{% if notice %}<p class="pdb-notice">{{ notice }}</p>{% elif error %}<div role="alert" class="pdb-notice pdb-danger">{{ error }}</div><a class="pdb-button" href="{{ inspect_url }}">{% translate "Inspect again" %}</a>
+{% else %}
+<dl><dt>{% translate "Tenant ID" %}</dt><dd>{{ candidate.tenant_id }}</dd><dt>{% translate "Database" %}</dt><dd>{{ candidate.database_name }}</dd><dt>{% translate "Schema" %}</dt><dd>{{ candidate.schema }}</dd><dt>{% translate "Alias" %}</dt><dd>{{ candidate.database }}</dd><dt>{% translate "Cluster" %}</dt><dd>{{ candidate.cluster_id }}</dd><dt>{% translate "Operation" %}</dt><dd>{{ candidate.operation_id }}</dd><dt>{% translate "State" %}</dt><dd>{{ candidate.state }}</dd><dt>{% translate "Database OID" %}</dt><dd>{{ candidate.database_oid|default:"Absent" }}</dd><dt>{% translate "Receipt OID" %}</dt><dd>{{ operation.database_oid|default:"None" }}</dd></dl>
+{% if actions %}<form method="post" class="pdb-form">{% csrf_token %}<input type="hidden" name="confirmation_token" value="{{ confirmation_token }}">
+<p class="pdb-notice">{% translate "READY requires the original ownership receipt. RETRY requires confirmed absence. CLEANUP removes only a verified empty, unreceipted database before retrying. Databases containing tenant data are never removed by this workflow. Recovery resumes and activates the existing tenant." %}</p>
+<label>{% translate "Decision" %}<select name="decision" required>{% for action in actions %}<option value="{{ action }}">{{ action|upper }}</option>{% endfor %}</select></label>
+<label>{% translate "Enter the tenant ID" %}<input name="confirm_tenant_id" required autocomplete="off"></label>
+<label>{% translate "Enter the exact database name" %}<input name="confirm_database_name" required autocomplete="off"></label>
+<label><input type="checkbox" name="confirm_ownership" value="yes" required> {% translate "I inspected the operation, original cluster, owner and database and authorize the displayed action. Other database administration is paused." %}</label>
+<button type="submit">{% translate "Confirm database recovery" %}</button></form>
+{% else %}<p class="pdb-notice">{% translate "No verified database recovery action is available. Existing data and infrastructure remain preserved." %}</p>{% endif %}
+{% endif %}</div>{% endblock %}

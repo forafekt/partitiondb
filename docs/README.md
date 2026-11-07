@@ -59,3 +59,5 @@ Tenants are never activated by a plain model save. They are provisioned through 
 - Commands are run from the repository root unless stated otherwise.
 - `SCHEMA`, `ALIAS`, `TENANT_ID` and similar upper-case words are placeholders to replace.
 - Paths beginning with `partitiondb.adapters.django` are shortened in tables where the context makes this clear.
+
+See [Admin tenant creation and recovery](ADMIN_RECOVERY.md) for separate creation forms and guarded operator recovery.

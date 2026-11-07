@@ -189,3 +189,35 @@ class TenantProvisionForm(forms.Form):
                 access_policy="restricted",
             )
         return options
+
+
+class SchemaTenantProvisionForm(TenantProvisionForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["database_alias"].choices = [
+            choice for choice in self.fields["database_alias"].choices if choice[0] != NEW_DATABASE
+        ]
+        self.fields.pop("database_profile")
+        self.fields.pop("database_name")
+        self.fields["database_alias"].help_text = "The schema is created inside this existing database."
+        self.fields["access_policy"].label = "Database access policy"
+        self.fields[
+            "access_policy"
+        ].help_text = "Choose shared runtime access or a separate restricted PostgreSQL role."
+
+
+class DatabaseTenantProvisionForm(TenantProvisionForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["database_alias"].choices = [(NEW_DATABASE, "New dedicated database")]
+        self.fields["database_alias"].initial = NEW_DATABASE
+        self.fields["database_alias"].disabled = True
+        self.fields["database_alias"].widget = forms.HiddenInput()
+        self.fields["access_policy"].initial = "restricted"
+        self.fields["access_policy"].disabled = True
+        self.fields["access_policy"].widget = forms.HiddenInput()
+        self.fields["database_profile"].required = True
+        self.fields["database_profile"].help_text = "Choose the verified server that will host the new database."
+        self.fields[
+            "database_name"
+        ].help_text = "Leave blank to generate a unique name. Existing databases are never adopted."

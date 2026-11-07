@@ -1,0 +1,40 @@
+{% extends "admin/base_site.html" %}
+{% load static i18n %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'partitiondb/admin/operations.css' %}">{% endblock %}
+{% block content %}
+<div class="pdb-panel">
+    <h1 class="text-xl font-semibold mb-4">{{ original }} — {% translate "Disabled role cleanup" %}</h1>
+    {% if error %}
+        <div role="alert" class="border border-red-500 rounded-default p-4 mb-4">{{ error }}</div>
+        <a href="{{ inspect_url }}" class="inline-block mb-4 bg-primary-600 text-white rounded-default px-4 py-2">{% translate "Inspect again" %}</a>
+        <p class="mb-4">{% translate "The tenant may still require recovery. Review its current status; do not create a replacement tenant." %}</p>
+    {% else %}
+        <p class="mb-4">{% translate "The current checks found a disabled role from a pending access operation, no ownership receipt, no grants or owned objects, no memberships or sessions, and no stored credential." %}</p>
+        <dl class="grid grid-cols-2 gap-3 border rounded-default p-4 mb-6">
+            <dt>{% translate "Tenant ID" %}</dt><dd>{{ candidate.tenant_id }}</dd>
+            <dt>{% translate "Existing schema" %}</dt><dd>{{ candidate.schema }}</dd>
+            <dt>{% translate "Database alias" %}</dt><dd>{{ candidate.database }}</dd>
+            <dt>{% translate "Operation" %}</dt><dd>{{ candidate.operation_id }}</dd>
+            <dt>{% translate "Role" %}</dt><dd>{{ candidate.role }}</dd>
+            <dt>{% translate "Role OID" %}</dt><dd>{{ candidate.role_oid }}</dd>
+        </dl>
+        <p class="mb-4">{% translate "This action removes only the displayed role, records a cleanup audit, and attempts verified recovery of the existing tenant. Its schema and tables are preserved. Fix the original failure and keep other role administration paused before confirming." %}</p>
+        <form class="pdb-form" method="post" class="border rounded-default p-4 mb-4">
+            {% csrf_token %}
+            <input type="hidden" name="confirmation_token" value="{{ confirmation_token }}">
+            <label class="block mb-4">{% translate "Enter the tenant ID" %}: <strong>{{ candidate.tenant_id }}</strong>
+                <input name="confirm_tenant_id" required autocomplete="off" class="block border rounded-default p-2 mt-2 bg-white dark:bg-base-900">
+            </label>
+            <label class="block mb-4">{% translate "Enter the role name" %}: <strong>{{ candidate.role }}</strong>
+                <input name="confirm_role" required autocomplete="off" class="block border rounded-default p-2 mt-2 bg-white dark:bg-base-900">
+            </label>
+            <label class="block mb-4"><input type="checkbox" name="confirm_ownership" value="yes" required>
+                {% translate "I inspected the provisioning records and verified that this role belongs to this failed operation. I authorize its removal and the recovery attempt." %}
+            </label>
+            <p class="mb-4">{% translate "The confirmation expires after 10 minutes. All checks run again before cleanup. A failure may leave the tenant awaiting recovery; inspect its status before trying again." %}</p>
+            <button type="submit" class="pdb-button">{% translate "Confirm cleanup and retry" %}</button>
+        </form>
+    {% endif %}
+    <a href="{{ status_url }}" class="text-primary-600">{% translate "Back to current access status" %}</a>
+</div>
+{% endblock %}

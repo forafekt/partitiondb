@@ -120,3 +120,5 @@ Provisioning forms supply standard submit-row context but use only their dedicat
 creation button. Their template suppresses inherited save rows so alternate admin
 templates cannot introduce duplicate save controls or a retry button after an
 ambiguous provisioning failure.
+
+See [Admin tenant creation and recovery](ADMIN_RECOVERY.md) for separate creation forms and guarded operator recovery.

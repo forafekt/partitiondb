@@ -161,6 +161,8 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
 
         form_class = self.get_provisioning_form_class(request)
         form = form_class(request.POST if request.method == "POST" else None)
+        from .forms import style_provisioning_form
+        style_provisioning_form(self, request, form)
         failed = False
         if request.method == "POST" and form.is_valid():
             try:
