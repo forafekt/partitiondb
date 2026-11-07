@@ -72,3 +72,21 @@ def test_package_paths_do_not_use_compatibility_search_directories():
     for package in (partitiondb, partitiondb.adapters.django):
         assert list(package.__path__) == [str(Path(package.__file__).parent)]
     assert not (ROOT / "partitiondb" / "_compat").exists()
+
+
+def test_control_plane_apps_have_one_canonical_implementation():
+    adapter = ROOT / "partitiondb" / "adapters" / "django"
+    for obsolete in ("registry", "registry_app", "databases", "access_control"):
+        assert not (adapter / obsolete).exists()
+    for feature in ("tenancy", "infrastructure", "database_access"):
+        assert (adapter / feature / "models.py").is_file()
+        assert (adapter / feature / "migrations" / "0001_initial.py").is_file()
+
+
+def test_admin_templates_use_no_partitiondb_css_or_theme_specific_dependencies():
+    adapter = ROOT / "partitiondb" / "adapters" / "django"
+    assert not list((adapter / "static").rglob("*.css"))
+    for template in (adapter / "templates" / "partitiondb" / "admin").glob("*.html"):
+        source = template.read_text()
+        for forbidden in ("operations.css", "pdb-", "style=", "<style", "x-data", "dark:", "rounded-default"):
+            assert forbidden not in source, template

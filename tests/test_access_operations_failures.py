@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from partitiondb.access import AccessPolicyEnum, TenantAccess
-from partitiondb.access.operations import OperationState, RestrictedAccessCoordinator
+from partitiondb.access.operations import RestrictedAccessCoordinator, RoleOperationState
 from partitiondb.postgres.role_manager import RoleBinding
 from partitiondb.tenancy.identity import Tenant
 
@@ -50,9 +50,9 @@ def test_each_failure_stops_later_side_effects(failure_point, expected):
     journal = Mock()
     journal.begin.side_effect = lambda _: step("intent")
     checkpoints = {
-        OperationState.ROLE_CREATED: "role_checkpoint",
-        OperationState.RECEIPT_RECORDED: "receipt_checkpoint",
-        OperationState.COMPLETED: "complete",
+        RoleOperationState.ROLE_CREATED: "role_checkpoint",
+        RoleOperationState.RECEIPT_RECORDED: "receipt_checkpoint",
+        RoleOperationState.COMPLETED: "complete",
     }
     journal.advance.side_effect = lambda _id, _old, new: step(checkpoints[new])
     manager = Mock()

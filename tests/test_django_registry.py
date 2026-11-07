@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from partitiondb import Tenant, tenant_scope
-from partitiondb.adapters.django.registry import DjangoRegistry
+from partitiondb.adapters.django.tenancy import DjangoRegistry
 from tests.django_setup import configure
 
 configure()
@@ -31,7 +31,7 @@ def test_registry_rejects_inherited_scope_before_query(method, arg):
 def test_registry_requires_concrete_shared_models_and_matching_domains():
     from apps.workspaces.models import Workspace
 
-    from partitiondb.adapters.django.registry.models import TenantBaseMixin
+    from partitiondb.adapters.django.tenancy.abstract_models import TenantBaseMixin
 
     with pytest.raises(TypeError):
         DjangoRegistry(Workspace)
@@ -64,7 +64,7 @@ from tests.django_setup import configure
 configure(sqlite_name=":memory:")
 from django.core.management import call_command
 from partitiondb import MissingTenant, current_tenant
-from partitiondb.adapters.django.registry import DjangoRegistry
+from partitiondb.adapters.django.tenancy import DjangoRegistry
 from partitiondb.tenancy.jobs import job_scope
 from partitiondb.adapters.django import get_domain_model, get_tenant_model
 Organization = get_tenant_model()

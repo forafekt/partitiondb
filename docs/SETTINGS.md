@@ -11,8 +11,9 @@ from partitiondb.adapters.django.configuration import DjangoSetup
 
 TENANCY = DjangoSetup(
     shared_apps={
-        "partitiondb_registry": "partitiondb.adapters.django.registry_app.apps.PartitionDBRegistryConfig",
-        "partitiondb_access_control": "partitiondb.adapters.django.access_control.apps.PartitionDBAccessControlConfig",
+        "partitiondb_tenancy": "partitiondb.adapters.django.tenancy.apps.PartitionDBTenancyConfig",
+        "partitiondb_infrastructure": "partitiondb.adapters.django.infrastructure",
+        "partitiondb_database_access": "partitiondb.adapters.django.database_access.apps.PartitionDBDatabaseAccessConfig",
         "auth": "django.contrib.auth",
         "contenttypes": "django.contrib.contenttypes",
         "sessions": "django.contrib.sessions",
@@ -24,7 +25,7 @@ TENANCY = DjangoSetup(
     tenant_urlconf="config.urls_tenant",
     shared_hosts=["localhost", "127.0.0.1"],
     shared_urlconf="config.urls_platform",
-    authorize="partitiondb.adapters.django.registry_app.tenancy.authorize_tenant",
+    authorize="partitiondb.adapters.django.tenancy.permissions.authorize_tenant",
 )
 
 INSTALLED_APPS = TENANCY.installed_apps
@@ -53,7 +54,7 @@ DATABASES = {
 4. Keep the rest of your normal Django settings.
 5. Classify **every** installed app label exactly once, as shared or tenant.
 
-The optional `partitiondb_registry` app selects the built-in tenant, domain and membership models. To use your own, see [Django integration](DJANGO.md#custom-shared-models).
+The optional `partitiondb_tenancy` app selects the built-in tenant, domain and membership models. To use your own, see [Django integration](DJANGO.md#custom-shared-models).
 
 ## Host guard
 
@@ -94,7 +95,7 @@ It does **not** configure `AUTHORIZE`; membership checks still require the expli
 ### Enabling built-in tenant admin login
 
 1. Pass `tenant_admin=True` to `DjangoSetup`.
-2. Set `TENANT_ADMIN_PERMISSIONS` to `partitiondb.adapters.django.registry_app.tenancy.tenant_admin_permissions`.
+2. Set `TENANT_ADMIN_PERMISSIONS` to `partitiondb.adapters.django.tenancy.permissions.tenant_admin_permissions`.
 3. Provide a tenant-local `TENANT_ADMIN_LOG_MODEL`.
 
 Details are in [Django integration → Authentication](DJANGO.md#authentication).

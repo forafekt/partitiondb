@@ -1,0 +1,50 @@
+{% extends "partitiondb/admin/action_page.html" %}
+{% load i18n admin_urls %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">{% translate 'Home' %}</a> &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a> &rsaquo; {{ original }}</div>{% endblock %}
+{% block content %}
+<p>Central metadata observed at {{ observed_at }}. Checkpoints and receipts are historical evidence; live access requires explicit inspection.</p>
+<div class="module"><h2>Identity and admission</h2>
+<table><tbody>
+<tr><th>Tenant ID</th><td>{{ original.pk }}</td></tr>
+<tr><th>Name</th><td>{{ original.name }}</td></tr>
+<tr><th>Tenant type</th><td>{{ original.get_tenant_type|default_if_none:"Untyped" }}</td></tr>
+<tr><th>Metadata updated</th><td>{{ original.updated_at|default:"—" }}</td></tr>
+<tr><th>Admission enabled</th><td>{{ original.active|yesno:"Yes,No" }}</td></tr>
+<tr><th>Domains</th><td>{% for domain in domains %}{{ domain.hostname }}{% if domain.is_primary %} (primary){% endif %}<br>{% empty %}{{ domains_error|default:"—" }}{% endfor %}</td></tr>
+{% if operator %}<tr><th>Memberships</th><td>{% for group in membership_counts %}{{ group.role }} / {{ group.active|yesno:"enabled,disabled" }}: {{ group.count }}<br>{% empty %}{{ memberships_error|default:"None" }}{% endfor %}</td></tr>{% endif %}
+</tbody></table></div>
+<div class="module"><h2>Placement</h2><table><tbody>
+<tr><th>Schema</th><td>{{ original.schema_name }}</td></tr>
+<tr><th>Database alias</th><td>{{ original.database_alias }}</td></tr>
+<tr><th>Database / profile</th><td>{{ summary.placement }}</td></tr>
+<tr><th>Route</th><td>{% if summary.managed %}Managed reservation{% else %}Preconfigured or unresolved{% endif %}</td></tr>
+{% if operator and summary.profile %}
+<tr><th>Server source alias</th><td>{{ summary.profile.source_alias }}</td></tr>
+<tr><th>Verified cluster ID</th><td>{{ summary.profile.cluster_id|default:"Settings-only profile" }}</td></tr>
+<tr><th>Source fingerprint</th><td>{{ summary.profile.fingerprint }}</td></tr>
+{% endif %}
+</tbody></table></div>
+{% if operator %}
+<div class="module"><h2>Provisioning and access evidence</h2><table><tbody>
+<tr><th>Lifecycle checkpoint</th><td>{{ summary.lifecycle }}</td></tr>
+<tr><th>Database provisioning</th><td>{{ summary.database_state }}{% if summary.database_operation %} ({{ summary.database_operation.updated_at }}){% endif %}</td></tr>
+<tr><th>Role provisioning</th><td>{{ summary.role_state }}{% if summary.role_operation %} ({{ summary.role_operation.updated_at }}){% endif %}</td></tr>
+<tr><th>Access policy</th><td>{{ original.access_policy }}</td></tr>
+<tr><th>PostgreSQL role</th><td>{{ original.access_role|default:"Missing" }}</td></tr>
+<tr><th>Credential reference</th><td>{{ original.credential_ref|default:"—" }}</td></tr>
+<tr><th>Role ownership receipts</th><td>{% for receipt in receipts %}{{ receipt.role_name }} / OID {{ receipt.role_oid }} / {{ receipt.created_at }}<br>{% empty %}{{ receipts_error|default:"Missing" }}{% endfor %}</td></tr>
+<tr><th>Role recovery</th><td>{% for event in role_events %}{{ event.decision }} / {{ event.actor_id }} / {{ event.created_at }}<br>{% empty %}{{ role_events_error|default:"None" }}{% endfor %}</td></tr>
+<tr><th>Database recovery</th><td>{% for event in database_events %}{{ event.decision }} / {{ event.actor_id }} / {{ event.created_at }}<br>{% empty %}{{ database_events_error|default:"None" }}{% endfor %}</td></tr>
+</tbody></table>
+{% for label, url in evidence_links %}<p><a href="{{ url }}">{{ label|capfirst }}</a></p>{% endfor %}
+</div>
+{% endif %}
+{% if can_operate %}<div class="module"><h2>Operator actions</h2>
+<p><a href="{{ role_url }}">Inspect role access and recovery</a> &middot; <a href="{{ database_url }}">Inspect database creation</a></p>
+{% if admission_blocker %}<p class="errornote">{{ admission_blocker }}</p>{% endif %}
+<p>Disabling admission prevents new admission. Running requests and jobs are not revoked.</p>
+<form method="post" action="{{ lifecycle_url }}">{% csrf_token %}
+{% include "partitiondb/admin/confirmation_fields.html" %}
+{% if original.active %}<button class="button" type="submit" name="action" value="disable">Disable admission</button>{% else %}<button class="button" type="submit" name="action" value="enable">Verify and enable admission</button>{% if can_resume %} <button class="button" type="submit" name="action" value="resume">Resume provisioning and verify admission</button>{% endif %}{% endif %}
+</form></div>{% endif %}
+{% endblock %}

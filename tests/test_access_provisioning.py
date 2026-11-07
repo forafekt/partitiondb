@@ -70,8 +70,8 @@ def test_ambiguous_access_failure_requires_operator_reconciliation():
     with pytest.raises(AmbiguousCreation):
         make(store, events).run(TENANT.id)
     with pytest.raises(ValueError):
-        make(store, events).reconcile_access(TENANT.id, confirm=Tenant("other", "other"), access_ready=True)
-    make(store, events).reconcile_access(TENANT.id, confirm=TENANT, access_ready=False)
+        make(store, events).reconcile_role(TENANT.id, confirm=Tenant("other", "other"), access_ready=True)
+    make(store, events).reconcile_role(TENANT.id, confirm=TENANT, access_ready=False)
     assert make(store, events).run(TENANT.id).stage == Stage.ACTIVE
     assert events == ["create", "migrate", "access", "access", "verify"]
 
@@ -85,6 +85,6 @@ def test_access_checkpoint_failure_cannot_repeat_side_effects():
     with pytest.raises(AmbiguousCreation):
         make(store, events).run(TENANT.id)
     store.fail_on = None
-    make(store, events).reconcile_access(TENANT.id, confirm=TENANT, access_ready=True)
+    make(store, events).reconcile_role(TENANT.id, confirm=TENANT, access_ready=True)
     assert make(store, events).run(TENANT.id).stage == Stage.ACTIVE
     assert events == ["create", "migrate", "access", "verify"]

@@ -19,7 +19,7 @@ Tenants are never activated by a plain model save. They are provisioned through 
 | Try the whole stack locally in minutes | [Local application stack](LOCAL_INFRASTRUCTURE.md) |
 | Add PartitionDB to a Django project | [Django settings](SETTINGS.md), then [Django integration](DJANGO.md) |
 | Understand the package layout and import paths | [Architecture](ARCHITECTURE.md) |
-| Move from the original extracted package | [Migration guide](MIGRATION.md) |
+| Recreate an earlier development installation | [Clean-break baseline](MIGRATION.md) |
 
 ## Guides
 

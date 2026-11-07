@@ -1,0 +1,11 @@
+{% extends "partitiondb/admin/action_page.html" %}{% load i18n %}
+{% block content %}<div class="module"><h1>{{ original }} — {% translate "Database creation recovery" %}</h1>
+{% if notice %}<p>{{ notice }}</p>{% elif error %}<div role="alert" class="errornote">{{ error }}</div><a class="button" href="{{ inspect_url }}">{% translate "Inspect again" %}</a>
+{% else %}
+<dl><dt>{% translate "Tenant ID" %}</dt><dd>{{ candidate.tenant_id }}</dd><dt>{% translate "Database" %}</dt><dd>{{ candidate.database_name }}</dd><dt>{% translate "Schema" %}</dt><dd>{{ candidate.schema }}</dd><dt>{% translate "Alias" %}</dt><dd>{{ candidate.database }}</dd><dt>{% translate "Cluster" %}</dt><dd>{{ candidate.cluster_id }}</dd><dt>{% translate "Operation" %}</dt><dd>{{ candidate.operation_id }}</dd><dt>{% translate "State" %}</dt><dd>{{ candidate.state }}</dd><dt>{% translate "Database OID" %}</dt><dd>{{ candidate.database_oid|default:"Absent" }}</dd><dt>{% translate "Receipt OID" %}</dt><dd>{{ operation.database_oid|default:"None" }}</dd></dl>
+{% if actions %}<form method="post">{% csrf_token %}
+<p>{% translate "READY requires the original ownership receipt. RETRY requires confirmed absence. CLEANUP removes only a verified empty, unreceipted database before retrying. Databases containing tenant data are never removed by this workflow. Recovery resumes and activates the existing tenant." %}</p>
+{% include "partitiondb/admin/confirmation_fields.html" %}
+<input type="submit" class="default" value="{% translate "Confirm database recovery" %}"></form>
+{% else %}<p>{% translate "No verified database recovery action is available. Existing data and infrastructure remain preserved." %}</p>{% endif %}
+{% endif %}</div>{% endblock %}

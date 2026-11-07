@@ -21,7 +21,7 @@ def atomic_tenant(tenant, *, privileged=False):
     """
     if type(privileged) is not bool:
         raise TypeError("privileged must be a boolean")
-    from partitiondb.adapters.django.databases.routes import ensure_database_alias, release_database_alias
+    from partitiondb.adapters.django.infrastructure.routes import ensure_database_alias, release_database_alias
 
     ensure_database_alias(tenant.database, tenant_id=tenant.id)
     tenant_policy(tenant)

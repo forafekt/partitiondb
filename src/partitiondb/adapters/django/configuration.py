@@ -18,7 +18,7 @@ DEFAULTS = {
     "TENANT_MODEL": None,
     "DOMAIN_MODEL": None,
     "MEMBERSHIP_MODEL": None,
-    "TENANT_WORKFLOW": "partitiondb.adapters.django.registry.workflow.TenantWorkflow",
+    "TENANT_WORKFLOW": "partitiondb.adapters.django.tenancy.workflow.TenantWorkflow",
     "CREDENTIAL_PROVIDER": None,
     "CREDENTIAL_PROVIDER_OPTIONS": {},
     "DEVELOPMENT_CREDENTIALS_DIR": None,
@@ -26,7 +26,7 @@ DEFAULTS = {
     "DATABASE_PROFILES": None,
     "DATABASE_PROFILE_REGISTRY": False,
     "DATABASE_SERVER_ONLY_ALIASES": [],
-    "PROVISIONING_CONNECTION_PARAMS": "partitiondb.adapters.django.registry.workflow.provisioning_connection_params",
+    "PROVISIONING_CONNECTION_PARAMS": "partitiondb.adapters.django.tenancy.workflow.provisioning_connection_params",
     "SHARED_APPS": [],
     "TENANT_APPS": [],
     "TENANT_TYPES": {},
@@ -88,14 +88,14 @@ class PartitionDBSettings(Mapping):
         if unknown:
             raise ImproperlyConfigured("Unknown PARTITIONDB settings: " + ", ".join(sorted(map(str, unknown))))
         self._values = {**deepcopy(DEFAULTS), **values}
-        if "partitiondb_registry" in self._values["SHARED_APPS"] and (
-            "TENANT_MODEL" not in values or values["TENANT_MODEL"] == "partitiondb_registry.Tenant"
+        if "partitiondb_tenancy" in self._values["SHARED_APPS"] and (
+            "TENANT_MODEL" not in values or values["TENANT_MODEL"] == "partitiondb_tenancy.Tenant"
         ):
-            self._values["TENANT_MODEL"] = "partitiondb_registry.Tenant"
+            self._values["TENANT_MODEL"] = "partitiondb_tenancy.Tenant"
             if "DOMAIN_MODEL" not in values:
-                self._values["DOMAIN_MODEL"] = "partitiondb_registry.Domain"
+                self._values["DOMAIN_MODEL"] = "partitiondb_tenancy.Domain"
             if "MEMBERSHIP_MODEL" not in values:
-                self._values["MEMBERSHIP_MODEL"] = "partitiondb_registry.Membership"
+                self._values["MEMBERSHIP_MODEL"] = "partitiondb_tenancy.Membership"
         if self._values["TENANT_MODEL"]:
             # Explicit None/custom values still win over the managed defaults.
             for key, name in {
@@ -107,7 +107,7 @@ class PartitionDBSettings(Mapping):
                 "MIGRATION_CONTEXT": "migration_context",
             }.items():
                 if key not in values:
-                    self._values[key] = "partitiondb.adapters.django.registry.workflow." + name
+                    self._values[key] = "partitiondb.adapters.django.tenancy.workflow." + name
 
     def __getitem__(self, key):
         return self._values[key]

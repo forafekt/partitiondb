@@ -182,7 +182,7 @@ class Provisioner:
                 raise ValueError("Reconciliation requires the exact tenant in CREATING state")
             return self._advance(record, Stage.SCHEMA_READY if schema_created else Stage.NEW)
 
-    def reconcile_access(self, tenant_id: str, *, confirm: Tenant, access_ready: bool) -> ProvisioningRecord:
+    def reconcile_role(self, tenant_id: str, *, confirm: Tenant, access_ready: bool) -> ProvisioningRecord:
         """Operator-confirmed recovery of ambiguous external role/secret operations.
 
         access_ready=True requires independently verifying the role's ownership,

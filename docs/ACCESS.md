@@ -24,14 +24,14 @@ Activation then verifies the completed journal, the receipt, the actual role att
 
 | Shared model | Purpose |
 | --- | --- |
-| `AccessOperation` | Durable intent and provisioning transitions |
+| `RoleProvisioningOperation` | Durable intent and provisioning transitions |
 | `RoleOwnershipReceipt` | Operation, role OID and credential-reference ownership |
-| `AccessRecoveryAudit` | Explicit operator recovery decisions |
-| `DatabaseOperation` / `DatabaseRecoveryAudit` | Database creation intent, receipt and recovery |
-| `TenantDatabaseTarget` | Persisted tenant database routing |
-| `DatabaseServerProfile` | Verified, operator-managed server availability |
+| `RoleRecoveryEvent` | Explicit operator recovery decisions |
+| `DatabaseProvisioningOperation` / `DatabaseRecoveryEvent` | Database creation intent, receipt and recovery |
+| `DatabaseReservation` | Persisted tenant database routing |
+| `DatabaseServer` | Verified, operator-managed server availability |
 
-Evidence is view-only in admin; server profiles have explicit management controls. Use the tenant's **access-status page** for inspection and recovery. Passwords are never displayed there.
+Evidence is view-only in admin; server profiles have explicit management controls. Use the tenant's **role-status page** for inspection and recovery. Passwords are never displayed there.
 
 > [!NOTE]
 > A completed operation records prior success, not continuous health. A broken secret can leave an operation "completed" while authentication fails. Structural role inspection alone does not establish ownership or password validity.
@@ -61,7 +61,7 @@ For local POSIX development:
 
 ```python
 PARTITIONDB.update(
-    CREDENTIAL_PROVIDER="partitiondb.adapters.django.databases.credentials.development_credentials",
+    CREDENTIAL_PROVIDER="partitiondb.adapters.django.infrastructure.credentials.development_credentials",
     DEVELOPMENT_CREDENTIALS_DIR=BASE_DIR / ".secrets",
 )
 ```
@@ -75,7 +75,7 @@ Run OpenBao as an external service inside your network, then configure:
 
 ```python
 PARTITIONDB.update(
-    CREDENTIAL_PROVIDER="partitiondb.adapters.django.databases.credentials.openbao_credentials",
+    CREDENTIAL_PROVIDER="partitiondb.adapters.django.infrastructure.credentials.openbao_credentials",
     CREDENTIAL_PROVIDER_OPTIONS={
         "address": "https://secrets.internal:8200",
         "mount": "secret",

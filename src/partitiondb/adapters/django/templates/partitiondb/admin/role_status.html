@@ -1,0 +1,42 @@
+{% extends "partitiondb/admin/action_page.html" %}
+{% load i18n %}
+{% block content %}
+<div class="module">
+    <h1>{{ original }} — {% translate "Database access recovery" %}</h1>
+    <p>{% translate "Inspect the current evidence, then choose a verified recovery decision. A successful recovery records your account, resumes provisioning and activates the existing tenant." %}</p>
+    <div>
+        <dl>
+            <dt>{% translate "Provisioning stage" %}</dt><dd>{{ status.stage }}</dd>
+            <dt>{% translate "PostgreSQL role" %}</dt><dd>{{ status.inspection.role }}</dd>
+            <dt>{% translate "Role state" %}</dt><dd>{{ status.inspection.state }} — {{ status.inspection.reason }}</dd>
+            <dt>{% translate "Access operation" %}</dt><dd>{{ status.operation.operation_id|default:"None" }} — {{ status.operation.state|default:"None" }}</dd>
+            <dt>{% translate "Ownership receipt" %}</dt><dd>{{ status.receipt.operation_id|default:"None" }}{% if status.receipt %} (OID {{ status.receipt.role_oid }}){% endif %}</dd>
+            <dt>{% translate "Ownership verified" %}</dt><dd>{{ status.evidence.ownership_verified|yesno:"Yes,No" }}</dd>
+            <dt>{% translate "Fresh credential authentication verified" %}</dt><dd>{{ status.evidence.credential_verified|yesno:"Yes,No" }}</dd>
+            <dt>{% translate "Role and credential absence verified" %}</dt><dd>{{ status.evidence.absence_verified|yesno:"Yes,No" }}</dd>
+            <dt>{% translate "Registry binding verified" %}</dt><dd>{{ status.binding_verified|yesno:"Yes,No" }}</dd>
+        </dl>
+    </div>
+    {% if status.can_reconcile %}
+        {% if status.evidence.ownership_verified and status.evidence.credential_verified or status.evidence.absence_verified %}
+            <form method="post" action="{{ reconcile_url }}">
+                {% csrf_token %}
+                <h2>{% translate "Recover the existing tenant" %}</h2>
+                {% include "partitiondb/admin/confirmation_fields.html" %}
+                <input type="submit" class="default" value="{% translate "Verify, recover and activate" %}">
+            </form>
+        {% else %}
+            <div>
+                <h2>{% translate "Recovery needs investigation" %}</h2>
+                <p>{% translate "READY requires verified ownership and working credentials. RETRY requires the expected role and credential to be absent. Fix the underlying issue and inspect any remaining role before retrying." %}</p>
+                <p>{% translate "Refresh this page after correcting the issue to recheck the evidence." %}</p>
+                {% if cleanup_url and status.inspection.state == "disabled" %}
+                    <a href="{{ cleanup_url }}">{% translate "Inspect cleanup eligibility" %}</a>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% else %}
+        <p>{% translate "No ambiguous access operation requires recovery." %}</p>
+    {% endif %}
+</div>
+{% endblock %}

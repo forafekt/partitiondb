@@ -33,7 +33,7 @@ def main(sqlite_name=None):
     try:
         client = Client(HTTP_HOST="alpha.test")
         client.force_login(user)
-        assert client.get(reverse("registry:partitiondb_registry_tenant_changelist")).status_code == 200
+        assert client.get(reverse("registry:partitiondb_tenancy_tenant_changelist")).status_code == 200
         dashboard = client.get(reverse("registry:index"))
         assert dashboard.status_code == 200
         assert b"Shared control plane" in dashboard.content
@@ -42,7 +42,7 @@ def main(sqlite_name=None):
         assert b"/admin/workspaces/workspace/" not in dashboard.content
         schema = "admin_" + uuid.uuid4().hex
         response = client.post(
-            reverse("registry:partitiondb_registry_tenant_add"),
+            reverse("registry:partitiondb_tenancy_tenant_add"),
             {
                 "name": "Admin test organization",
                 "schema_name": schema,
@@ -56,7 +56,7 @@ def main(sqlite_name=None):
         records.append(record.pk)
         assert not record.active
         response = client.post(
-            reverse("registry:partitiondb_registry_tenant_change", args=[record.pk]),
+            reverse("registry:partitiondb_tenancy_tenant_change", args=[record.pk]),
             {
                 "name": record.name,
                 "schema_name": "forbidden_change",
@@ -80,7 +80,7 @@ def main(sqlite_name=None):
         record.refresh_from_db()
         assert record.schema_name == schema and not record.active
         response = client.post(
-            reverse("registry:partitiondb_registry_domain_add"),
+            reverse("registry:partitiondb_tenancy_domain_add"),
             {
                 "hostname": username.replace("_", "-").upper() + ".EXAMPLE",
                 "tenant": record.pk,

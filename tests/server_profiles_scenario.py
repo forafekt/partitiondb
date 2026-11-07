@@ -27,14 +27,14 @@ def main():
         from django.db import connections
 
         from partitiondb import Tenant, tenant_scope
-        from partitiondb.adapters.django.access_control.admin import DatabaseServerProfileAdmin
-        from partitiondb.adapters.django.access_control.models import DatabaseServerProfile
-        from partitiondb.adapters.django.databases.profiles import verify_server_profile
-        from partitiondb.adapters.django.databases.routes import database_profiles
+        from partitiondb.adapters.django.infrastructure.admin import DatabaseServerAdmin
+        from partitiondb.adapters.django.infrastructure.models import DatabaseServer
+        from partitiondb.adapters.django.infrastructure.profiles import verify_server_profile
+        from partitiondb.adapters.django.infrastructure.routes import database_profiles
 
         call_command("migrate", verbosity=0)
         assert database_profiles() == {}
-        row = DatabaseServerProfile.objects.create(name="local", source_profile="default")
+        row = DatabaseServer.objects.create(name="local", source_profile="default")
         assert not row.enabled
         row.enabled = True
         try:
@@ -50,8 +50,8 @@ def main():
         context.__enter__ = Mock(return_value=connection)
         context.__exit__ = Mock(return_value=False)
         with (
-            patch("partitiondb.adapters.django.databases.profiles.psycopg.connect", return_value=context),
-            patch("partitiondb.adapters.django.databases.profiles.cluster_id", return_value="12345"),
+            patch("partitiondb.adapters.django.infrastructure.profiles.psycopg.connect", return_value=context),
+            patch("partitiondb.adapters.django.infrastructure.profiles.cluster_id", return_value="12345"),
         ):
             row = verify_server_profile(row)
         assert row.cluster_id == "12345"
@@ -64,8 +64,8 @@ def main():
         assert database_profiles() == {}
         assert database_profiles(include_disabled=True)["local"].cluster_id == "12345"
         with (
-            patch("partitiondb.adapters.django.databases.profiles.psycopg.connect", return_value=context),
-            patch("partitiondb.adapters.django.databases.profiles.cluster_id", return_value="99999"),
+            patch("partitiondb.adapters.django.infrastructure.profiles.psycopg.connect", return_value=context),
+            patch("partitiondb.adapters.django.infrastructure.profiles.cluster_id", return_value="99999"),
         ):
             try:
                 verify_server_profile(row)
@@ -90,7 +90,7 @@ def main():
                 pass
             else:
                 raise AssertionError("Server registry read leaked into tenant scope")
-        administrator = DatabaseServerProfileAdmin(DatabaseServerProfile, Mock())
+        administrator = DatabaseServerAdmin(DatabaseServer, Mock())
         for superuser in (False, True):
             request = SimpleNamespace(user=SimpleNamespace(is_active=True, is_superuser=superuser))
             assert administrator.has_change_permission(request) is superuser

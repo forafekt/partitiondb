@@ -6,6 +6,7 @@ from dataclasses import asdict
 
 import psycopg
 from django.contrib import messages
+from django.contrib.admin.utils import quote, unquote
 from django.core import signing
 from django.core.exceptions import (
     ImproperlyConfigured,
@@ -19,7 +20,7 @@ from django.http import Http404, HttpResponseNotAllowed, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
-from partitiondb.adapters.django.access_control.cleanup import (
+from partitiondb.adapters.django.database_access.cleanup import (
     CleanupBlocked,
     CleanupCandidate,
     cleanup_disabled_role,
@@ -32,37 +33,40 @@ CLEANUP_SALT = "partitiondb.tenant-access-cleanup.v1"
 
 
 class AccessCleanupAdminMixin:
+    role_cleanup_template_name = "partitiondb/admin/role_cleanup.html"
+
     def get_urls(self):
         return [
             path(
-                "<path:object_id>/cleanup-access/",
-                self.admin_site.admin_view(self.cleanup_access_view),
-                name=f"{self.opts.app_label}_{self.opts.model_name}_cleanup_access",
+                "<path:object_id>/cleanup-role/",
+                self.admin_site.admin_view(self.cleanup_role_view),
+                name=f"{self.opts.app_label}_{self.opts.model_name}_cleanup_role",
             )
         ] + super().get_urls()
 
-    def access_status_view(self, request, object_id):
-        response = super().access_status_view(request, object_id)
+    def role_status_view(self, request, object_id):
+        response = super().role_status_view(request, object_id)
         if hasattr(response, "context_data"):
             response.context_data["cleanup_url"] = reverse(
-                f"{self.admin_site.name}:{self.opts.app_label}_{self.opts.model_name}_cleanup_access",
+                f"{self.admin_site.name}:{self.opts.app_label}_{self.opts.model_name}_cleanup_role",
                 args=[object_id],
             )
         return response
 
-    def cleanup_access_view(self, request, object_id):
+    def cleanup_role_view(self, request, object_id):
         self._require_control_plane()
         if request.method not in ("GET", "POST"):
             return HttpResponseNotAllowed(["GET", "POST"])
-        obj = self.get_object(request, object_id)
+        obj = self.get_object(request, unquote(object_id))
         if obj is None:
             raise Http404("Tenant not found")
         if not self.has_reconcile_permission(request, obj) or not request.user.pk:
             raise PermissionDenied
         status_url = reverse(
-            f"{self.admin_site.name}:{self.opts.app_label}_{self.opts.model_name}_access_status",
-            args=[obj.pk],
+            f"{self.admin_site.name}:{self.opts.app_label}_{self.opts.model_name}_role_status",
+            args=[quote(obj.pk)],
         )
+        request.current_app = self.admin_site.name
         context_data = {
             **self.admin_site.each_context(request),
             "title": "Inspect disabled role cleanup",
@@ -143,5 +147,12 @@ class AccessCleanupAdminMixin:
                     "and fix the underlying issue before trying again."
                 )
             )
-            return TemplateResponse(request, "partitiondb/admin/access_cleanup.html", context_data, status=409)
-        return TemplateResponse(request, "partitiondb/admin/access_cleanup.html", context_data)
+            return TemplateResponse(request, self.role_cleanup_template_name, context_data, status=409)
+        from .forms import RoleCleanupForm, confirmation_form
+
+        context_data["model_admin"] = self
+        context_data["confirmation_form"] = confirmation_form(
+            self, request, RoleCleanupForm, token=context_data.get("confirmation_token")
+        )
+        context_data["media"] = self.media + context_data["confirmation_form"].media
+        return TemplateResponse(request, self.role_cleanup_template_name, context_data)

@@ -172,3 +172,5 @@ The bundled Compose deployment demonstrates integration, not production high ava
 ## Contributing
 
 Run the test and release checks against **disposable infrastructure only**. See [testing](docs/TESTING.md) for the development environment, the Compose test stack and release gates.
+
+The Django control plane uses separate **Tenancy**, **Infrastructure**, and **Database access** apps, with a tenant overview for placement, admission, provisioning and recovery evidence. This is a [clean-break development baseline](docs/MIGRATION.md); earlier development databases and imports are unsupported. See [admin organization and recovery](docs/ADMIN_RECOVERY.md).

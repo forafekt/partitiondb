@@ -1,7 +1,7 @@
 """Verify PostgreSQL role ownership against receipts and durable operation intent."""
 
 from partitiondb.access.evidence import CredentialAuthentication, OwnershipReceiptStore
-from partitiondb.access.operations import OperationState
+from partitiondb.access.operations import RoleOperationState
 from partitiondb.access.recovery import RecoveryEvidence
 from partitiondb.postgres.role_inspection import RoleInspection, RoleState
 from partitiondb.postgres.role_manager import tenant_role_name
@@ -76,9 +76,9 @@ class JournalBoundRecoveryEvidence:
             or operation.role != receipt.role
             or operation.state
             not in (
-                OperationState.ROLE_CREATED,
-                OperationState.RECEIPT_RECORDED,
-                OperationState.COMPLETED,
+                RoleOperationState.ROLE_CREATED,
+                RoleOperationState.RECEIPT_RECORDED,
+                RoleOperationState.COMPLETED,
             )
         ):
             return RecoveryEvidence()

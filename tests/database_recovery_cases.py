@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase
 
 from partitiondb import Tenant
-from partitiondb.adapters.django.databases.recovery import (
+from partitiondb.adapters.django.infrastructure.recovery import (
     DatabaseCandidate,
     DatabaseRecoveryBlocked,
     database_actions,
@@ -16,8 +16,8 @@ from partitiondb.adapters.django.databases.recovery import (
 )
 from partitiondb.provisioning.databases import (
     DatabaseObservation,
-    DatabaseOperation,
-    DatabaseState,
+    DatabaseProvisioningOperation,
+    DatabaseProvisioningState,
     DatabaseTarget,
 )
 
@@ -26,7 +26,7 @@ class DatabaseRecoveryTests(SimpleTestCase):
     def setUp(self):
         self.tenant = Tenant("7", "org_db", "pdb_db_example")
         self.target = DatabaseTarget(self.tenant, "pdb_example", "cluster-1", "dbowner", 10)
-        self.operation = DatabaseOperation("operation-db", self.target, DatabaseState.CREATING)
+        self.operation = DatabaseProvisioningOperation("operation-db", self.target, DatabaseProvisioningState.CREATING)
         self.observed = DatabaseObservation(77, 10, True)
         self.candidate = DatabaseCandidate(
             "7",
@@ -51,7 +51,7 @@ class DatabaseRecoveryTests(SimpleTestCase):
         )
 
     def test_ready_verifies_an_existing_receipt(self):
-        operation = replace(self.operation, state=DatabaseState.CREATED, database_oid=77)
+        operation = replace(self.operation, state=DatabaseProvisioningState.CREATED, database_oid=77)
         self.assertEqual(
             database_actions(
                 self.workflow,
@@ -83,12 +83,12 @@ class DatabaseRecoveryTests(SimpleTestCase):
 
     def test_present_database_requires_independent_empty_check(self):
         with patch(
-            "partitiondb.adapters.django.databases.recovery.empty_database",
+            "partitiondb.adapters.django.infrastructure.recovery.empty_database",
             side_effect=DatabaseRecoveryBlocked("contains data"),
         ):
             with self.assertRaises(DatabaseRecoveryBlocked):
                 database_actions(self.workflow, *self.context)
-        with patch("partitiondb.adapters.django.databases.recovery.empty_database") as check:
+        with patch("partitiondb.adapters.django.infrastructure.recovery.empty_database") as check:
             self.assertEqual(database_actions(self.workflow, *self.context), ["cleanup"])
             check.assert_called_once()
 
@@ -104,10 +104,10 @@ class DatabaseRecoveryTests(SimpleTestCase):
             inspection = self.inspection_connection(nonempty, oid)
             with (
                 patch(
-                    "partitiondb.adapters.django.databases.recovery.psycopg.connect",
+                    "partitiondb.adapters.django.infrastructure.recovery.psycopg.connect",
                     return_value=nullcontext(inspection),
                 ),
-                patch("partitiondb.adapters.django.databases.recovery.cluster_id", return_value="cluster-1"),
+                patch("partitiondb.adapters.django.infrastructure.recovery.cluster_id", return_value="cluster-1"),
             ):
                 with self.assertRaises(DatabaseRecoveryBlocked):
                     empty_database(self.workflow, self.service, self.target, self.observed)
@@ -122,14 +122,14 @@ class DatabaseRecoveryTests(SimpleTestCase):
             )
         for counts in ([(1,)], [(0,), (1,)]):
             self.service.manager.connection.execute.return_value.fetchone.side_effect = counts
-            with patch("partitiondb.adapters.django.databases.recovery.psycopg.connect") as connect:
+            with patch("partitiondb.adapters.django.infrastructure.recovery.psycopg.connect") as connect:
                 with self.assertRaises(DatabaseRecoveryBlocked):
                     empty_database(self.workflow, self.service, self.target, self.observed)
                 connect.assert_not_called()
 
     def test_stale_signed_snapshot_never_recovers_or_drops(self):
         with patch(
-            "partitiondb.adapters.django.databases.recovery.database_recovery_context",
+            "partitiondb.adapters.django.infrastructure.recovery.database_recovery_context",
             return_value=nullcontext(self.context),
         ):
             with self.assertRaises(DatabaseRecoveryBlocked):
@@ -145,15 +145,15 @@ class DatabaseRecoveryTests(SimpleTestCase):
     def test_cleanup_audit_failure_prevents_ddl_and_retry(self):
         with (
             patch(
-                "partitiondb.adapters.django.databases.recovery.database_recovery_context",
+                "partitiondb.adapters.django.infrastructure.recovery.database_recovery_context",
                 return_value=nullcontext(self.context),
             ),
-            patch("partitiondb.adapters.django.databases.recovery.empty_database"),
+            patch("partitiondb.adapters.django.infrastructure.recovery.empty_database"),
             patch(
-                "partitiondb.adapters.django.databases.recovery.durable_control_plane",
+                "partitiondb.adapters.django.infrastructure.recovery.durable_control_plane",
                 return_value=nullcontext(),
             ),
-            patch("partitiondb.adapters.django.databases.recovery.DatabaseRecoveryAudit") as audit,
+            patch("partitiondb.adapters.django.infrastructure.recovery.DatabaseRecoveryEvent") as audit,
         ):
             audit._base_manager.using.return_value.get_or_create.side_effect = RuntimeError("audit failed")
             with self.assertRaises(RuntimeError):
@@ -168,15 +168,15 @@ class DatabaseRecoveryTests(SimpleTestCase):
         self.service.reconcile.side_effect = lambda *a, **kw: events.append(kw["decision"])
         with (
             patch(
-                "partitiondb.adapters.django.databases.recovery.database_recovery_context",
+                "partitiondb.adapters.django.infrastructure.recovery.database_recovery_context",
                 return_value=nullcontext(self.context),
             ),
-            patch("partitiondb.adapters.django.databases.recovery.empty_database"),
+            patch("partitiondb.adapters.django.infrastructure.recovery.empty_database"),
             patch(
-                "partitiondb.adapters.django.databases.recovery.durable_control_plane",
+                "partitiondb.adapters.django.infrastructure.recovery.durable_control_plane",
                 return_value=nullcontext(),
             ),
-            patch("partitiondb.adapters.django.databases.recovery.DatabaseRecoveryAudit") as audit,
+            patch("partitiondb.adapters.django.infrastructure.recovery.DatabaseRecoveryEvent") as audit,
             patch(
                 "django.core.management.call_command",
                 side_effect=lambda *a, **kw: events.append("resume"),
@@ -230,7 +230,7 @@ class DatabaseRecoveryAdminSecurityTests(SimpleTestCase):
             {"confirm_database_name": "other"},
             {"confirm_ownership": ""},
         ):
-            request = RequestFactory().post("/database-status/", {**data, **override})
+            request = RequestFactory().post("/database-provisioning/", {**data, **override})
             request.user = Mock(pk=1)
             with (
                 patch(
@@ -238,15 +238,15 @@ class DatabaseRecoveryAdminSecurityTests(SimpleTestCase):
                 ),
                 patch("partitiondb.adapters.django.administration.database_recovery.recover_database") as recover,
             ):
-                response = model_admin.database_status_view(request, "7")
+                response = model_admin.database_provisioning_view(request, "7")
             self.assertEqual(response.status_code, 409)
             recover.assert_not_called()
-        request = RequestFactory().post("/database-status/", data)
+        request = RequestFactory().post("/database-provisioning/", data)
         request.user = Mock(pk=2)
         with (
             patch("partitiondb.adapters.django.administration.database_recovery.automatic_database", return_value=True),
             patch("partitiondb.adapters.django.administration.database_recovery.recover_database") as recover,
         ):
-            response = model_admin.database_status_view(request, "7")
+            response = model_admin.database_provisioning_view(request, "7")
         self.assertEqual(response.status_code, 409)
         recover.assert_not_called()

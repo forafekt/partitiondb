@@ -1,14 +1,14 @@
-"""Explicitly install/upgrade the library's shared lifecycle checkpoint table."""
+"""Explicitly install the library's shared lifecycle checkpoint table."""
 
 from django.core.management import BaseCommand, CommandError
 
-from partitiondb.adapters.django.access_control.boundary import require_control_plane
-from partitiondb.adapters.django.registry.workflow import get_workflow
+from partitiondb.adapters.django.control_plane import require_control_plane
+from partitiondb.adapters.django.tenancy.workflow import get_workflow
 from partitiondb.postgres.provisioning import PostgresProvisioningStore
 
 
 class Command(BaseCommand):
-    help = "Install or upgrade central provisioning checkpoints before starting provisioners."
+    help = "Install current-baseline central provisioning checkpoints before starting provisioners."
 
     def handle(self, *args, **options):
         try:

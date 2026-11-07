@@ -11,11 +11,22 @@ from uuid import uuid4
 from partitiondb.tenancy.identity import Tenant
 
 
-class DatabaseState(StrEnum):
+class DatabaseProvisioningState(StrEnum):
     CREATING = "creating"
     CREATED = "created"
     READY = "ready"
     CLEANED = "cleaned"
+
+
+class DatabaseRecoveryDecision(StrEnum):
+    READY = "ready"
+    RETRY = "retry"
+
+
+class DatabaseRecoveryEventKind(StrEnum):
+    READY = DatabaseRecoveryDecision.READY.value
+    RETRY = DatabaseRecoveryDecision.RETRY.value
+    CLEANUP = "cleanup"
 
 
 class AmbiguousDatabaseCreation(RuntimeError):
@@ -39,10 +50,10 @@ class DatabaseObservation:
 
 
 @dataclass(frozen=True, slots=True)
-class DatabaseOperation:
+class DatabaseProvisioningOperation:
     operation_id: str
     target: DatabaseTarget
-    state: DatabaseState = DatabaseState.CREATING
+    state: DatabaseProvisioningState = DatabaseProvisioningState.CREATING
     database_oid: int | None = None
 
 
@@ -69,7 +80,7 @@ class DatabaseProvisioner:
         if (
             operation is None
             or operation.target != target
-            or operation.state not in (DatabaseState.CREATED, DatabaseState.READY)
+            or operation.state not in (DatabaseProvisioningState.CREATED, DatabaseProvisioningState.READY)
             or operation.database_oid is None
             or observed is None
             or observed.oid != operation.database_oid
@@ -84,7 +95,7 @@ class DatabaseProvisioner:
         if operation is None:
             if self.manager.inspect(target) is not None:
                 raise AmbiguousDatabaseCreation("Existing database has no ownership receipt")
-            operation = DatabaseOperation(uuid4().hex, target)
+            operation = DatabaseProvisioningOperation(uuid4().hex, target)
             self.journal.begin(operation)
             # CREATE DATABASE cannot be committed atomically with the journal.
             # Failure before receipt persistence must remain ambiguous.
@@ -92,10 +103,10 @@ class DatabaseProvisioner:
             if observed.owner_oid != target.owner_oid or observed.safe is not True:
                 raise AmbiguousDatabaseCreation("New database attributes could not be verified")
             operation = self.journal.receipt(operation, observed.oid)
-        elif operation.state == DatabaseState.CREATING:
+        elif operation.state == DatabaseProvisioningState.CREATING:
             raise AmbiguousDatabaseCreation("Database creation has no durable receipt; inspect before recovery")
         self.verify(target, operation)
-        if operation.state == DatabaseState.CREATED:
+        if operation.state == DatabaseProvisioningState.CREATED:
             operation = self.journal.ready(operation)
         return operation
 
@@ -105,12 +116,12 @@ class DatabaseProvisioner:
         operation = self._operation(target)
         if operation is None:
             raise ValueError("No database creation operation to recover")
-        if decision == "ready":
-            if operation.state != DatabaseState.CREATED:
+        if decision == DatabaseRecoveryDecision.READY:
+            if operation.state != DatabaseProvisioningState.CREATED:
                 raise ValueError("READY requires an existing database ownership receipt")
             self.verify(target, operation)
-        elif decision == "retry":
-            if operation.state != DatabaseState.CREATING or self.manager.inspect(target) is not None:
+        elif decision == DatabaseRecoveryDecision.RETRY:
+            if operation.state != DatabaseProvisioningState.CREATING or self.manager.inspect(target) is not None:
                 raise AmbiguousDatabaseCreation("RETRY requires confirmed absence and an unreceipted operation")
         else:
             raise ValueError("Recovery decision must be ready or retry")

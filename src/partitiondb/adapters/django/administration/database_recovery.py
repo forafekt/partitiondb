@@ -5,22 +5,23 @@ from dataclasses import asdict
 
 import psycopg
 from django.contrib import admin, messages
+from django.contrib.admin.utils import quote, unquote
 from django.core import signing
-from django.core.exceptions import ObjectDoesNotExist, PermissionDenied, ValidationError
+from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist, PermissionDenied, ValidationError
 from django.db import DatabaseError
 from django.http import Http404, HttpResponseNotAllowed, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from partitiondb.adapters.django.databases.recovery import (
+from partitiondb.adapters.django.infrastructure.recovery import (
     DatabaseCandidate,
     DatabaseRecoveryBlocked,
     database_actions,
     database_recovery_context,
     recover_database,
 )
-from partitiondb.adapters.django.databases.routes import automatic_database
+from partitiondb.adapters.django.infrastructure.routes import automatic_database
 from partitiondb.credentials.openbao import CredentialStoreError
 
 DATABASE_SALT = "partitiondb.database-recovery.v1"
@@ -28,13 +29,15 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseRecoveryAdminMixin:
+    database_provisioning_template_name = "partitiondb/admin/database_provisioning.html"
+
     @admin.display(description="Database recovery")
     def database_recovery(self, obj):
         return format_html(
             '<a href="{}">Inspect database creation</a>',
             reverse(
-                f"{self.admin_site.name}:{self.opts.app_label}_{self.opts.model_name}_database_status",
-                args=[obj.pk],
+                f"{self.admin_site.name}:{self.opts.app_label}_{self.opts.model_name}_database_provisioning",
+                args=[quote(obj.pk)],
             ),
         )
 
@@ -45,25 +48,27 @@ class DatabaseRecoveryAdminMixin:
     def get_urls(self):
         return [
             path(
-                "<path:object_id>/database-status/",
-                self.admin_site.admin_view(self.database_status_view),
-                name=f"{self.opts.app_label}_{self.opts.model_name}_database_status",
+                "<path:object_id>/database-provisioning/",
+                self.admin_site.admin_view(self.database_provisioning_view),
+                name=f"{self.opts.app_label}_{self.opts.model_name}_database_provisioning",
             )
         ] + super().get_urls()
 
-    def database_status_view(self, request, object_id):
+    def database_provisioning_view(self, request, object_id):
         self._require_control_plane()
         if request.method not in ("GET", "POST"):
             return HttpResponseNotAllowed(["GET", "POST"])
-        obj = self.get_object(request, object_id)
+        obj = self.get_object(request, unquote(object_id))
         if obj is None:
             raise Http404("Tenant not found")
         if not self.has_reconcile_permission(request, obj) or not request.user.pk:
             raise PermissionDenied
+        request.current_app = self.admin_site.name
         data = {
             **self.admin_site.each_context(request),
             "title": "Database creation recovery",
             "opts": self.opts,
+            "model_admin": self,
             "original": obj,
             "inspect_url": request.path,
         }
@@ -73,7 +78,7 @@ class DatabaseRecoveryAdminMixin:
                     "This tenant uses a schema in an existing database. "
                     "Use its access recovery page for role provisioning issues."
                 )
-                return TemplateResponse(request, "partitiondb/admin/database_status.html", data)
+                return TemplateResponse(request, self.database_provisioning_template_name, data)
             workflow = self.get_workflow(request)
             if request.method == "POST":
                 try:
@@ -127,6 +132,7 @@ class DatabaseRecoveryAdminMixin:
             CredentialStoreError,
             ObjectDoesNotExist,
             ValidationError,
+            ImproperlyConfigured,
         ) as error:
             logger.warning("Database recovery blocked: %s", type(error).__name__)
             data["error"] = (
@@ -137,5 +143,15 @@ class DatabaseRecoveryAdminMixin:
                     "database ownership and provisioning records before retrying."
                 )
             )
-            return TemplateResponse(request, "partitiondb/admin/database_status.html", data, status=409)
-        return TemplateResponse(request, "partitiondb/admin/database_status.html", data)
+            return TemplateResponse(request, self.database_provisioning_template_name, data, status=409)
+        from .forms import DatabaseRecoveryForm, confirmation_form
+
+        data["confirmation_form"] = confirmation_form(
+            self,
+            request,
+            DatabaseRecoveryForm,
+            token=data.get("confirmation_token"),
+            decisions=[(action, action.upper()) for action in data.get("actions", ())],
+        )
+        data["media"] = self.media + data["confirmation_form"].media
+        return TemplateResponse(request, self.database_provisioning_template_name, data)

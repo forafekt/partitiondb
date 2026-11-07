@@ -21,15 +21,18 @@ def main():
         from django.db import connections
 
         from partitiondb.adapters.django import get_tenant_model
-        from partitiondb.adapters.django.access_control.models import DatabaseOperation, DatabaseRecoveryAudit
-        from partitiondb.adapters.django.registry.workflow import get_workflow
+        from partitiondb.adapters.django.infrastructure.models import (
+            DatabaseProvisioningOperation,
+            DatabaseRecoveryEvent,
+        )
+        from partitiondb.adapters.django.tenancy.workflow import get_workflow
         from partitiondb.postgres.role_manager import tenant_role_name
 
         Organization = get_tenant_model()
 
         if "--crash" in sys.argv:
             with patch(
-                "partitiondb.adapters.django.databases.store.DjangoDatabaseJournal.receipt",
+                "partitiondb.adapters.django.infrastructure.store.DjangoDatabaseJournal.receipt",
                 side_effect=lambda *_: os._exit(73),
             ):
                 call_command(
@@ -52,9 +55,9 @@ def main():
             row = Organization.objects.get(database_alias="dedicated")
             tenant = row.as_tenant()
             assert not row.active
-            operation = DatabaseOperation.objects.get(tenant_id=tenant.id)
+            operation = DatabaseProvisioningOperation.objects.get(tenant_id=tenant.id)
             assert operation.state == "creating" and operation.database_oid is None
-            assert not DatabaseRecoveryAudit.objects.exists()
+            assert not DatabaseRecoveryEvent.objects.exists()
 
             def recover(decision):
                 call_command(
@@ -81,7 +84,7 @@ def main():
                     pass
                 else:
                     raise AssertionError("Unreceipted existing database must never be adopted or retried")
-            assert not DatabaseRecoveryAudit.objects.exists()
+            assert not DatabaseRecoveryEvent.objects.exists()
 
             # This disposable database belongs to the test wrapper. The library
             # exposes no DROP operation. After explicit removal, RETRY is safe.
@@ -94,7 +97,7 @@ def main():
             # Fail after audit insertion: the transaction must roll back both
             # the audit and the transition, leaving recovery repeatable.
             with patch(
-                "partitiondb.adapters.django.databases.store.DjangoDatabaseJournal._transition",
+                "partitiondb.adapters.django.infrastructure.store.DjangoDatabaseJournal._transition",
                 side_effect=RuntimeError("injected"),
             ):
                 try:
@@ -103,11 +106,11 @@ def main():
                     pass
                 else:
                     raise AssertionError("Expected audited recovery failure")
-            assert not DatabaseRecoveryAudit.objects.exists()
+            assert not DatabaseRecoveryEvent.objects.exists()
             operation.refresh_from_db()
             assert operation.state == "creating"
             recover("retry")
-            assert DatabaseRecoveryAudit.objects.get(operation_id=operation.operation_id).actor_id == "test-operator"
+            assert DatabaseRecoveryEvent.objects.get(operation_id=operation.operation_id).actor_id == "test-operator"
             operation.refresh_from_db()
             assert operation.state == "cleaned"
             call_command("provision_tenant", tenant.id, verbosity=0)
@@ -120,7 +123,9 @@ def main():
             )
             row.refresh_from_db()
             assert row.active
-            assert sorted(DatabaseOperation.objects.filter(tenant_id=tenant.id).values_list("state", flat=True)) == [
+            assert sorted(
+                DatabaseProvisioningOperation.objects.filter(tenant_id=tenant.id).values_list("state", flat=True)
+            ) == [
                 "cleaned",
                 "ready",
             ]

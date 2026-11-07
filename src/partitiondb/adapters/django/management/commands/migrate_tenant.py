@@ -124,6 +124,6 @@ class Command(BaseCommand):
                             )
             finally:
                 connection.close()
-                from partitiondb.adapters.django.databases.routes import release_database_alias
+                from partitiondb.adapters.django.infrastructure.routes import release_database_alias
 
                 release_database_alias(tenant.database)

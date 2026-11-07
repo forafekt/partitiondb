@@ -31,7 +31,7 @@ def request(method="POST", confirmation="tenant-1"):
 
 def test_reconcile_rejects_get_without_service_call():
     admin = make_admin()
-    response = admin.reconcile_access_view(request("GET"), "tenant-1")
+    response = admin.reconcile_role_view(request("GET"), "tenant-1")
     assert isinstance(response, HttpResponseNotAllowed)
     admin.access_reconciliation_service.assert_not_called()
 
@@ -39,7 +39,7 @@ def test_reconcile_rejects_get_without_service_call():
 def test_reconcile_requires_exact_identity_confirmation():
     admin = make_admin()
     with pytest.raises(SuspiciousOperation):
-        admin.reconcile_access_view(request(confirmation="other"), "tenant-1")
+        admin.reconcile_role_view(request(confirmation="other"), "tenant-1")
     admin.access_reconciliation_service.assert_not_called()
 
 
@@ -47,14 +47,14 @@ def test_reconcile_requires_permission():
     admin = make_admin()
     admin.has_reconcile_permission.return_value = False
     with pytest.raises(PermissionDenied):
-        admin.reconcile_access_view(request(), "tenant-1")
+        admin.reconcile_role_view(request(), "tenant-1")
     admin.access_reconciliation_service.assert_not_called()
 
 
 def test_reconcile_failure_does_not_log_success():
     admin = make_admin()
     admin.access_reconciliation_service.side_effect = RuntimeError("inspection failed")
-    response = admin.reconcile_access_view(request(), "tenant-1")
+    response = admin.reconcile_role_view(request(), "tenant-1")
     assert response.status_code == 409
     admin.log_change.assert_not_called()
     admin.message_user.assert_not_called()

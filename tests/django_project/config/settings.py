@@ -33,8 +33,9 @@ ALLOWED_HOSTS = ["*"]
 
 TENANCY = DjangoSetup(
     shared_apps={
-        "partitiondb_access_control": "partitiondb.adapters.django.access_control",
-        "partitiondb_registry": "partitiondb.adapters.django.registry_app",
+        "partitiondb_infrastructure": "partitiondb.adapters.django.infrastructure",
+        "partitiondb_database_access": "partitiondb.adapters.django.database_access",
+        "partitiondb_tenancy": "partitiondb.adapters.django.tenancy",
         "accounts": "apps.accounts.apps.AccountsConfig",
         "admin": "partitiondb.adapters.django.administration.apps.PartitionDBAdminConfig",
         "auth": "django.contrib.auth",
@@ -48,20 +49,20 @@ TENANCY = DjangoSetup(
         "audit": "apps.audit",
         "organizations": "apps.organizations",
     },
-    authorize="partitiondb.adapters.django.registry_app.tenancy.authorize_tenant",
+    authorize="partitiondb.adapters.django.tenancy.permissions.authorize_tenant",
     tenant_urlconf="config.urls",
     shared_hosts=["localhost", "127.0.0.1", "192.168.1.15"],
     shared_urlconf="config.urls_platform",
     tenant_admin=True,
     TENANT_AUTH_PATHS=["/accounts/", "/api/auth/"],
     TENANT_AUTH_URLCONF="config.urls_auth",
-    # TENANT_MODEL="partitiondb_registry.Tenant",
-    # DOMAIN_MODEL="partitiondb_registry.Domain",
-    # MEMBERSHIP_MODEL="partitiondb_registry.Membership",
+    # TENANT_MODEL="partitiondb_tenancy.Tenant",
+    # DOMAIN_MODEL="partitiondb_tenancy.Domain",
+    # MEMBERSHIP_MODEL="partitiondb_tenancy.Membership",
     TENANT_WORKFLOW="apps.workspaces.tenant_setup.WorkspaceTenantWorkflow",
-    CREDENTIAL_PROVIDER="partitiondb.adapters.django.databases.credentials.development_credentials",
+    CREDENTIAL_PROVIDER="partitiondb.adapters.django.infrastructure.credentials.development_credentials",
     DEVELOPMENT_CREDENTIALS_DIR=Path(os.getenv("PARTITIONDB_DEMO_CREDENTIALS_DIR", str(BASE_DIR / ".secrets"))),
-    TENANT_ADMIN_PERMISSIONS="partitiondb.adapters.django.registry_app.tenancy.tenant_admin_permissions",
+    TENANT_ADMIN_PERMISSIONS="partitiondb.adapters.django.tenancy.permissions.tenant_admin_permissions",
     TENANT_ADMIN_LOG_MODEL="audit.AdminAudit",
 )
 INSTALLED_APPS = TENANCY.installed_apps

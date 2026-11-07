@@ -22,7 +22,7 @@ def load_inventory():
 def operational_tenant(schema, database, tenant_id=None, tenant_type=None):
     if tenant_id is not None:
         tenant = Tenant(tenant_id, schema, database, tenant_type=tenant_type)
-        from partitiondb.adapters.django.databases.routes import ensure_database_alias
+        from partitiondb.adapters.django.infrastructure.routes import ensure_database_alias
 
         ensure_database_alias(database, tenant_id=tenant_id)
         tenant_policy(tenant)

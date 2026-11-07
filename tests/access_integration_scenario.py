@@ -31,12 +31,12 @@ def configure():
 
 def crash_worker():
     configure()
-    from partitiondb.adapters.django.registry.workflow import access_context
+    from partitiondb.adapters.django.tenancy.workflow import access_context
 
     with access_context(os.environ["PARTITIONDB_CRASH_TENANT"]) as context:
         # The role, secret and receipt must survive abrupt process termination.
         with patch(
-            "partitiondb.adapters.django.access_control.bindings.DjangoRoleBindingRecorder.__call__",
+            "partitiondb.adapters.django.database_access.bindings.DjangoRoleBindingRecorder.__call__",
             side_effect=lambda *_: os._exit(71),
         ):
             context.provisioner.run(os.environ["PARTITIONDB_CRASH_TENANT"])
@@ -57,15 +57,15 @@ def main():
         from django.test import Client, RequestFactory, override_settings
 
         from partitiondb.adapters.django import get_domain_model, get_tenant_model
-        from partitiondb.adapters.django.access_control.models import (
-            AccessOperation,
-            AccessRecoveryAudit,
+        from partitiondb.adapters.django.database_access.models import (
             RoleOwnershipReceipt,
+            RoleProvisioningOperation,
+            RoleRecoveryEvent,
         )
-        from partitiondb.adapters.django.access_control.services import AuditedDjangoReconciliationService
-        from partitiondb.adapters.django.registry.workflow import access_context, registry_lifecycle_factory
-        from partitiondb.adapters.django.registry_app.models import Membership
+        from partitiondb.adapters.django.database_access.services import AuditedDjangoReconciliationService
         from partitiondb.adapters.django.routing.scope import atomic_tenant
+        from partitiondb.adapters.django.tenancy.models import Membership
+        from partitiondb.adapters.django.tenancy.workflow import access_context, registry_lifecycle_factory
         from partitiondb.postgres.provisioning import PostgresProvisioningStore
         from partitiondb.postgres.role_manager import tenant_role_name
         from partitiondb.provisioning import Stage
@@ -121,12 +121,12 @@ def main():
             normal = Organization.objects.get(schema_name="normal_" + suffix)
             owned.append(normal.as_tenant())
             assert normal.active and normal.access_role == tenant_role_name(normal.as_tenant())
-            assert AccessOperation.objects.get(tenant_id=str(normal.pk)).state == "completed"
+            assert RoleProvisioningOperation.objects.get(tenant_id=str(normal.pk)).state == "completed"
             assert RoleOwnershipReceipt.objects.get(tenant_id=str(normal.pk)).role_name == normal.access_role
-            assert not AccessRecoveryAudit.objects.exists()
+            assert not RoleRecoveryEvent.objects.exists()
 
             # A completed operation is historical; status must still test the current secret.
-            status_url = f"/admin/partitiondb_registry/tenant/{normal.pk}/access-status/"
+            status_url = f"/admin/partitiondb_tenancy/tenant/{normal.pk}/role-status/"
             page = client.get(status_url)
             assert page.status_code == 200
             assert "Verified — fresh password connection succeeded".encode() in page.content
@@ -145,8 +145,8 @@ def main():
                 finally:
                     path.write_text(secret)
             assert "Verified — fresh password connection succeeded".encode() in client.get(status_url).content
-            assert AccessOperation.objects.get(tenant_id=str(normal.pk)).state == "completed"
-            assert not AccessRecoveryAudit.objects.exists()
+            assert RoleProvisioningOperation.objects.get(tenant_id=str(normal.pk)).state == "completed"
+            assert not RoleRecoveryEvent.objects.exists()
 
             # A real atomic migration fails after DDL and data writes. Earlier migrations
             # remain applied, the failed migration rolls back, and provisioning stays inactive.
@@ -187,7 +187,7 @@ def main():
                         migrating.refresh_from_db()
                         assert not migrating.active and not migrating.access_role
                         assert client.get("/admin/", HTTP_HOST="migrationfailure.localhost").status_code == 400
-                        assert not AccessOperation.objects.filter(tenant_id=migration_tenant.id).exists()
+                        assert not RoleProvisioningOperation.objects.filter(tenant_id=migration_tenant.id).exists()
                         with atomic_tenant(migration_tenant, privileged=True):
                             assert not Workspace.objects.exists()
                             with connections["default"].cursor() as cursor:
@@ -235,7 +235,7 @@ def main():
                         try:
                             secret_path.write_text("invalid-upgrade-password")
                             with patch(
-                                "partitiondb.adapters.django.access_control.migration_access.provision_restricted_role"
+                                "partitiondb.adapters.django.database_access.migration_access.provision_restricted_role"
                             ) as grant:
                                 try:
                                     call_command(
@@ -263,7 +263,7 @@ def main():
                                 pass
                             else:
                                 raise AssertionError("Upgrade bypassed lifecycle lock")
-                    from partitiondb.adapters.django.access_control.migration_access import DjangoMigrationAccess
+                    from partitiondb.adapters.django.database_access.migration_access import DjangoMigrationAccess
 
                     with access_context(migration_tenant.id) as context:
                         service_boundary = DjangoMigrationAccess(
@@ -304,7 +304,7 @@ def main():
                     forbidden.assert_not_called()
                     # Committed DDL plus failed finalization remains visible and safely retryable.
                     with patch(
-                        "partitiondb.adapters.django.access_control.migration_access.provision_restricted_role",
+                        "partitiondb.adapters.django.database_access.migration_access.provision_restricted_role",
                         side_effect=RuntimeError("password=never-display-this"),
                     ):
                         try:
@@ -341,12 +341,12 @@ def main():
                 timeout=30,
             )
             assert result.returncode == 71
-            operation = AccessOperation.objects.get(tenant_id=tenant.id)
+            operation = RoleProvisioningOperation.objects.get(tenant_id=tenant.id)
             assert operation.state == "receipt_recorded"
             assert RoleOwnershipReceipt.objects.filter(operation_id=operation.operation_id).exists()
             interrupted.refresh_from_db()
             assert not interrupted.access_role and not interrupted.active
-            page = client.get(f"/admin/partitiondb_registry/tenant/{tenant.id}/access-status/")
+            page = client.get(f"/admin/partitiondb_tenancy/tenant/{tenant.id}/role-status/")
             assert page.status_code == 200 and b"access_provisioning" in page.content
             with access_context(tenant.id) as context:
                 assert context.credentials.get(interrupted.credential_ref).encode() not in page.content
@@ -367,16 +367,16 @@ def main():
                         pass
                     else:
                         raise AssertionError("Recovery bypassed tenant lock")
-            assert not AccessRecoveryAudit.objects.exists()
+            assert not RoleRecoveryEvent.objects.exists()
             response = client.post(
-                f"/admin/partitiondb_registry/tenant/{tenant.id}/reconcile-access/",
+                f"/admin/partitiondb_tenancy/tenant/{tenant.id}/reconcile-role/",
                 {"decision": "ready", "confirm_tenant_id": tenant.id},
             )
             assert response.status_code == 302
             interrupted.refresh_from_db()
             operation.refresh_from_db()
             assert interrupted.active and interrupted.access_role == tenant_role_name(tenant)
-            assert operation.state == "completed" and AccessRecoveryAudit.objects.count() == 1
+            assert operation.state == "completed" and RoleRecoveryEvent.objects.count() == 1
 
             # ORM boundaries authenticate with the dedicated role; qualified SQL cannot cross tenants.
             with atomic_tenant(tenant):
@@ -395,7 +395,7 @@ def main():
                     raise AssertionError("Cross-tenant query succeeded")
                 try:
                     with transaction.atomic(), connections[tenant.database].cursor() as cursor:
-                        cursor.execute("SELECT * FROM public.pdb_access_operation")
+                        cursor.execute("SELECT * FROM public.pdb_access_role_operation")
                 except Exception as error:
                     assert getattr(error.__cause__, "sqlstate", None) == "42501"
                 else:
@@ -422,9 +422,9 @@ def main():
 
             # Admission changes preserve credentials and data; they are not PostgreSQL revocation.
             counts = (
-                AccessOperation.objects.count(),
+                RoleProvisioningOperation.objects.count(),
                 RoleOwnershipReceipt.objects.count(),
-                AccessRecoveryAudit.objects.count(),
+                RoleRecoveryEvent.objects.count(),
             )
             with access_context(tenant.id) as context:
                 secret = context.credentials.get(interrupted.credential_ref)
@@ -467,9 +467,9 @@ def main():
                 assert Workspace.objects.filter(name="browser-write").count() == 1
                 assert Workspace.objects.filter(name="restricted-runtime").count() == 1
             assert counts == (
-                AccessOperation.objects.count(),
+                RoleProvisioningOperation.objects.count(),
                 RoleOwnershipReceipt.objects.count(),
-                AccessRecoveryAudit.objects.count(),
+                RoleRecoveryEvent.objects.count(),
             )
 
             # A failure before role creation has no receipt, but can be explicitly retried after absence proof.
@@ -497,15 +497,17 @@ def main():
                 else:
                     raise AssertionError("Expected injected checkpoint failure")
                 context.provisioner._advance = advance
-                assert AccessOperation.objects.get(tenant_id=retry_tenant.id).state == "cleaned"
+                assert RoleProvisioningOperation.objects.get(tenant_id=retry_tenant.id).state == "cleaned"
                 result = service(context)(request("retry", retry), retry_tenant, confirmation=retry_tenant.id)
                 assert result.stage == Stage.MIGRATED
             call_command("provision_tenant", retry_tenant.id, verbosity=0)
             with registry_lifecycle_factory(retry_tenant.id) as lifecycle:
                 lifecycle.set_active(retry_tenant, active=True)
-            states = list(AccessOperation.objects.filter(tenant_id=retry_tenant.id).values_list("state", flat=True))
+            states = list(
+                RoleProvisioningOperation.objects.filter(tenant_id=retry_tenant.id).values_list("state", flat=True)
+            )
             assert sorted(states) == ["cleaned", "completed"]
-            assert AccessRecoveryAudit.objects.filter(tenant_id=retry_tenant.id).count() == 1
+            assert RoleRecoveryEvent.objects.filter(tenant_id=retry_tenant.id).count() == 1
             # A structurally identical replacement role is not the owned role.
             with registry_lifecycle_factory(str(normal.pk)) as lifecycle:
                 lifecycle.set_active(normal.as_tenant(), active=False)
@@ -523,7 +525,7 @@ def main():
                 provision_restricted_role(context.admin_connection, normal.as_tenant(), role)
             # The migration path also rejects replacement roles before refreshing grants.
             with patch(
-                "partitiondb.adapters.django.access_control.migration_access.provision_restricted_role"
+                "partitiondb.adapters.django.database_access.migration_access.provision_restricted_role"
             ) as grant:
                 try:
                     call_command("migrate_tenant", normal.schema_name, tenant_id=str(normal.pk), verbosity=0)

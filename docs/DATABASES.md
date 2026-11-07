@@ -95,7 +95,7 @@ Behavior:
 
 ## Routing and ownership
 
-`TenantDatabaseTarget` stores the generated alias, tenant ID, profile, database name and a non-secret source fingerprint.
+`DatabaseReservation` stores the generated alias, tenant ID, profile, database name and a non-secret source fingerprint.
 
 - The reserved `pdb_db_` alias namespace must not appear in static settings.
 - Every lookup validates central ownership and source binding before hydrating a process-local connection definition.
@@ -130,4 +130,4 @@ Pre-created aliases omit this option and retain their operator-defined ownership
 
 ### Not provided
 
-PartitionDB supplies no automatic `DROP DATABASE`, relocation or tenant retirement.
+Normal provisioning never drops databases. Explicit operator recovery can clean up an inspected empty failed creation under the safeguards in [admin recovery](ADMIN_RECOVERY.md). Database relocation and tenant retirement are not provided.

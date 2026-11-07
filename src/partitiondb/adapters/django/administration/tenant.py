@@ -11,8 +11,8 @@ from django.template.response import TemplateResponse
 
 from partitiondb import current_tenant
 from partitiondb.adapters.django.configuration import get_config
-from partitiondb.adapters.django.registry.models import TenantAdminAuditMixin
 from partitiondb.adapters.django.routing.router import app_sets
+from partitiondb.adapters.django.tenancy.abstract_models import TenantAdminAuditMixin
 
 
 @dataclass(frozen=True)
@@ -81,6 +81,8 @@ class TenantModelAdminMixin:
 
     def has_delete_permission(self, request, obj=None):
         return self.opts.app_label in app_sets()[1] and super().has_delete_permission(request, obj)
+
+    tenant_history_template_name = "partitiondb/admin/tenant_history.html"
 
     view_on_site = False
 
@@ -161,7 +163,7 @@ class TenantModelAdminMixin:
         events = audit_model().objects.filter(model_label=self.opts.label_lower, object_id=str(obj.pk))[:200]
         return TemplateResponse(
             request,
-            "partitiondb/admin/tenant_history.html",
+            self.tenant_history_template_name,
             {
                 **self.admin_site.each_context(request),
                 **(extra_context or {}),

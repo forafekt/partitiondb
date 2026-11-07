@@ -9,7 +9,7 @@ from django.core.management import CommandError, call_command
 from django.test import override_settings
 
 from partitiondb import Tenant, tenant_scope
-from partitiondb.adapters.django.registry.lifecycle import RegistryLifecycle, RegistryState
+from partitiondb.adapters.django.tenancy.lifecycle import AdmissionBlocked, RegistryLifecycle, RegistryState
 from partitiondb.provisioning import ProvisioningRecord, Stage
 from tests.django_setup import configure
 from tests.test_provisioning import Store
@@ -21,7 +21,7 @@ Organization = get_tenant_model()
 
 
 TENANT = Tenant("one", "alpha")
-MODULE = "partitiondb.adapters.django.registry.lifecycle"
+MODULE = "partitiondb.adapters.django.tenancy.lifecycle"
 
 
 @pytest.mark.parametrize("stage", [None, Stage.NEW, Stage.MIGRATED, Stage.ACTIVE])
@@ -40,11 +40,22 @@ def test_activation_requires_exact_ready_checkpoint(stage):
     ):
         if stage == Stage.ACTIVE:
             assert controller.set_active(TENANT, active=True) == RegistryState(TENANT, True)
-            row.save.assert_called_once_with(using="default", update_fields=["active"])
+            row.save.assert_called_once_with(using="default", update_fields=["active", "updated_at"])
         else:
             with pytest.raises(ValueError, match="ACTIVE"):
                 controller.set_active(TENANT, active=True)
             row.save.assert_not_called()
+
+
+@pytest.mark.parametrize("stage", [Stage.CREATING, Stage.DATABASE_PROVISIONING, Stage.ACCESS_PROVISIONING])
+def test_incomplete_provisioning_blocks_activation_before_access_verification(stage):
+    store = Store()
+    store.record = ProvisioningRecord(TENANT, stage)
+    verifier = MagicMock()
+    controller = RegistryLifecycle(Organization, store, verify_access=verifier)
+    with patch.object(controller, "_boundary"), pytest.raises(AdmissionBlocked, match="incomplete"):
+        controller.set_active(TENANT, active=True)
+    verifier.assert_not_called()
 
 
 def test_boundary_rejects_tenant_scope_before_connection_access():
@@ -171,6 +182,8 @@ def test_identity_mismatch_rejects_both_admission_actions(active, checkpoint):
     controller = RegistryLifecycle(Organization, store)
     row = MagicMock(active=False)
     row.as_tenant.return_value = Tenant("one", "different")
+    row.pk, row.schema_name, row.database_alias = "one", "different", "default"
+    row.get_tenant_type.return_value = None
     query = MagicMock()
     query.select_for_update.return_value.get.return_value = row
     with (
@@ -187,10 +200,17 @@ def test_deactivation_without_checkpoint_and_idempotency():
     store = Store()
     store.record = None
     controller = RegistryLifecycle(Organization, store)
-    row = MagicMock(active=True)
-    row.as_tenant.return_value = TENANT
+    row = MagicMock(active=True, pk=TENANT.id, schema_name=TENANT.schema, database_alias=TENANT.database)
+    row.get_tenant_type.return_value = None
+    row.as_tenant.side_effect = AssertionError("Deactivation tried to validate unavailable routing")
     query = MagicMock()
     query.select_for_update.return_value.get.return_value = row
+
+    def persisted_update(**values):
+        row.active = values["active"]
+        return 1
+
+    query.filter.return_value.update.side_effect = persisted_update
     with (
         patch.object(controller, "_boundary"),
         patch.object(Organization._base_manager, "using", return_value=query),
@@ -198,7 +218,9 @@ def test_deactivation_without_checkpoint_and_idempotency():
     ):
         assert controller.set_active(TENANT, active=False) == RegistryState(TENANT, False)
         controller.set_active(TENANT, active=False)
-    row.save.assert_called_once()
+    query.filter.return_value.update.assert_called_once()
+    row.save.assert_not_called()
+    row.as_tenant.assert_not_called()
 
 
 @pytest.mark.postgres

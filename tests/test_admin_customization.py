@@ -217,3 +217,52 @@ def test_shared_public_class_relationships():
 
     assert issubclass(SharedAdminSite, SharedAdminSiteMixin)
     assert issubclass(SharedModelAdmin, SharedModelAdminMixin)
+
+
+def test_explicit_non_model_admin_class_is_rejected_clearly():
+    from partitiondb.adapters.django.administration.configuration import compose_model_admin
+
+    with pytest.raises(ImproperlyConfigured, match="ModelAdmin"):
+        compose_model_admin("SHARED", object)
+
+
+def test_managed_list_hooks_preserve_configured_ui_and_application_columns():
+    from types import SimpleNamespace
+
+    from partitiondb.adapters.django import get_tenant_model
+    from partitiondb.adapters.django.administration.managed import ManagedTenantAdmin
+
+    class UIHooks(CustomSharedAdmin):
+        def get_list_display(self, request):
+            return (*super().get_list_display(request), "ui_column")
+
+        def get_list_filter(self, request):
+            return (*super().get_list_filter(request), "schema_name")
+
+    class ApplicationAdmin(ManagedTenantAdmin):
+        list_display = ("name", "active")
+
+    with config(SHARED={"MODEL_ADMIN_CLASS": UIHooks}):
+        site = create_admin_site("SHARED")
+        site.register(get_tenant_model(), ApplicationAdmin)
+        registered = site._registry[get_tenant_model()]
+        request = SimpleNamespace(user=SimpleNamespace(is_active=True, is_superuser=True))
+        assert list(registered.get_list_display(request)) == ["name", "active", "ui_column"]
+        assert "schema_name" in registered.get_list_filter(request)
+
+
+def test_system_check_rejects_a_ui_replacing_the_guarded_default_site():
+    from unittest.mock import patch
+
+    from partitiondb.adapters.django import apps as adapter_apps
+    from partitiondb.adapters.django.administration.apps import PartitionDBAdminConfig
+    from partitiondb.adapters.django.checks import check_admin_site
+
+    config_app = PartitionDBAdminConfig("partitiondb.adapters.django", adapter_apps)
+    with (
+        patch("partitiondb.adapters.django.checks.apps.get_app_config", return_value=config_app),
+        patch("django.contrib.admin.site", admin.AdminSite()),
+    ):
+        errors = check_admin_site(None)
+    assert [error.id for error in errors] == ["partitiondb.E036"]
+    assert "BasicAppConfig" in errors[0].hint

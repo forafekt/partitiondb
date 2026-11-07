@@ -27,16 +27,16 @@ def check_runtime():
     from django.db import connections
 
     from partitiondb.adapters.django import get_domain_model, get_tenant_model
-    from partitiondb.adapters.django.access_control.models import TenantDatabaseTarget
-    from partitiondb.adapters.django.databases.routes import managed_alias
-    from partitiondb.adapters.django.registry.workflow import resolve_host
+    from partitiondb.adapters.django.infrastructure.models import DatabaseReservation
+    from partitiondb.adapters.django.infrastructure.routes import managed_alias
     from partitiondb.adapters.django.routing.scope import atomic_tenant
+    from partitiondb.adapters.django.tenancy.workflow import resolve_host
 
     assert not any(managed_alias(alias) for alias in connections)
     records = list(get_tenant_model()._base_manager.using("default").filter(name__startswith="Dynamic ").order_by("pk"))
     assert len(records) == 3
     for record in records:
-        target = TenantDatabaseTarget.objects.get(tenant_id=str(record.pk))
+        target = DatabaseReservation.objects.get(tenant_id=str(record.pk))
         assert record.database_alias not in connections
         domain = get_domain_model().objects.get(tenant_id=record.pk, is_primary=True)
         identity = resolve_host(domain.hostname)
@@ -68,19 +68,19 @@ def main():
         from django.test import Client, override_settings
 
         from partitiondb.adapters.django import get_tenant_model
-        from partitiondb.adapters.django.access_control.models import DatabaseOperation, TenantDatabaseTarget
-        from partitiondb.adapters.django.databases.routes import NEW_DATABASE, database_profiles, managed_alias
-        from partitiondb.adapters.django.registry.workflow import get_workflow, resolve_host
-        from partitiondb.adapters.django.registry_app.models import Membership
+        from partitiondb.adapters.django.infrastructure.models import DatabaseProvisioningOperation, DatabaseReservation
+        from partitiondb.adapters.django.infrastructure.routes import NEW_DATABASE, database_profiles, managed_alias
         from partitiondb.adapters.django.routing.scope import atomic_tenant
+        from partitiondb.adapters.django.tenancy.models import Membership
+        from partitiondb.adapters.django.tenancy.workflow import get_workflow, resolve_host
 
         call_command("makemigrations", check=True, dry_run=True, verbosity=0)
         call_command("migrate", verbosity=0, interactive=False)
         if os.environ.get("PARTITIONDB_DYNAMIC_REGISTRY") == "1":
-            from partitiondb.adapters.django.access_control.models import DatabaseServerProfile
-            from partitiondb.adapters.django.databases.profiles import verify_server_profile
+            from partitiondb.adapters.django.infrastructure.models import DatabaseServer
+            from partitiondb.adapters.django.infrastructure.profiles import verify_server_profile
 
-            registration = DatabaseServerProfile.objects.create(name=profile, source_profile=profile)
+            registration = DatabaseServer.objects.create(name=profile, source_profile=profile)
             registration = verify_server_profile(registration)
             registration.enabled = True
             registration.save()
@@ -90,14 +90,14 @@ def main():
         platform.force_login(root)
         identities = []
         try:
-            page = platform.get("/admin/partitiondb_registry/tenant/add/")
+            page = platform.get("/admin/partitiondb_tenancy/tenant/add/")
             assert page.status_code == 200
             assert b"New database + tenant schema" in page.content
             call_command("create_tenant", name="Shared", schema="demo", hostname="shared.localhost", verbosity=0)
             shared = model.objects.get(name="Shared").as_tenant()
             names = os.environ["PARTITIONDB_DYNAMIC_DATABASE_NAMES"].split(",")
             response = platform.post(
-                "/admin/partitiondb_registry/tenant/add/",
+                "/admin/partitiondb_tenancy/tenant/add/",
                 {
                     "name": "Dynamic first",
                     "schema": "demo",
@@ -134,9 +134,9 @@ def main():
             for record in records:
                 identity = record.as_tenant()
                 identities.append(identity)
-                target = TenantDatabaseTarget.objects.get(tenant_id=identity.id)
+                target = DatabaseReservation.objects.get(tenant_id=identity.id)
                 assert managed_alias(identity.database) and record.active and record.access_policy == "restricted"
-                assert DatabaseOperation.objects.get(tenant_id=identity.id).state == "ready"
+                assert DatabaseProvisioningOperation.objects.get(tenant_id=identity.id).state == "ready"
                 with atomic_tenant(identity):
                     Workspace.objects.create(name="only-" + identity.id)
                     with connections[identity.database].cursor() as cursor:
@@ -222,7 +222,7 @@ def main():
                 confirm_schema=first_identity.schema,
                 confirm_database=first_identity.database,
             )
-            target = TenantDatabaseTarget.objects.get(tenant_id=str(records[0].pk))
+            target = DatabaseReservation.objects.get(tenant_id=str(records[0].pk))
             target.database_name = "changed"
             try:
                 target.save()
@@ -232,7 +232,7 @@ def main():
                 raise AssertionError("Ordinary save changed database routing")
             # Cached alias definitions do not bypass a missing central route.
             with transaction.atomic():
-                TenantDatabaseTarget.objects.filter(pk=target.pk).delete()
+                DatabaseReservation.objects.filter(pk=target.pk).delete()
                 try:
                     resolve_host("demo-db-tenant.localhost")
                 except ValidationError:

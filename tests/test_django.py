@@ -97,7 +97,7 @@ def test_typed_registry_model_persists_type_and_forbids_normal_save_conversion(s
     from django.test import override_settings
     from django.test.utils import isolate_apps
 
-    from partitiondb.adapters.django.registry.models import TypedTenantMixin
+    from partitiondb.adapters.django.tenancy.abstract_models import TypedTenantMixin
     from tests.test_tenant_types import TYPES
 
     with (

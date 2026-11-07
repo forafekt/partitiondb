@@ -4,8 +4,8 @@ import json
 
 from django.core.management import BaseCommand, CommandError
 
-from partitiondb.adapters.django.access_control.boundary import require_control_plane
-from partitiondb.adapters.django.registry.workflow import get_workflow
+from partitiondb.adapters.django.control_plane import require_control_plane
+from partitiondb.adapters.django.tenancy.workflow import get_workflow
 from partitiondb.postgres.provisioning import PostgresProvisioningStore
 from partitiondb.provisioning import Stage
 

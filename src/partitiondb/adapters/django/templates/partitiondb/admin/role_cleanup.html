@@ -1,0 +1,30 @@
+{% extends "partitiondb/admin/action_page.html" %}
+{% load i18n %}
+{% block content %}
+<div class="module">
+    <h1>{{ original }} — {% translate "Disabled role cleanup" %}</h1>
+    {% if error %}
+        <div role="alert">{{ error }}</div>
+        <a href="{{ inspect_url }}">{% translate "Inspect again" %}</a>
+        <p>{% translate "The tenant may still require recovery. Review its current status; do not create a replacement tenant." %}</p>
+    {% else %}
+        <p>{% translate "The current checks found a disabled role from a pending access operation, no ownership receipt, no grants or owned objects, no memberships or sessions, and no stored credential." %}</p>
+        <dl>
+            <dt>{% translate "Tenant ID" %}</dt><dd>{{ candidate.tenant_id }}</dd>
+            <dt>{% translate "Existing schema" %}</dt><dd>{{ candidate.schema }}</dd>
+            <dt>{% translate "Database alias" %}</dt><dd>{{ candidate.database }}</dd>
+            <dt>{% translate "Operation" %}</dt><dd>{{ candidate.operation_id }}</dd>
+            <dt>{% translate "Role" %}</dt><dd>{{ candidate.role }}</dd>
+            <dt>{% translate "Role OID" %}</dt><dd>{{ candidate.role_oid }}</dd>
+        </dl>
+        <p>{% translate "This action removes only the displayed role, records a cleanup audit, and attempts verified recovery of the existing tenant. Its schema and tables are preserved. Fix the original failure and keep other role administration paused before confirming." %}</p>
+        <form method="post">
+            {% csrf_token %}
+            {% include "partitiondb/admin/confirmation_fields.html" %}
+            <p>{% translate "The confirmation expires after 10 minutes. All checks run again before cleanup. A failure may leave the tenant awaiting recovery; inspect its status before trying again." %}</p>
+            <input type="submit" class="default" value="{% translate "Confirm cleanup and retry" %}">
+        </form>
+    {% endif %}
+    <a href="{{ status_url }}">{% translate "Back to current access status" %}</a>
+</div>
+{% endblock %}

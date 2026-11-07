@@ -7,7 +7,7 @@ from partitiondb.provisioning.databases import (
     AmbiguousDatabaseCreation,
     DatabaseObservation,
     DatabaseProvisioner,
-    DatabaseState,
+    DatabaseProvisioningState,
     DatabaseTarget,
 )
 
@@ -32,13 +32,13 @@ class Journal:
     def receipt(self, operation, oid):
         if self.fail == "receipt":
             raise OSError("Receipt unavailable")
-        self.operation = replace(operation, state=DatabaseState.CREATED, database_oid=oid)
+        self.operation = replace(operation, state=DatabaseProvisioningState.CREATED, database_oid=oid)
         return self.operation
 
     def ready(self, operation):
         if self.fail == "ready":
             raise OSError("Checkpoint unavailable")
-        self.operation = replace(operation, state=DatabaseState.READY)
+        self.operation = replace(operation, state=DatabaseProvisioningState.READY)
         return self.operation
 
     def recover(self, operation, *, decision, actor):
@@ -46,7 +46,7 @@ class Journal:
             raise OSError("Audit unavailable")
         self.audits.append((operation.operation_id, decision, actor))
         if decision == "retry":
-            self.history.append(replace(operation, state=DatabaseState.CLEANED))
+            self.history.append(replace(operation, state=DatabaseProvisioningState.CLEANED))
             self.operation = None
             return self.history[-1]
         return self.ready(operation)
@@ -79,7 +79,7 @@ def setup():
 def test_database_preparation_is_repeatable_only_with_verified_receipt():
     journal, manager, service = setup()
     first = service.prepare(TARGET)
-    assert first.state == DatabaseState.READY
+    assert first.state == DatabaseProvisioningState.READY
     assert first.database_oid == 101
     assert service.prepare(TARGET) == first
     assert manager.creates == 1
@@ -103,7 +103,7 @@ def test_database_failure_never_repeats_unknown_creation(boundary):
         assert manager.creates == 0
         assert journal.operation is None
         return
-    assert journal.operation.state == DatabaseState.CREATING
+    assert journal.operation.state == DatabaseProvisioningState.CREATING
     with pytest.raises(AmbiguousDatabaseCreation):
         service.prepare(TARGET)
     for decision in ("ready", "retry"):
@@ -138,9 +138,9 @@ def test_saved_receipt_recovers_after_readiness_checkpoint_failure():
     journal.fail = "ready"
     with pytest.raises(OSError):
         service.prepare(TARGET)
-    assert journal.operation.state == DatabaseState.CREATED
+    assert journal.operation.state == DatabaseProvisioningState.CREATED
     journal.fail = None
-    assert service.reconcile(TARGET, decision="ready", actor="operator").state == DatabaseState.READY
+    assert service.reconcile(TARGET, decision="ready", actor="operator").state == DatabaseProvisioningState.READY
     assert manager.creates == 1
     assert len(journal.audits) == 1
 

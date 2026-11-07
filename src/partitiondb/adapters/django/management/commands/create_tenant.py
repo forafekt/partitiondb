@@ -2,8 +2,8 @@
 
 from django.core.management import BaseCommand, CommandError
 
-from partitiondb.adapters.django.databases.routes import tenant_database_aliases
-from partitiondb.adapters.django.registry.workflow import get_workflow
+from partitiondb.adapters.django.infrastructure.routes import tenant_database_aliases
+from partitiondb.adapters.django.tenancy.workflow import get_workflow
 
 
 class Command(BaseCommand):

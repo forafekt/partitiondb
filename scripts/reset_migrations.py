@@ -41,9 +41,6 @@ def main():
         from django.core.management import call_command
 
         # Generate without connecting to a database or registering admin sites.
-        # settings.INSTALLED_APPS = [app for app in settings.INSTALLED_APPS if "admin" not in app] + [
-        #     "partitiondb.adapters.django.registry_app.apps.PartitionDBRegistryConfig"
-        # ]
         settings.INSTALLED_APPS = [app for app in settings.INSTALLED_APPS if "admin" not in app]
         settings.DATABASES = {}
         django.setup()
@@ -53,8 +50,9 @@ def main():
             "organizations",
             "workspaces",
             "audit",
-            "partitiondb_access_control",
-            "partitiondb_registry",
+            "partitiondb_infrastructure",
+            "partitiondb_database_access",
+            "partitiondb_tenancy",
             skip_checks=True,
         )
 

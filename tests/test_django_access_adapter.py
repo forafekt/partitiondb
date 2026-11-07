@@ -5,7 +5,7 @@ import pytest
 
 def test_access_mixin_is_abstract():
     pytest.importorskip("django")
-    from partitiondb.adapters.django.access_control.policy_models import TenantAccessMixin
+    from partitiondb.adapters.django.database_access.policy_models import TenantAccessMixin
 
     assert TenantAccessMixin._meta.abstract
     assert TenantAccessMixin._meta.get_field("access_policy").default == "shared"

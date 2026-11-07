@@ -40,8 +40,8 @@ from types import SimpleNamespace
 from django.core.management import call_command
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
-from partitiondb.adapters.django.registry_app.models import Tenant, Domain, Membership
-from partitiondb.adapters.django.registry_app.tenancy import authorize_tenant, tenant_admin_permissions
+from partitiondb.adapters.django.tenancy.models import Tenant, Domain, Membership
+from partitiondb.adapters.django.tenancy.permissions import authorize_tenant, tenant_admin_permissions
 call_command("migrate", verbosity=0, interactive=False)
 user = get_user_model().objects.create_user("member")
 row = Tenant.objects.create(name="One", schema_name="one")

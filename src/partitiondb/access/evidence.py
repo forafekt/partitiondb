@@ -6,6 +6,7 @@ receipt persistence remains ambiguous and requires manual investigation.
 """
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Protocol
 
 from partitiondb.tenancy.identity import Tenant
@@ -33,3 +34,9 @@ class OwnershipReceiptStore(Protocol):
 class CredentialAuthentication(Protocol):
     def verify(self, tenant: Tenant, role: str, credential_ref: str) -> bool: ...
     def absent(self, credential_ref: str) -> bool: ...
+
+
+class RoleRecoveryEventKind(StrEnum):
+    READY = "ready"
+    RETRY = "retry"
+    CLEANUP = "cleanup"

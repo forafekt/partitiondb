@@ -5,7 +5,7 @@ from django.http import HttpResponseNotAllowed
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
-from partitiondb.adapters.django.registry.forms import (
+from partitiondb.adapters.django.tenancy.forms import (
     DatabaseTenantProvisionForm,
     SchemaTenantProvisionForm,
     TenantProvisionForm,
@@ -13,6 +13,8 @@ from partitiondb.adapters.django.registry.forms import (
 
 
 class TenantCreationAdminMixin:
+    creation_choice_template_name = "partitiondb/admin/provision_choose.html"
+
     def get_urls(self):
         label = f"{self.opts.app_label}_{self.opts.model_name}"
         return [
@@ -82,6 +84,7 @@ class TenantCreationAdminMixin:
             return super().add_view(request, form_url, extra_context)
         if not self.has_add_permission(request):
             raise PermissionDenied
+        request.current_app = self.admin_site.name
         label = f"{self.admin_site.name}:{self.opts.app_label}_{self.opts.model_name}"
         links = {
             "schema_url": reverse(label + "_add_schema"),
@@ -93,7 +96,7 @@ class TenantCreationAdminMixin:
                 return HttpResponseNotAllowed(["GET"])
             return TemplateResponse(
                 request,
-                "partitiondb/admin/provision_choose.html",
+                self.creation_choice_template_name,
                 {
                     **self.admin_site.each_context(request),
                     "opts": self.opts,

@@ -166,7 +166,7 @@ The current checkout replaces the pre-production migration history with initial 
 > [!WARNING]
 > Old databases must be rebuilt. This is **not** an upgrade path for existing data.
 
-Django app labels and the separate `pdb_provisioning` checkpoint table are unchanged.
+The canonical shared app labels are `partitiondb_tenancy`, `partitiondb_infrastructure`, and `partitiondb_database_access`. Their initial migrations replace the earlier app ownership and tables. The separate `pdb_provisioning` checkpoint table must also be reset; its installer does not upgrade historical layouts.
 
 ### 1. Reset repository migrations
 
@@ -227,3 +227,27 @@ python scripts/purge_databases.py --purge-roles --apply --confirm "DELETE DEVELO
 - Ownership is reassigned to the connected administrator and role grants are removed in each supplied database before cluster-wide role deletion.
 - Include every database that has role dependencies in the DSN list. Dependencies in omitted databases make role deletion fail, and earlier changes may already have committed. Prefer a role-only invocation when supplying multiple databases with different schemas.
 - Secrets and uploaded files are unaffected.
+
+
+## Control-plane refactor validation
+
+The clean-break implementation requires fresh-install and PostgreSQL validation before release. Run tests manually; the source refactor does not execute them automatically. For the focused non-integration slice:
+
+```sh
+python -m pytest tests/test_control_plane_apps.py tests/test_tenant_overview.py tests/test_admin.py tests/test_admin_customization.py tests/test_shared_admin.py tests/test_django_access_admin_actions.py tests/test_admin_recovery.py tests/test_tenant_admin.py
+```
+
+`test_tenant_overview.py` starts an isolated SQLite scenario covering permission-scoped rendering, exact-confirmation/POST guards, batched summary queries, missing/unavailable/mismatched evidence, primary-domain switching, native group ordering, custom scalar tenant IDs, and recovery decision constraints. SQLite does not validate PostgreSQL locks, cluster IDs, OIDs, actual checkpoint queries, or DDL recovery; run the full disposable PostgreSQL matrix and exact artifact gates described above as well.
+
+Run migration drift against the full example project after installing all three shared apps. Review dedicated/static routes, ambiguous external side effects, audit-before-DDL ordering, disabled admission during target/secret-store outages, and tenant-local audit isolation. Do not validate by pointing reset tools or acceptance scenarios at an existing application database.
+
+### Optional real-Unfold acceptance
+
+In a disposable environment containing the consuming application's pinned `django-unfold` version, run:
+
+```sh
+python -m tests.recovery_admin_scenario --unfold
+python -m tests.custom_admin_scenario --unfold
+```
+
+These explicitly selected scenarios use actual Unfold site/ModelAdmin bases for shared provisioning/recovery and tenant CRUD/audit isolation respectively. The ordinary suite retains synthetic UI coverage and does not require Unfold. Run these scenarios manually; template/configuration checks alone cannot certify UI behavior or PostgreSQL recovery. Keep ActiveLane integration validation separate.

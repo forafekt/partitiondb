@@ -81,10 +81,18 @@ def shared_admin_site(**kwargs) -> admin.AdminSite:
 def compose_model_admin(scope, admin_class=None):
     """Preserve registration overrides while inheriting the configured UI base."""
     configured = get_model_admin_class(scope)
+    if admin_class is not None and (not isinstance(admin_class, type) or not issubclass(admin_class, admin.ModelAdmin)):
+        raise ImproperlyConfigured("An explicit admin class must extend Django ModelAdmin")
     if admin_class is None or issubclass(configured, admin_class):
         return configured
     if scope == "TENANT":
         validate_admin_class(admin_class, scope, "MODEL_ADMIN_CLASS")
     if issubclass(admin_class, configured):
         return admin_class
-    return type(admin_class.__name__, (admin_class, configured), {"__module__": admin_class.__module__})
+    try:
+        composed = type(admin_class.__name__, (admin_class, configured), {"__module__": admin_class.__module__})
+    except TypeError as error:
+        raise ImproperlyConfigured(
+            "Admin classes have incompatible inheritance; put PartitionDB mixins first"
+        ) from error
+    return validate_admin_class(composed, scope, "MODEL_ADMIN_CLASS")

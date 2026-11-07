@@ -8,14 +8,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
+from partitiondb.access.evidence import RoleRecoveryEventKind
 from partitiondb.postgres.role_inspection import RoleInspection, RoleState
 from partitiondb.provisioning import Provisioner, Stage
 from partitiondb.tenancy.identity import Tenant, tenant_scope
 
 
 class RecoveryDecision(StrEnum):
-    READY = "ready"
-    RETRY = "retry"
+    READY = RoleRecoveryEventKind.READY.value
+    RETRY = RoleRecoveryEventKind.RETRY.value
 
 
 @dataclass(frozen=True, slots=True)

@@ -91,8 +91,7 @@ your UI library automatically. Tenant registrations must still include
 
 The public names use `SharedAdminSite`, `SharedAdminSiteMixin`, `SharedModelAdmin`
 and `SharedModelAdminMixin`, matching the corresponding `Tenant*` names. The shared registry model
-uses `ManagedTenantAdmin`. Both sites show only their own apps and preserve the
-original app display names.
+uses `ManagedTenantAdmin`. Both sites show only their own apps. The shared site orders the three PartitionDB control-plane apps and their models while retaining native app ownership and names.
 
 Keep class definitions separate from registration modules. Do not import the
 site singleton in its own configured class module, resolve classes while building
@@ -117,8 +116,48 @@ it executes no shared audit SQL, and shared recent actions are never exposed.
 Tenant object history continues to use the tenant-local audit model.
 
 Provisioning forms supply standard submit-row context but use only their dedicated
-creation button. Their template suppresses inherited save rows so alternate admin
-templates cannot introduce duplicate save controls or a retry button after an
-ambiguous provisioning failure.
+creation button. Their template suppresses inherited save rows and uses a dedicated form body so alternate admin templates cannot introduce duplicate save controls or a retry button after an ambiguous provisioning failure.
 
 See [Admin tenant creation and recovery](ADMIN_RECOVERY.md) for separate creation forms and guarded operator recovery.
+
+## Native markup and Unfold integration
+
+PartitionDB ships no custom admin CSS, inline styles, Tailwind utility classes, or Alpine state. Its pages use Django's `module`, `aligned`, `form-row`, `submit-row`, `button`, `default`, and error/help classes, and inherit the active admin templates. Action pages load Django's `admin/css/forms.css` and the configured widgets' media. Applications can override the shared `partitiondb/admin/action_page.html` shell through normal Django template discovery.
+
+Provisioning and confirmation forms render BoundFields and ask the configured ModelAdmin for its text, textarea, choice and checkbox widgets. Specialized/password/multiple-value widgets and application-supplied widget classes are preserved. Provisioning does not call a theme's internal fieldset template or require its JavaScript tab state. Validation, signed confirmations, and service authorization remain independent of presentation.
+
+For Unfold, use its actual site and ModelAdmin bases in an application-owned module:
+
+```python
+from unfold.admin import ModelAdmin as UnfoldModelAdmin
+from unfold.sites import UnfoldAdminSite
+from partitiondb.adapters.django.admin import (
+    SharedAdminSiteMixin, SharedModelAdminMixin,
+    TenantAdminSiteMixin, TenantModelAdminMixin,
+)
+
+class SharedSite(SharedAdminSiteMixin, UnfoldAdminSite):
+    pass
+
+class SharedModelAdmin(SharedModelAdminMixin, UnfoldModelAdmin):
+    pass
+
+class TenantSite(TenantAdminSiteMixin, UnfoldAdminSite):
+    pass
+
+class TenantModelAdmin(TenantModelAdminMixin, UnfoldModelAdmin):
+    pass
+```
+
+Configure these classes through `ADMIN.SHARED` and `ADMIN.TENANT`, and install `unfold.apps.BasicAppConfig` before the admin apps so Django discovers its templates and assets. Classify its app label `unfold` in `SHARED_APPS` (or declare `"unfold": "unfold.apps.BasicAppConfig"` first in `DjangoSetup.shared_apps`); even UI-only apps require explicit placement. Use `unfold.apps.BasicAppConfig`, rather than Unfold's default AppConfig: the latter replaces `admin.site` during startup and bypasses the configured PartitionDB site. Keep `PartitionDBAdminConfig` as the shared admin AppConfig to construct the configured default site before autodiscovery. Explicit tenant sites must use `create_admin_site("TENANT", ...)`; constructing the native `TenantAdminSite` directly deliberately selects native Django. Unfold is an application dependency and is not installed by PartitionDB.
+
+The dashboard preserves configured ModelAdmin list-display, list-filter and changelist hooks. Applications may customize `overview_template_name`, `provisioning_template_name`, `creation_choice_template_name`, `role_status_template_name`, `role_error_template_name`, `role_cleanup_template_name`, and `database_provisioning_template_name`. Tenant-local history exposes `tenant_history_template_name`. Template overrides must retain CSRF tokens, exact confirmations, permission checks and the distinction between inspection and mutation.
+
+Custom fieldsets, including grouped fields, are filtered for credential references and role/recovery details when the viewer lacks operator access. Application overrides are trusted code and must preserve cooperative `super()` calls and PartitionDB's tenancy guards. Standard Django CRUD views still follow the configured UI base's hooks; tenant-local rendering/logging deliberately avoids shared ContentType and LogEntry access.
+
+Configuration checks and template compilation do not establish complete visual or behavioral compatibility with every Unfold release. Run the manual admin/recovery and PostgreSQL acceptance checks against the consuming application's pinned UI version before promotion. ActiveLane must be validated separately; editing it is not part of the library refactor.
+
+Unfold reference: [custom sites](https://unfoldadmin.com/docs/configuration/custom-sites/) and [ModelAdmin configuration](https://unfoldadmin.com/docs/configuration/modeladmin/).
+
+
+System check `partitiondb.E036` reports when startup replaces the configured shared admin site. Correct the UI AppConfig/site setup rather than silencing that check. An isolated configuration/template compilation review passed with Django 6.0.10 and Unfold 0.110.1; shared registrations inherited Unfold's ModelAdmin and both site factories selected the configured classes. This was not a runtime or visual acceptance run.

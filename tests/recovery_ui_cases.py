@@ -10,13 +10,10 @@ from django.template.loader import render_to_string
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
 
-from partitiondb.adapters.django.access_control.admin import AccessOperationAdmin, AccessRecoveryAuditAdmin
-from partitiondb.adapters.django.access_control.models import (
-    AccessOperation,
-    AccessRecoveryAudit,
-)
 from partitiondb.adapters.django.administration.managed import ManagedTenantAdmin as TenantAdmin
-from partitiondb.adapters.django.registry_app.models import Tenant
+from partitiondb.adapters.django.database_access.admin import RoleProvisioningOperationAdmin, RoleRecoveryEventAdmin
+from partitiondb.adapters.django.database_access.models import RoleProvisioningOperation, RoleRecoveryEvent
+from partitiondb.adapters.django.tenancy.models import Tenant
 
 
 @override_settings(
@@ -36,26 +33,29 @@ class RecoveryAdminTests(SimpleTestCase):
     def test_admin_registration_and_recovery_links(self):
         for model, expected, obj in (
             (Tenant, TenantAdmin, self.tenant),
-            (AccessOperation, AccessOperationAdmin, AccessOperation(tenant_id="3")),
+            (RoleProvisioningOperation, RoleProvisioningOperationAdmin, RoleProvisioningOperation(tenant_id="3")),
             (
-                AccessRecoveryAudit,
-                AccessRecoveryAuditAdmin,
-                AccessRecoveryAudit(tenant_id="3"),
+                RoleRecoveryEvent,
+                RoleRecoveryEventAdmin,
+                RoleRecoveryEvent(tenant_id="3"),
             ),
         ):
             with self.subTest(model=model):
                 model_admin = shared_admin_site._registry[model]
                 self.assertIsInstance(model_admin, expected)
                 self.assertEqual(model_admin.check(), [])
-                self.assertIn("tenant_recovery", model_admin.list_display)
+                if model is Tenant:
+                    self.assertIn("tenant_overview", model_admin.get_list_display(self.request))
+                else:
+                    self.assertIn("tenant_recovery", model_admin.list_display)
                 url = reverse(
-                    f"{shared_admin_site.name}:partitiondb_registry_tenant_access_status",
+                    f"{shared_admin_site.name}:partitiondb_tenancy_tenant_role_status",
                     args=[3],
                 )
                 self.assertIn(url, model_admin.tenant_recovery(obj))
 
     def test_evidence_remains_immutable_and_superuser_only(self):
-        for model in (AccessOperation, AccessRecoveryAudit):
+        for model in (RoleProvisioningOperation, RoleRecoveryEvent):
             model_admin = shared_admin_site._registry[model]
             self.assertFalse(model_admin.has_add_permission(self.request))
             self.assertFalse(model_admin.has_change_permission(self.request))
@@ -77,13 +77,23 @@ class RecoveryAdminTests(SimpleTestCase):
                 absence_verified=evidence.get("absent", False),
             ),
         }
+        from partitiondb.adapters.django.administration.forms import RoleRecoveryForm, confirmation_form
+
+        decisions = []
+        if status["evidence"].ownership_verified and status["evidence"].credential_verified:
+            decisions.append(("ready", "READY"))
+        if status["evidence"].absence_verified:
+            decisions.append(("retry", "RETRY"))
         with patch.object(shared_admin_site, "each_context", return_value={}):
             return render_to_string(
-                "partitiondb/admin/access_status.html",
+                "partitiondb/admin/role_status.html",
                 {
                     "original": self.tenant,
                     "status": status,
-                    "reconcile_url": "/admin/partitiondb_registry/tenant/3/reconcile-access/",
+                    "confirmation_form": confirmation_form(
+                        self.tenant_admin, self.request, RoleRecoveryForm, decisions=decisions
+                    ),
+                    "reconcile_url": "/admin/partitiondb_tenancy/tenant/3/reconcile-role/",
                 },
                 request=self.request,
             )
@@ -104,18 +114,18 @@ class RecoveryAdminTests(SimpleTestCase):
         self.assertNotIn('value="ready"', html)
 
     def test_endpoint_requires_post_superuser_and_exact_confirmation(self):
-        self.assertEqual(self.tenant_admin.reconcile_access_view(self.request, "3").status_code, 405)
+        self.assertEqual(self.tenant_admin.reconcile_role_view(self.request, "3").status_code, 405)
         request = RequestFactory().post("/admin/reconcile/", {"confirm_tenant_id": "wrong", "decision": "retry"})
         request.user = self.request.user
         with patch.object(self.tenant_admin, "get_object", return_value=self.tenant):
             with self.assertRaises(SuspiciousOperation):
-                self.tenant_admin.reconcile_access_view(request, "3")
+                self.tenant_admin.reconcile_role_view(request, "3")
             request.user.is_superuser = False
             with self.assertRaises(PermissionDenied):
-                self.tenant_admin.reconcile_access_view(request, "3")
+                self.tenant_admin.reconcile_role_view(request, "3")
 
     def cleanup_candidate(self):
-        from partitiondb.adapters.django.access_control.cleanup import CleanupCandidate
+        from partitiondb.adapters.django.database_access.cleanup import CleanupCandidate
 
         return CleanupCandidate("3", "org_demo3", "default", "operation-3", "pdb_org_demo3", 123)
 
@@ -140,7 +150,7 @@ class RecoveryAdminTests(SimpleTestCase):
             "confirm_ownership": "yes",
         }
         data.update(changes)
-        request = RequestFactory().post("/admin/partitiondb_registry/tenant/3/cleanup-access/", data)
+        request = RequestFactory().post("/admin/partitiondb_tenancy/tenant/3/cleanup-role/", data)
         request.user = self.request.user
         return request
 
@@ -158,7 +168,7 @@ class RecoveryAdminTests(SimpleTestCase):
             ),
             patch("partitiondb.adapters.django.administration.recovery.cleanup_disabled_role") as cleanup,
         ):
-            response = self.tenant_admin.cleanup_access_view(self.request, "3")
+            response = self.tenant_admin.cleanup_role_view(self.request, "3")
             response.render()
         self.assertContains(response, "Confirm cleanup and retry")
         self.assertContains(response, 'name="confirm_ownership"')
@@ -178,7 +188,7 @@ class RecoveryAdminTests(SimpleTestCase):
                 patch.object(shared_admin_site, "each_context", return_value={}),
                 patch("partitiondb.adapters.django.administration.recovery.cleanup_disabled_role") as cleanup,
             ):
-                response = self.tenant_admin.cleanup_access_view(self.cleanup_post(**changes), "3")
+                response = self.tenant_admin.cleanup_role_view(self.cleanup_post(**changes), "3")
                 self.assertEqual(response.status_code, 409)
                 cleanup.assert_not_called()
 
@@ -195,9 +205,9 @@ class RecoveryAdminTests(SimpleTestCase):
                 "partitiondb.adapters.django.administration.recovery.signing.loads",
                 side_effect=signing.SignatureExpired(),
             ):
-                self.assertEqual(self.tenant_admin.cleanup_access_view(request, "3").status_code, 409)
+                self.assertEqual(self.tenant_admin.cleanup_role_view(request, "3").status_code, 409)
             request.user.pk = 2
-            self.assertEqual(self.tenant_admin.cleanup_access_view(request, "3").status_code, 409)
+            self.assertEqual(self.tenant_admin.cleanup_role_view(request, "3").status_code, 409)
             cleanup.assert_not_called()
 
     def test_cleanup_post_calls_guarded_cleanup_then_audited_retry(self):
@@ -221,14 +231,14 @@ class RecoveryAdminTests(SimpleTestCase):
             patch.object(self.tenant_admin, "log_change"),
             patch.object(self.tenant_admin, "message_user"),
         ):
-            response = self.tenant_admin.cleanup_access_view(request, "3")
+            response = self.tenant_admin.cleanup_role_view(request, "3")
         self.assertEqual(response.status_code, 302)
         self.assertEqual(events, ["cleanup", "retry"])
 
     def test_cleanup_failure_never_reports_success_or_resumes(self):
         from unittest.mock import MagicMock
 
-        from partitiondb.adapters.django.access_control.cleanup import CleanupBlocked
+        from partitiondb.adapters.django.database_access.cleanup import CleanupBlocked
 
         with (
             patch.object(self.tenant_admin, "get_object", return_value=self.tenant),
@@ -241,7 +251,7 @@ class RecoveryAdminTests(SimpleTestCase):
             patch.object(self.tenant_admin, "access_reconciliation_service") as reconcile,
             patch.object(self.tenant_admin, "message_user") as message,
         ):
-            response = self.tenant_admin.cleanup_access_view(self.cleanup_post(), "3")
+            response = self.tenant_admin.cleanup_role_view(self.cleanup_post(), "3")
         self.assertEqual(response.status_code, 409)
         reconcile.assert_not_called()
         message.assert_not_called()
@@ -250,7 +260,7 @@ class RecoveryAdminTests(SimpleTestCase):
         from django.urls import resolve
 
         request = self.cleanup_post()
-        callback = resolve("/admin/partitiondb_registry/tenant/3/cleanup-access/").func
+        callback = resolve("/admin/partitiondb_tenancy/tenant/3/cleanup-role/").func
         with patch("partitiondb.adapters.django.administration.recovery.cleanup_disabled_role") as cleanup:
             response = callback(request, object_id="3")
         self.assertEqual(response.status_code, 403)
@@ -264,5 +274,5 @@ class RecoveryAdminTests(SimpleTestCase):
             patch("partitiondb.adapters.django.administration.recovery.cleanup_disabled_role") as cleanup,
             self.assertRaises(PermissionDenied),
         ):
-            self.tenant_admin.cleanup_access_view(request, "3")
+            self.tenant_admin.cleanup_role_view(request, "3")
         cleanup.assert_not_called()

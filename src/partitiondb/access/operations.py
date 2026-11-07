@@ -9,7 +9,7 @@ from partitiondb.access.evidence import RoleOwnershipReceipt
 from partitiondb.postgres.role_manager import RoleBinding, tenant_role_name
 
 
-class OperationState(StrEnum):
+class RoleOperationState(StrEnum):
     PENDING = "pending"
     ROLE_CREATED = "role_created"
     RECEIPT_RECORDED = "receipt_recorded"
@@ -18,12 +18,12 @@ class OperationState(StrEnum):
 
 
 @dataclass(frozen=True)
-class AccessOperation:
+class RoleProvisioningOperation:
     operation_id: str
     tenant: object
     credential_ref: str
     role: str
-    state: OperationState = OperationState.PENDING
+    state: RoleOperationState = RoleOperationState.PENDING
 
 
 class RestrictedAccessCoordinator:
@@ -53,12 +53,12 @@ class RestrictedAccessCoordinator:
         if access.policy != AccessPolicyEnum.RESTRICTED or not access.credential_ref:
             raise ValueError("Unsupported or incomplete access policy")
         role = tenant_role_name(tenant)
-        op = AccessOperation(uuid4().hex, tenant, access.credential_ref, role)
+        op = RoleProvisioningOperation(uuid4().hex, tenant, access.credential_ref, role)
         self.journal.begin(op)
         binding = self.role_manager.provision(tenant, credential_ref=access.credential_ref)
         if binding != RoleBinding(role, access.credential_ref):
             raise ValueError("Unexpected PostgreSQL role binding")
-        self.journal.advance(op.operation_id, OperationState.PENDING, OperationState.ROLE_CREATED)
+        self.journal.advance(op.operation_id, RoleOperationState.PENDING, RoleOperationState.ROLE_CREATED)
         oid = self.role_oid(tenant, role)
         if not isinstance(oid, int) or isinstance(oid, bool) or oid <= 0:
             raise ValueError("Cannot verify PostgreSQL role OID")
@@ -73,6 +73,6 @@ class RestrictedAccessCoordinator:
                 operation_id=op.operation_id,
             )
         )
-        self.journal.advance(op.operation_id, OperationState.ROLE_CREATED, OperationState.RECEIPT_RECORDED)
+        self.journal.advance(op.operation_id, RoleOperationState.ROLE_CREATED, RoleOperationState.RECEIPT_RECORDED)
         self.record_binding(tenant, binding)
-        self.journal.advance(op.operation_id, OperationState.RECEIPT_RECORDED, OperationState.COMPLETED)
+        self.journal.advance(op.operation_id, RoleOperationState.RECEIPT_RECORDED, RoleOperationState.COMPLETED)

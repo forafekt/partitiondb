@@ -43,7 +43,7 @@ tenant_signature(rebuild_report, args=(42,), tenant_id="customer-42").apply_asyn
 **Requirements**
 
 - The repository's `get(id)` must return a current, **active** `Tenant`, or `None`. The factory owns cleanup.
-- `partitiondb.adapters.django.registry.DjangoRegistry` can supply the repository implementation. Wrap its construction in a context-manager factory like the one above.
+- `partitiondb.adapters.django.tenancy.DjangoRegistry` can supply the repository implementation. Wrap its construction in a context-manager factory like the one above.
 - The task decorator (`@app.task`) must be **outermost**, with `@tenant_job` directly beneath it. Bound synchronous tasks are supported.
 - Coroutine and generator tasks are rejected.
 

@@ -1,12 +1,13 @@
 """Optional registry administration for a shared control-plane AdminSite."""
 
 from django.contrib import admin
+from django.contrib.admin.utils import quote
 from django.core.checks import Error
 from django.core.exceptions import PermissionDenied
 
 from partitiondb import current_tenant
-from partitiondb.adapters.django.registry.models import DomainModelMixin, TenantBaseMixin
 from partitiondb.adapters.django.routing.router import app_sets
+from partitiondb.adapters.django.tenancy.abstract_models import DomainModelMixin, TenantBaseMixin
 
 
 class SharedModelAdminMixin:
@@ -115,7 +116,24 @@ class SharedAdminSiteMixin:
 
     def get_app_list(self, request, app_label=None):
         allowed = app_sets()[0]
-        return [app for app in super().get_app_list(request, app_label) if app["app_label"] in allowed]
+        result = [app for app in super().get_app_list(request, app_label) if app["app_label"] in allowed]
+        order = {"partitiondb_tenancy": 0, "partitiondb_infrastructure": 1, "partitiondb_database_access": 2}
+        model_order = {
+            "Tenant": 0,
+            "Domain": 1,
+            "Membership": 2,
+            "DatabaseServer": 0,
+            "DatabaseReservation": 1,
+            "DatabaseProvisioningOperation": 2,
+            "DatabaseRecoveryEvent": 3,
+            "RoleProvisioningOperation": 0,
+            "RoleOwnershipReceipt": 1,
+            "RoleRecoveryEvent": 2,
+        }
+        for app in result:
+            if app["app_label"] in order:
+                app["models"].sort(key=lambda model: model_order.get(model["object_name"], 99))
+        return sorted(result, key=lambda app: (order.get(app["app_label"], 99), app["name"].lower()))
 
 
 class ProvisioningTenantAdmin(TenantRegistryAdmin):
@@ -134,6 +152,17 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
 
     def get_provisioning_fieldsets(self, request, form):
         return ((None, {"fields": tuple(form.fields)}),)
+
+    def get_provisioning_bound_fieldsets(self, request, form):
+        """Native BoundFields keep application widgets and avoid theme-internal helpers."""
+        groups = []
+        for title, options in self.get_provisioning_fieldsets(request, form):
+            fields = []
+            for name in options["fields"]:
+                names = (name,) if isinstance(name, str) else name
+                fields.extend(form[field] for field in names if not form.fields[field].widget.is_hidden)
+            groups.append({"title": title, "fields": fields})
+        return groups
 
     def provision_tenant(self, request, cleaned_data):
         raise NotImplementedError("Implement the application provisioning service")
@@ -154,6 +183,10 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
         from django.urls import reverse
 
         self._require_control_plane()
+        if request.method not in ("GET", "POST"):
+            from django.http import HttpResponseNotAllowed
+
+            return HttpResponseNotAllowed(["GET", "POST"])
         if not self.has_add_permission(request):
             raise PermissionDenied
         request.current_app = self.admin_site.name
@@ -162,6 +195,7 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
         form_class = self.get_provisioning_form_class(request)
         form = form_class(request.POST if request.method == "POST" else None)
         from .forms import style_provisioning_form
+
         style_provisioning_form(self, request, form)
         failed = False
         if request.method == "POST" and form.is_valid():
@@ -195,7 +229,7 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
                 return HttpResponseRedirect(
                     reverse(
                         f"{self.admin_site.name}:{self.opts.app_label}_{self.opts.model_name}_change",
-                        args=[obj.pk],
+                        args=[quote(obj.pk)],
                     )
                 )
         return TemplateResponse(
@@ -207,6 +241,8 @@ class ProvisioningTenantAdmin(TenantRegistryAdmin):
                 "title": "Create and provision tenant",
                 "opts": self.opts,
                 "form": form,
+                "model_admin": self,
+                "provisioning_fieldsets": self.get_provisioning_bound_fieldsets(request, form),
                 "adminform": AdminForm(form, self.get_provisioning_fieldsets(request, form), {}, model_admin=self),
                 "media": self.media + form.media,
                 "add": True,

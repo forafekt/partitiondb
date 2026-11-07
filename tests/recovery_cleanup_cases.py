@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase
 
 from partitiondb import Tenant
-from partitiondb.adapters.django.access_control.cleanup import CleanupBlocked, cleanup_disabled_role, inspect_cleanup
+from partitiondb.adapters.django.database_access.cleanup import CleanupBlocked, cleanup_disabled_role, inspect_cleanup
 from partitiondb.postgres.role_inspection import RoleInspection, RoleState
 from partitiondb.provisioning import Stage
 
@@ -41,15 +41,15 @@ class DisabledRoleCleanupTests(SimpleTestCase):
         self.context.admin_connection.execute.return_value.fetchone.return_value = (0,)
         for name in (
             "get_tenant_model",
-            "AccessOperation",
+            "RoleProvisioningOperation",
             "RoleOwnershipReceipt",
             "DjangoRecoveryAuditSink",
         ):
-            patcher = patch("partitiondb.adapters.django.access_control.cleanup." + name)
+            patcher = patch("partitiondb.adapters.django.database_access.cleanup." + name)
             setattr(self, name, patcher.start())
             self.addCleanup(patcher.stop)
         self.get_tenant_model.return_value._base_manager.using.return_value.get.return_value = self.registry
-        operations = self.AccessOperation._base_manager.using.return_value.filter.return_value
+        operations = self.RoleProvisioningOperation._base_manager.using.return_value.filter.return_value
         operations.exclude.return_value = operations
         operations.get.return_value = self.operation
         operations.exists.return_value = False

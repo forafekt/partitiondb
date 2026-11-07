@@ -34,8 +34,9 @@ try:
             "django.contrib.staticfiles",
             "django.contrib.admin",
             "partitiondb.adapters.django.apps.PartitionDBConfig",
-            "partitiondb.adapters.django.access_control",
-            "partitiondb.adapters.django.registry_app",
+            "partitiondb.adapters.django.infrastructure",
+            "partitiondb.adapters.django.database_access",
+            "partitiondb.adapters.django.tenancy",
         ],
         DATABASES={
             "default": {
@@ -65,8 +66,8 @@ try:
         STATIC_URL="/static/",
         DEFAULT_AUTO_FIELD="django.db.models.BigAutoField",
         PARTITIONDB={
-            "TENANT_MODEL": "partitiondb_registry.Tenant",
-            "DOMAIN_MODEL": "partitiondb_registry.Domain",
+            "TENANT_MODEL": "partitiondb_tenancy.Tenant",
+            "DOMAIN_MODEL": "partitiondb_tenancy.Domain",
             "SHARED_APPS": [
                 "auth",
                 "contenttypes",
@@ -74,8 +75,9 @@ try:
                 "messages",
                 "staticfiles",
                 "admin",
-                "partitiondb_access_control",
-                "partitiondb_registry",
+                "partitiondb_infrastructure",
+                "partitiondb_database_access",
+                "partitiondb_tenancy",
             ],
             "TENANT_APPS": [],
             "DATABASE_PROFILES": {"default": {"database_alias": "default"}},
@@ -92,10 +94,10 @@ try:
     from django.db import connections
     from django.test import RequestFactory
 
-    from partitiondb.adapters.django.access_control.models import DatabaseRecoveryAudit
-    from partitiondb.adapters.django.databases.store import DjangoDatabaseJournal
-    from partitiondb.adapters.django.registry.workflow import TenantWorkflow, get_workflow
-    from partitiondb.adapters.django.registry_app.models import Tenant
+    from partitiondb.adapters.django.infrastructure.models import DatabaseRecoveryEvent
+    from partitiondb.adapters.django.infrastructure.store import DjangoDatabaseJournal
+    from partitiondb.adapters.django.tenancy.models import Tenant
+    from partitiondb.adapters.django.tenancy.workflow import TenantWorkflow, get_workflow
     from partitiondb.credentials.development import DevelopmentCredentials
     from partitiondb.postgres.role_manager import tenant_role_name
 
@@ -131,9 +133,11 @@ try:
 
             tenant = failed_creation(target_name, "empty")
             roles.append(tenant_role_name(tenant.as_tenant()))
-            request = RequestFactory().get("/admin/partitiondb_registry/tenant/" + str(tenant.pk) + "/database-status/")
+            request = RequestFactory().get(
+                "/admin/partitiondb_tenancy/tenant/" + str(tenant.pk) + "/database-provisioning/"
+            )
             request.user = actor
-            response = model_admin.database_status_view(request, str(tenant.pk))
+            response = model_admin.database_provisioning_view(request, str(tenant.pk))
             assert response.status_code == 200, response.context_data.get("error")
             response.render()
             assert response.context_data["actions"] == ["cleanup"]
@@ -151,12 +155,12 @@ try:
             request.user = actor
             request.session = {}
             request._messages = FallbackStorage(request)
-            response = model_admin.database_status_view(request, str(tenant.pk))
+            response = model_admin.database_provisioning_view(request, str(tenant.pk))
             assert response.status_code == 302, getattr(response, "context_data", {})
             tenant.refresh_from_db()
             assert tenant.active
             assert list(
-                DatabaseRecoveryAudit.objects.filter(tenant_id=str(tenant.pk))
+                DatabaseRecoveryEvent.objects.filter(tenant_id=str(tenant.pk))
                 .order_by("pk")
                 .values_list("decision", flat=True)
             ) == ["cleanup", "retry"]
@@ -171,13 +175,13 @@ try:
                 # Large objects have no tenant schema: emptiness must cover them too.
                 large_oid = connection.execute("SELECT lo_create(0)").fetchone()[0]
             request = RequestFactory().get(
-                "/admin/partitiondb_registry/tenant/" + str(blocked.pk) + "/database-status/"
+                "/admin/partitiondb_tenancy/tenant/" + str(blocked.pk) + "/database-provisioning/"
             )
             request.user = actor
-            response = model_admin.database_status_view(request, str(blocked.pk))
+            response = model_admin.database_provisioning_view(request, str(blocked.pk))
             assert response.status_code == 409
             assert "contains" in response.context_data["error"]
-            assert DatabaseRecoveryAudit.objects.filter(tenant_id=str(blocked.pk)).count() == 0
+            assert DatabaseRecoveryEvent.objects.filter(tenant_id=str(blocked.pk)).count() == 0
             with psycopg.connect(**dict(source, dbname=blocked_name), autocommit=True) as connection:
                 assert connection.execute("SELECT 1 FROM pg_largeobject_metadata WHERE oid=%s", (large_oid,)).fetchone()
             print(

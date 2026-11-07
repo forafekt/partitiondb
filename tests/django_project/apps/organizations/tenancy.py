@@ -1,4 +1,4 @@
-from partitiondb.adapters.django.registry.lookup import get_membership_model
+from partitiondb.adapters.django.tenancy.lookup import get_membership_model
 
 
 def authorize_tenant(request, tenant):

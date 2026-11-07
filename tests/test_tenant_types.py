@@ -160,7 +160,7 @@ def test_optional_typed_model_and_admin_expose_immutable_type_metadata():
     from django.test.utils import isolate_apps
 
     from partitiondb.adapters.django.administration.registry import TenantRegistryAdmin
-    from partitiondb.adapters.django.registry.models import TypedTenantMixin
+    from partitiondb.adapters.django.tenancy.abstract_models import TypedTenantMixin
 
     with isolate_apps("apps.organizations"), override_settings(PARTITIONDB=typed_config()):
 

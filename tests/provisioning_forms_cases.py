@@ -10,9 +10,9 @@ from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import resolve, reverse
 
 from partitiondb.adapters.django.administration.forms import style_provisioning_form
-from partitiondb.adapters.django.databases.routes import NEW_DATABASE
-from partitiondb.adapters.django.registry.forms import DatabaseTenantProvisionForm, SchemaTenantProvisionForm
-from partitiondb.adapters.django.registry_app.models import Tenant
+from partitiondb.adapters.django.infrastructure.routes import NEW_DATABASE
+from partitiondb.adapters.django.tenancy.forms import DatabaseTenantProvisionForm, SchemaTenantProvisionForm
+from partitiondb.adapters.django.tenancy.models import Tenant
 
 
 @override_settings(ROOT_URLCONF="tests.recovery_admin_urls")
@@ -20,7 +20,7 @@ class TenantCreationTests(SimpleTestCase):
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
-        module = "partitiondb.adapters.django.registry.forms"
+        module = "partitiondb.adapters.django.tenancy.forms"
         for name, value in (
             ("database_profiles", {"control": Mock()}),
             ("tenant_database_aliases", ["default", "dedicated"]),
@@ -41,7 +41,7 @@ class TenantCreationTests(SimpleTestCase):
             "database_profile": "control",
         }
         self.admin = shared_admin_site._registry[Tenant]
-        self.request = RequestFactory().get("/admin/partitiondb_registry/tenant/add/")
+        self.request = RequestFactory().get("/admin/partitiondb_tenancy/tenant/add/")
         self.request.user = get_user_model()(pk=1, is_superuser=True, is_staff=True, is_active=True)
 
     def test_schema_form_excludes_new_database_inputs_and_rejects_forged_mode(self):
@@ -81,8 +81,8 @@ class TenantCreationTests(SimpleTestCase):
             style_provisioning_form(self.admin, self.request, form)
             self.assertIsInstance(form, expected)
             self.assertIsInstance(form.fields["name"].widget, AdminTextInputWidget)
-            url = reverse(f"{shared_admin_site.name}:partitiondb_registry_tenant_add_{kind}")
-            self.assertEqual(resolve(url).url_name, f"partitiondb_registry_tenant_add_{kind}")
+            url = reverse(f"{shared_admin_site.name}:partitiondb_tenancy_tenant_add_{kind}")
+            self.assertEqual(resolve(url).url_name, f"partitiondb_tenancy_tenant_add_{kind}")
 
     def test_add_page_is_a_choice_not_an_ambiguous_combined_form(self):
         with patch.object(shared_admin_site, "each_context", return_value={}):
@@ -90,3 +90,57 @@ class TenantCreationTests(SimpleTestCase):
         self.assertEqual(response.template_name, "partitiondb/admin/provision_choose.html")
         self.assertIn("schema_url", response.context_data)
         self.assertIn("database_url", response.context_data)
+
+
+class NativeAdminFormTests(SimpleTestCase):
+    def test_specialized_widgets_and_multiple_values_are_preserved(self):
+        from django import forms
+        from django.contrib import admin
+
+        class Form(forms.Form):
+            password = forms.CharField(widget=forms.PasswordInput)
+            multiple = forms.MultipleChoiceField(choices=[("a", "A"), ("b", "B")])
+            text = forms.CharField(widget=forms.Textarea(attrs={"rows": 8}))
+
+        form = Form()
+        password, multiple = form.fields["password"].widget, form.fields["multiple"].widget
+        style_provisioning_form(admin.ModelAdmin(Tenant, admin.AdminSite()), RequestFactory().get("/"), form)
+        self.assertIs(form.fields["password"].widget, password)
+        self.assertIs(form.fields["multiple"].widget, multiple)
+        self.assertIsInstance(form.fields["text"].widget, forms.Textarea)
+        self.assertEqual(form.fields["text"].widget.attrs["rows"], 8)
+
+    def test_cleanup_confirmation_preserves_exact_ownership_value_and_signed_token(self):
+        from django.contrib import admin
+
+        from partitiondb.adapters.django.administration.forms import RoleCleanupForm, confirmation_form
+
+        form = confirmation_form(
+            admin.ModelAdmin(Tenant, admin.AdminSite()),
+            RequestFactory().get("/"),
+            RoleCleanupForm,
+            token="signed-inspection",
+        )
+        self.assertIn('value="yes"', str(form["confirm_ownership"]))
+        self.assertIn('value="signed-inspection"', str(form["confirmation_token"]))
+
+    def test_provisioning_is_native_and_preserves_multipart_context(self):
+        from django import forms
+        from django.contrib import admin
+
+        from partitiondb.adapters.django.administration.registry import ProvisioningTenantAdmin
+
+        class UploadForm(forms.Form):
+            upload = forms.FileField()
+
+        class UploadAdmin(ProvisioningTenantAdmin):
+            provisioning_form_class = UploadForm
+
+        model_admin = UploadAdmin(Tenant, admin.AdminSite())
+        request = RequestFactory().get("/admin/add/")
+        request.user = get_user_model()(pk=1, is_active=True, is_staff=True, is_superuser=True)
+        with patch.object(model_admin.admin_site, "each_context", return_value={}):
+            response = model_admin.add_view(request)
+        self.assertTrue(response.context_data["has_file_field"])
+        self.assertEqual(response.context_data["provisioning_fieldsets"][0]["fields"][0].name, "upload")
+        self.assertNotIn("unfold", str(response.template_name))

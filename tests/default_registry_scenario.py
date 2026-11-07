@@ -19,7 +19,7 @@ def main():
     sys.modules[urls.__name__] = urls
     with tempfile.TemporaryDirectory() as directory:
         credential_config = {
-            "CREDENTIAL_PROVIDER": "partitiondb.adapters.django.databases.credentials.development_credentials",
+            "CREDENTIAL_PROVIDER": "partitiondb.adapters.django.infrastructure.credentials.development_credentials",
             "DEVELOPMENT_CREDENTIALS_DIR": directory,
         }
         if os.environ.get("PARTITIONDB_DEFAULT_REGISTRY_OPENBAO") == "1":
@@ -32,8 +32,9 @@ def main():
                 "django.contrib.auth",
                 "django.contrib.contenttypes",
                 "partitiondb.adapters.django.apps.PartitionDBConfig",
-                "partitiondb.adapters.django.registry_app.apps.PartitionDBRegistryConfig",
-                "partitiondb.adapters.django.access_control.apps.PartitionDBAccessControlConfig",
+                "partitiondb.adapters.django.tenancy.apps.PartitionDBTenancyConfig",
+                "partitiondb.adapters.django.infrastructure",
+                "partitiondb.adapters.django.database_access.apps.PartitionDBDatabaseAccessConfig",
                 "apps.workspaces.apps.WorkspacesConfig",
             ],
             MIDDLEWARE=["partitiondb.adapters.django.routing.middleware.TenantMiddleware"],
@@ -57,7 +58,13 @@ def main():
                 "test_base": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
             },
             PARTITIONDB={
-                "SHARED_APPS": ["auth", "contenttypes", "partitiondb_registry", "partitiondb_access_control"],
+                "SHARED_APPS": [
+                    "auth",
+                    "contenttypes",
+                    "partitiondb_tenancy",
+                    "partitiondb_infrastructure",
+                    "partitiondb_database_access",
+                ],
                 "TENANT_APPS": ["workspaces"],
                 **credential_config,
             },
@@ -69,13 +76,13 @@ def main():
         from django.core.management import call_command
 
         from partitiondb.adapters.django import get_domain_model, get_tenant_model
-        from partitiondb.adapters.django.registry.workflow import access_context, get_workflow, resolve_host
         from partitiondb.adapters.django.routing.scope import atomic_tenant
+        from partitiondb.adapters.django.tenancy.workflow import access_context, get_workflow, resolve_host
 
         call_command("makemigrations", check=True, dry_run=True, verbosity=0)
         call_command("migrate", verbosity=0, interactive=False)
-        assert get_tenant_model()._meta.label == "partitiondb_registry.Tenant"
-        assert get_domain_model()._meta.label == "partitiondb_registry.Domain"
+        assert get_tenant_model()._meta.label == "partitiondb_tenancy.Tenant"
+        assert get_domain_model()._meta.label == "partitiondb_tenancy.Domain"
         assert type(get_workflow()).__name__ == "TenantWorkflow"
         call_command(
             "create_tenant",
@@ -89,6 +96,14 @@ def main():
         tenant = record.as_tenant()
         try:
             assert record.active
+            from partitiondb.adapters.django.administration.overview import TenantOverviewService
+
+            overview = TenantOverviewService().detail(
+                record, include_operations=True, include_domains=True, include_memberships=True
+            )
+            assert overview["summary"].lifecycle == "active"
+            assert overview["summary"].role_operation.state == "completed"
+            assert overview["summary"].hostname == "builtin.localhost"
             assert resolve_host("builtin.localhost") == tenant
             with atomic_tenant(tenant):
                 Workspace.objects.create(name="default workflow write")

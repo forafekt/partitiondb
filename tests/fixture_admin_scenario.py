@@ -32,7 +32,7 @@ def main():
     from partitiondb import current_tenant
     from partitiondb.adapters.django import get_tenant_model
     from partitiondb.adapters.django.checks import check_configuration
-    from partitiondb.adapters.django.registry_app.models import Membership
+    from partitiondb.adapters.django.tenancy.models import Membership
 
     assert not check_configuration(None), check_configuration(None)
     Organization = get_tenant_model()
@@ -50,7 +50,7 @@ def main():
             platform.post(platform_login, {"login": "root", "username": "root", "password": "test-only"}).status_code
             == 302
         )
-        assert platform.get("/admin/partitiondb_registry/membership/").status_code == 200
+        assert platform.get("/admin/partitiondb_tenancy/membership/").status_code == 200
         assert platform.get("/admin/workspaces/workspace/").status_code == 404
 
         tenant = Client(HTTP_HOST="demo.localhost:8000")
@@ -72,7 +72,7 @@ def main():
         assert response.status_code == 200, response.content[:1000]
         assert tenant.get("/admin/workspaces/workspace/").status_code == 200
         assert tenant.get("/admin/workspaces/workspace/add/").status_code == 403
-        assert tenant.get("/admin/partitiondb_registry/membership/").status_code == 404
+        assert tenant.get("/admin/partitiondb_tenancy/membership/").status_code == 404
         membership.role = "editor"
         membership.save()
         assert tenant.get("/admin/workspaces/workspace/add/").status_code == 200

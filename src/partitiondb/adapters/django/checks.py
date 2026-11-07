@@ -22,8 +22,8 @@ def check_configuration(app_configs, **kwargs):
         return [Error(str(error), id="partitiondb.E008")]
     errors = []
     try:
-        from partitiondb.adapters.django.databases.routes import database_profiles, tenant_database_aliases
-        from partitiondb.adapters.django.databases.settings import database_provisioning_targets
+        from partitiondb.adapters.django.infrastructure.routes import database_profiles, tenant_database_aliases
+        from partitiondb.adapters.django.infrastructure.settings import database_provisioning_targets
 
         database_provisioning_targets()
         database_profiles(include_registered=False)
@@ -139,14 +139,17 @@ def check_configuration(app_configs, **kwargs):
         except ImproperlyConfigured as error:
             errors.append(Error(str(error), id="partitiondb.E030"))
     if config["TENANT_MODEL"]:
-        from partitiondb.adapters.django.registry.lookup import get_domain_model, get_tenant_model
-        from partitiondb.adapters.django.registry.workflow import provisioner_factory, resolve_host
+        from partitiondb.adapters.django.tenancy.lookup import get_domain_model, get_tenant_model
+        from partitiondb.adapters.django.tenancy.workflow import provisioner_factory, resolve_host
 
         try:
             get_tenant_model()
             if config.callback("PROVISIONER_FACTORY") is provisioner_factory:
-                if "partitiondb_access_control" not in config["SHARED_APPS"]:
-                    raise ImproperlyConfigured("Managed tenants require partitiondb_access_control in SHARED_APPS")
+                if not {"partitiondb_database_access", "partitiondb_infrastructure"} <= set(config["SHARED_APPS"]):
+                    raise ImproperlyConfigured(
+                        "Managed tenants require partitiondb_database_access and "
+                        "partitiondb_infrastructure in SHARED_APPS"
+                    )
             if config["DOMAIN_MODEL"] or config.callback("RESOLVER") is resolve_host:
                 get_domain_model()
             for name in ("TENANT_WORKFLOW", "CREDENTIAL_PROVIDER", "PROVISIONING_CONNECTION_PARAMS"):
@@ -154,7 +157,7 @@ def check_configuration(app_configs, **kwargs):
         except ImproperlyConfigured as error:
             errors.append(Error(str(error), id="partitiondb.E031"))
     if config["MEMBERSHIP_MODEL"]:
-        from partitiondb.adapters.django.registry.lookup import get_membership_model
+        from partitiondb.adapters.django.tenancy.lookup import get_membership_model
 
         try:
             get_membership_model()
@@ -203,7 +206,7 @@ def check_configuration(app_configs, **kwargs):
                 )
             )
         try:
-            from partitiondb.adapters.django.registry.models import TenantAdminAuditMixin
+            from partitiondb.adapters.django.tenancy.abstract_models import TenantAdminAuditMixin
 
             audit = apps.get_model(config.get("TENANT_ADMIN_LOG_MODEL", ""))
             if not issubclass(audit, TenantAdminAuditMixin) or audit._meta.app_label not in tenant:
@@ -276,3 +279,33 @@ def check_configuration(app_configs, **kwargs):
                     except (ImportError, AttributeError, ImproperlyConfigured):
                         errors.append(Error(f"Invalid URLCONF for tenant type {name}", id="partitiondb.E018"))
     return errors
+
+
+@register()
+def check_admin_site(app_configs, **kwargs):
+    """Detect UI packages replacing the guarded default site during AppConfig.ready()."""
+    try:
+        admin_config = apps.get_app_config("admin")
+    except LookupError:
+        return []
+    from django.contrib import admin
+
+    from partitiondb.adapters.django.administration.apps import PartitionDBAdminConfig
+    from partitiondb.adapters.django.administration.configuration import resolve_admin_class
+
+    if not isinstance(admin_config, PartitionDBAdminConfig):
+        return []
+    try:
+        configured = resolve_admin_class("SHARED", "SITE_CLASS")
+        if isinstance(admin.site, configured):
+            return []
+    except ImproperlyConfigured as error:
+        return [Error(str(error), id="partitiondb.E036")]
+    return [
+        Error(
+            "The default admin site does not use the configured PartitionDB shared site.",
+            hint="A UI app may have replaced admin.site during startup. With Unfold, install "
+            "unfold.apps.BasicAppConfig and retain PartitionDBAdminConfig for the admin app.",
+            id="partitiondb.E036",
+        )
+    ]

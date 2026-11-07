@@ -26,13 +26,10 @@ def main():
         from django.test import Client
 
         from partitiondb.adapters.django import get_domain_model, get_tenant_model
-        from partitiondb.adapters.django.access_control.models import (
-            AccessOperation,
-            RoleOwnershipReceipt,
-        )
-        from partitiondb.adapters.django.registry.workflow import access_context, registry_lifecycle_factory
-        from partitiondb.adapters.django.registry_app.models import Membership
+        from partitiondb.adapters.django.database_access.models import RoleOwnershipReceipt, RoleProvisioningOperation
         from partitiondb.adapters.django.routing.scope import atomic_tenant
+        from partitiondb.adapters.django.tenancy.models import Membership
+        from partitiondb.adapters.django.tenancy.workflow import access_context, registry_lifecycle_factory
         from partitiondb.postgres.role_manager import tenant_role_name
         from partitiondb.provisioning import Stage
 
@@ -73,20 +70,20 @@ def main():
                     timeout=30,
                 )
                 assert result.returncode == 71
-                assert AccessOperation.objects.get(tenant_id=tenant.id).state == "receipt_recorded"
+                assert RoleProvisioningOperation.objects.get(tenant_id=tenant.id).state == "receipt_recorded"
                 assert not Organization.objects.get(pk=tenant.id).active
                 # Audited READY inspects the target database and finalizes central metadata.
                 response = platform.post(
-                    f"/admin/partitiondb_registry/tenant/{tenant.id}/reconcile-access/",
+                    f"/admin/partitiondb_tenancy/tenant/{tenant.id}/reconcile-role/",
                     {"decision": "ready", "confirm_tenant_id": tenant.id},
                 )
                 assert response.status_code == 302
-                from partitiondb.adapters.django.access_control.models import AccessRecoveryAudit
+                from partitiondb.adapters.django.database_access.models import RoleRecoveryEvent
 
-                assert AccessRecoveryAudit.objects.get(tenant_id=tenant.id).database_alias == "dedicated"
+                assert RoleRecoveryEvent.objects.get(tenant_id=tenant.id).database_alias == "dedicated"
             else:
                 response = platform.post(
-                    "/admin/partitiondb_registry/tenant/add/",
+                    "/admin/partitiondb_tenancy/tenant/add/",
                     {
                         "name": "Dedicated",
                         "schema": "org_same",
@@ -105,8 +102,8 @@ def main():
             assert tenant.database == "dedicated" and shared.database_alias == "default"
             receipt = RoleOwnershipReceipt.objects.get(tenant_id=tenant.id)
             assert receipt.database_alias == "dedicated"
-            assert AccessOperation.objects.get(tenant_id=tenant.id).state == "completed"
-            page = platform.get(f"/admin/partitiondb_registry/tenant/{tenant.id}/access-status/")
+            assert RoleProvisioningOperation.objects.get(tenant_id=tenant.id).state == "completed"
+            page = platform.get(f"/admin/partitiondb_tenancy/tenant/{tenant.id}/role-status/")
             assert page.status_code == 200
             assert "Verified — fresh password connection succeeded".encode() in page.content
             # The reserved database cannot be silently assigned to another tenant.
@@ -134,11 +131,11 @@ def main():
                     assert context.provisioner.store.get(tenant.id).stage == Stage.ACTIVE
                 assert context.admin_connection.info.dbname == os.environ["POSTGRES_DEDICATED_DB"]
                 for table in (
-                    "pdb_registry_tenant",
+                    "pdb_tenancy_tenant",
                     "auth_user",
                     "django_session",
-                    "pdb_access_operation",
-                    "pdb_role_ownership_receipt",
+                    "pdb_access_role_operation",
+                    "pdb_access_role_receipt",
                     "pdb_provisioning",
                 ):
                     assert (
@@ -203,7 +200,7 @@ def main():
             ):
                 assert unavailable.get("/api/workspaces/").status_code == 500
                 with patch(
-                    "partitiondb.adapters.django.registry.workflow.TenantWorkflow.credentials",
+                    "partitiondb.adapters.django.tenancy.workflow.TenantWorkflow.credentials",
                     side_effect=AssertionError("Deactivation contacted the secret provider"),
                 ):
                     with registry_lifecycle_factory(tenant.id) as lifecycle:
@@ -311,7 +308,7 @@ def main():
             # Roles are cluster-global; remove their grants from their actual target before dropping them.
             for identity in identities:
                 if identity.database != "default":
-                    from partitiondb.adapters.django.registry.workflow import provisioning_connection_params
+                    from partitiondb.adapters.django.tenancy.workflow import provisioning_connection_params
 
                     with psycopg.connect(**provisioning_connection_params(identity.database), autocommit=True) as admin:
                         role = tenant_role_name(identity)

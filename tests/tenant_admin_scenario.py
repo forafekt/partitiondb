@@ -38,7 +38,7 @@ def permissions(request, tenant):
     )
 
 
-def main(postgres=False, custom_ui=False):
+def main(postgres=False, custom_ui=False, unfold=False):
     with tempfile.TemporaryDirectory() as folder:
         databases = {
             alias: {
@@ -66,7 +66,8 @@ def main(postgres=False, custom_ui=False):
         settings.configure(
             SECRET_KEY="test-only",
             ALLOWED_HOSTS=["alpha.test", "beta.test"],
-            INSTALLED_APPS=[
+            INSTALLED_APPS=(["unfold.apps.BasicAppConfig"] if unfold else [])
+            + [
                 "partitiondb.adapters.django",
                 "apps.workspaces",
                 "django.contrib.auth",
@@ -101,7 +102,14 @@ def main(postgres=False, custom_ui=False):
                 }
             ],
             PARTITIONDB={
-                "SHARED_APPS": ["auth", "contenttypes", "sessions", "admin", "messages"],
+                "SHARED_APPS": [
+                    *(["unfold"] if unfold else []),
+                    "auth",
+                    "contenttypes",
+                    "sessions",
+                    "admin",
+                    "messages",
+                ],
                 "TENANT_APPS": ["workspaces"],
                 "RESOLVER": "tests.tenant_admin_scenario.resolve",
                 "AUTHORIZE": "tests.tenant_admin_scenario.authorize",
@@ -116,7 +124,7 @@ def main(postgres=False, custom_ui=False):
         if custom_ui:
             from tests.custom_admin_scenario import install_custom_urls
 
-            install_custom_urls()
+            install_custom_urls(unfold=unfold)
         from apps.workspaces.models import Workspace
         from django.contrib.auth import get_user_model
         from django.core.management import call_command
@@ -124,7 +132,7 @@ def main(postgres=False, custom_ui=False):
         from django.test import Client
 
         from partitiondb import tenant_scope
-        from partitiondb.adapters.django.registry.models import TenantAdminAuditMixin
+        from partitiondb.adapters.django.tenancy.abstract_models import TenantAdminAuditMixin
 
         class Audit(TenantAdminAuditMixin):
             class Meta(TenantAdminAuditMixin.Meta):

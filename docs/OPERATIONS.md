@@ -21,7 +21,7 @@ python manage.py provision_tenant TENANT_ID --status
 python manage.py provision_tenant TENANT_ID
 ```
 
-- The normal creation workflow also installs or upgrades its checkpoint store. Quiesce older provisioners before an upgrade, because store constraint changes can lock the table.
+- The normal creation workflow also installs the current-baseline checkpoint store idempotently. Historical table layouts are unsupported and are not altered by the installer. Use a fresh development baseline.
 - Resuming an `ACTIVE` checkpoint is a no-op. It is **not** a migration upgrade command.
 
 ### The framework-neutral `Provisioner`
@@ -65,7 +65,7 @@ Decisions are audited. Afterwards, resume provisioning and perform admission if 
 
 ### Access provisioning ambiguity (`ACCESS_PROVISIONING`)
 
-Use the tenant's admin **access-status page**.
+Use the tenant's admin **role-status page**.
 
 | Action | What it does |
 | --- | --- |

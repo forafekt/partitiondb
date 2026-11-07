@@ -1,10 +1,7 @@
-{% extends "admin/base_site.html" %}{% load static i18n %}
-{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'partitiondb/admin/operations.css' %}">{% endblock %}
+{% extends "partitiondb/admin/action_page.html" %}
+{% load i18n %}
 {% block content %}
-<h1>{% translate "Create tenant" %}</h1>
-<p class="pdb-notice">{% translate "Choose where the tenant's data will live. Each option has its own provisioning form." %}</p>
-<div class="pdb-grid">
-<a class="pdb-card" href="{{ schema_url }}"><h2>{% translate "Schema tenant" %}</h2><p>{% translate "Create a tenant schema inside an existing database. Choose its runtime access policy." %}</p></a>
-<a class="pdb-card" href="{{ database_url }}"><h2>{% translate "Database tenant" %}</h2><p>{% translate "Create a dedicated database on a verified server, with a tenant schema and restricted database role." %}</p></a>
-</div>
+<p>{% translate "Choose where the tenant's data will live. Each option has its own provisioning form." %}</p>
+<div class="module"><h2>{% translate "Schema tenant" %}</h2><p>{% translate "Create a tenant schema inside an existing database. Choose its runtime access policy." %}</p><p><a href="{{ schema_url }}" class="button">{% translate "Create schema tenant" %}</a></p></div>
+<div class="module"><h2>{% translate "Database tenant" %}</h2><p>{% translate "Create a dedicated database on a verified server, with a tenant schema and restricted database role." %}</p><p><a href="{{ database_url }}" class="button">{% translate "Create database tenant" %}</a></p></div>
 {% endblock %}

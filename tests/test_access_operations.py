@@ -3,7 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from partitiondb.access import AccessPolicyEnum, TenantAccess
-from partitiondb.access.operations import OperationState, RestrictedAccessCoordinator
+from partitiondb.access.operations import RestrictedAccessCoordinator, RoleOperationState
 from partitiondb.postgres.role_manager import RoleBinding
 from partitiondb.tenancy.identity import Tenant
 
@@ -45,7 +45,7 @@ def test_restricted_records_intent_before_role_creation():
     )
     assert events == ["intent", "role", "receipt", "binding"]
     assert journal.advance.call_count == 3
-    assert journal.advance.call_args.args[-1] == OperationState.COMPLETED
+    assert journal.advance.call_args.args[-1] == RoleOperationState.COMPLETED
 
 
 def test_journal_failure_prevents_role_side_effects():

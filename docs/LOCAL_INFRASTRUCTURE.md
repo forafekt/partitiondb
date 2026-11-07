@@ -12,14 +12,14 @@ A single Docker Compose command brings up a complete, runnable PartitionDB examp
 Run from the repository root (requires Compose v2.20+):
 
 ```sh
-docker compose up --build -d
+docker compose -f compose.yml -f compose.local.yml up -d --build
 docker compose ps
 docker compose logs --tail=80 initialize web worker bao-renew
 ```
 
-`compose.yml` includes `compose.local.yml`. Selecting `-f compose.local.yml` explicitly starts the same `partitiondb-local` project.
+`compose.yml` includes `compose.local.yml`. The command above, plain `docker compose up -d --build`, and `docker compose -f compose.local.yml up -d --build` all select the same `partitiondb-local` stack. No test services are included.
 
-The image installs a wheel built from the checkout. The `initialize` service prepares TLS, OpenBao, the control database, migrations, checkpoints, static files, server profiles and an administrator. Existing database data and account passwords are kept across restarts.
+The image installs a wheel built from the checkout and checks Django configuration plus local initializer imports during the build, before any runtime fixture writes. The `initialize` service prepares TLS, OpenBao, the control database, migrations, checkpoints, static files, server profiles and an administrator. Existing database data and account passwords are kept across restarts.
 
 ## Services
 
@@ -47,7 +47,7 @@ Select **Token** in the UI. Credentials live beneath `secret/partitiondb` with h
 
 ## Create and exercise tenants
 
-1. In platform admin, open **PartitionDB tenants → Tenants → Add**.
+1. In platform admin, open **PartitionDB tenancy → Tenants → Add**.
 2. Choose **New database + tenant schema**, with server `tenant_server`, name `demo`, schema `demo` and hostname `demo.localhost`. Leave the database name blank.
 3. Tick the provisioning confirmation and submit. The default workspace is seeded.
 4. Create an active staff user and an active tenant membership with an explicit viewer/editor/admin role.

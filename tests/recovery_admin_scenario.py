@@ -1,5 +1,6 @@
 """Run native admin acceptance without any host application or UI dependency."""
 
+import sys
 import unittest
 
 from django.conf import settings
@@ -16,8 +17,9 @@ settings.configure(
         "django.contrib.staticfiles",
         "django.contrib.admin",
         "partitiondb.adapters.django.apps.PartitionDBConfig",
-        "partitiondb.adapters.django.access_control",
-        "partitiondb.adapters.django.registry_app",
+        "partitiondb.adapters.django.infrastructure",
+        "partitiondb.adapters.django.database_access",
+        "partitiondb.adapters.django.tenancy",
     ],
     DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
     TEMPLATES=[
@@ -36,8 +38,8 @@ settings.configure(
     STATIC_URL="/static/",
     DEFAULT_AUTO_FIELD="django.db.models.BigAutoField",
     PARTITIONDB={
-        "TENANT_MODEL": "partitiondb_registry.Tenant",
-        "DOMAIN_MODEL": "partitiondb_registry.Domain",
+        "TENANT_MODEL": "partitiondb_tenancy.Tenant",
+        "DOMAIN_MODEL": "partitiondb_tenancy.Domain",
         "SHARED_APPS": [
             "auth",
             "contenttypes",
@@ -45,14 +47,33 @@ settings.configure(
             "messages",
             "staticfiles",
             "admin",
-            "partitiondb_access_control",
-            "partitiondb_registry",
+            "partitiondb_infrastructure",
+            "partitiondb_database_access",
+            "partitiondb_tenancy",
         ],
         "TENANT_APPS": [],
         "DATABASE_PROFILES": {"default": {"database_alias": "default"}},
         "DATABASE_PROFILE_REGISTRY": False,
     },
 )
+if "--unfold" in sys.argv:
+    settings.INSTALLED_APPS = [
+        "unfold.apps.BasicAppConfig",
+        *[
+            "partitiondb.adapters.django.administration.apps.PartitionDBAdminConfig"
+            if app == "django.contrib.admin"
+            else app
+            for app in settings.INSTALLED_APPS
+        ],
+    ]
+    settings.PARTITIONDB["SHARED_APPS"] = ["unfold", *settings.PARTITIONDB["SHARED_APPS"]]
+    settings.PARTITIONDB["ADMIN"] = {
+        "SHARED": {
+            "SITE_CLASS": "tests.unfold_admin_ui.SharedSite",
+            "MODEL_ADMIN_CLASS": "tests.unfold_admin_ui.SharedAdmin",
+        }
+    }
+
 import django  # noqa: E402
 
 django.setup()

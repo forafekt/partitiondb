@@ -1,23 +1,23 @@
 """Default managed tenant admin; subclass forms and workflow methods to customize."""
 
-from django.contrib import admin
 from django.core.checks import Error
 from django.core.exceptions import ImproperlyConfigured
 
-from partitiondb.adapters.django.access_control.evidence_store import DjangoOwnershipReceiptStore
-from partitiondb.adapters.django.access_control.models import AccessOperation, RoleOwnershipReceipt
-from partitiondb.adapters.django.access_control.operation_store import DjangoAccessOperationJournal
-from partitiondb.adapters.django.access_control.services import (
+from partitiondb.adapters.django.administration.access import TenantAccessRegistryAdmin
+from partitiondb.adapters.django.administration.registry import ProvisioningTenantAdmin
+from partitiondb.adapters.django.database_access.evidence_store import DjangoOwnershipReceiptStore
+from partitiondb.adapters.django.database_access.models import RoleOwnershipReceipt, RoleProvisioningOperation
+from partitiondb.adapters.django.database_access.operation_store import DjangoRoleProvisioningJournal
+from partitiondb.adapters.django.database_access.services import (
     AuditedDjangoReconciliationService,
     JournalBoundRecoveryEvidence,
 )
-from partitiondb.adapters.django.administration.access import TenantAccessRegistryAdmin
-from partitiondb.adapters.django.administration.registry import ProvisioningTenantAdmin
-from partitiondb.adapters.django.registry.forms import TenantProvisionForm
-from partitiondb.adapters.django.registry.lookup import get_tenant_model
-from partitiondb.adapters.django.registry.workflow import get_workflow
+from partitiondb.adapters.django.tenancy.forms import TenantProvisionForm
+from partitiondb.adapters.django.tenancy.lookup import get_tenant_model
+from partitiondb.adapters.django.tenancy.workflow import get_workflow
 from partitiondb.provisioning import Stage
 
+from .dashboard import TenantDashboardAdminMixin
 from .database_recovery import DatabaseRecoveryAdminMixin
 from .provisioning import TenantCreationAdminMixin
 from .recovery import AccessCleanupAdminMixin
@@ -25,6 +25,7 @@ from .recovery_links import RecoveryLinksMixin
 
 
 class ManagedTenantAdmin(
+    TenantDashboardAdminMixin,
     AccessCleanupAdminMixin,
     DatabaseRecoveryAdminMixin,
     TenantCreationAdminMixin,
@@ -34,17 +35,6 @@ class ManagedTenantAdmin(
 ):
     provisioning_form_class = TenantProvisionForm
 
-    list_display = (
-        "pk",
-        "name",
-        "schema_name",
-        "database_location",
-        "active",
-        "access_policy",
-        "access_role",
-        "tenant_recovery",
-        "database_recovery",
-    )
     search_fields = ("name", "schema_name")
     ordering = ("name",)
 
@@ -52,33 +42,17 @@ class ManagedTenantAdmin(
         fields = super().get_readonly_fields(request, obj)
         if obj is not None:
             fields += ("tenant_recovery", "database_recovery")
+            fields += tuple(field for field in ("created_at", "updated_at") if hasattr(self.model, field))
         if obj is not None and "database_location" not in fields:
             return (*fields, "database_location")
         return fields
-
-    @admin.display(description="Database")
-    def database_location(self, obj):
-        from django.db import connections
-
-        from partitiondb.adapters.django.databases.routes import managed_alias
-
-        if managed_alias(obj.database_alias):
-            from partitiondb.adapters.django.access_control.models import TenantDatabaseTarget
-
-            target = (
-                TenantDatabaseTarget._base_manager.using("default")
-                .filter(alias=obj.database_alias, tenant_id=str(obj.pk))
-                .first()
-            )
-            return f"{target.database_name} ({target.profile})" if target else "Unresolved database route"
-        return connections[obj.database_alias].settings_dict["NAME"]
 
     def access_inspection_service(self, request, tenant):
         with self.get_workflow(request).access_context(tenant.id) as context:
             with context.provisioner.store.lock(tenant.id):
                 record = context.provisioner.store.get(tenant.id)
                 inspection = context.inspector.inspect(tenant)
-                journal = DjangoAccessOperationJournal(AccessOperation)
+                journal = DjangoRoleProvisioningJournal(RoleProvisioningOperation)
                 receipts = DjangoOwnershipReceiptStore(RoleOwnershipReceipt)
                 operation = journal.get(tenant)
                 registry = get_tenant_model()._base_manager.using("default").get(pk=tenant.id)

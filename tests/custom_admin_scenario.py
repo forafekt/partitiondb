@@ -1,7 +1,7 @@
 """Reuse CRUD acceptance with a synthetic UI site and model admin."""
 
 
-def install_custom_urls():
+def install_custom_urls(unfold=False):
     import sys
     from types import ModuleType
 
@@ -11,10 +11,17 @@ def install_custom_urls():
 
     from partitiondb.adapters.django.admin import TenantAdminSiteMixin, TenantModelAdminMixin
 
-    class UISite(admin.AdminSite):
+    base_site, base_admin = admin.AdminSite, admin.ModelAdmin
+    if unfold:
+        from unfold.admin import ModelAdmin
+        from unfold.sites import UnfoldAdminSite
+
+        base_site, base_admin = UnfoldAdminSite, ModelAdmin
+
+    class UISite(base_site):
         site_title = "Synthetic UI"
 
-    class UIModelAdmin(admin.ModelAdmin):
+    class UIModelAdmin(base_admin):
         list_per_page = 17
 
     class CustomSite(TenantAdminSiteMixin, UISite):
@@ -38,6 +45,8 @@ def install_custom_urls():
 
 
 if __name__ == "__main__":
+    import sys
+
     from tests.tenant_admin_scenario import main
 
-    main(custom_ui=True)
+    main(custom_ui=True, unfold="--unfold" in sys.argv)

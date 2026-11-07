@@ -29,12 +29,7 @@ class PostgresProvisioningStore:
             raise RuntimeError("Checkpoint store needs an idle autocommit connection")
 
     def install(self):
-        """Install or atomically upgrade metadata; preserve existing tenant records.
-
-        Replacing the original stage constraint requires a table lock. Run this
-        administrative step before starting provisioners, not during requests.
-        Unknown stored stages abort and roll back the entire upgrade.
-        """
+        """Idempotently create the current baseline; older store layouts are unsupported."""
         if self._tenant_id is not None:
             raise RuntimeError("Cannot install while provisioning")
         self._idle()
@@ -47,18 +42,9 @@ class PostgresProvisioningStore:
                         schema_name text NOT NULL,
                         database_alias text NOT NULL,
                         tenant_type text,
-                        stage text NOT NULL,
+                        stage text NOT NULL CONSTRAINT pdb_provisioning_stage_check CHECK (stage IN ({})),
                         UNIQUE (database_alias, schema_name)
                     )"""
-                ).format(self.table)
-            )
-            # PostgreSQL gave the original inline CHECK this same name. Replace
-            # it for both legacy and current stores, keeping Stage authoritative.
-            self.connection.execute(
-                sql.SQL(
-                    "ALTER TABLE {} ADD COLUMN IF NOT EXISTS tenant_type text, "
-                    "DROP CONSTRAINT IF EXISTS pdb_provisioning_stage_check, "
-                    "ADD CONSTRAINT pdb_provisioning_stage_check CHECK (stage IN ({}))"
                 ).format(self.table, stages)
             )
 

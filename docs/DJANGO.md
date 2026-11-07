@@ -14,11 +14,11 @@
 
 ### Built-in models (recommended)
 
-Add the optional `partitiondb_registry` shared app to get concrete Tenant, Domain and Membership models. No `Organization` subclass is required.
+Add the optional `partitiondb_tenancy` shared app to get concrete Tenant, Domain and Membership models. No `Organization` subclass is required.
 
 1. Install shared `auth` and `contenttypes` (or your configured shared user model), since Membership has a foreign key to the user.
-2. Classify the `partitiondb_registry` app label as shared. The three model settings then default to the built-in models.
-3. Wire the membership callbacks from `partitiondb.adapters.django.registry_app.tenancy`:
+2. Classify the `partitiondb_tenancy` app label as shared. The three model settings then default to the built-in models.
+3. Wire the membership callbacks from `partitiondb.adapters.django.tenancy.permissions`:
 
 | Setting | Value |
 | --- | --- |
@@ -35,7 +35,7 @@ Define your own models with the provided mixins:
 
 ```python
 from django.db import models
-from partitiondb.adapters.django.registry.models import DomainModelMixin, TenantModelMixin
+from partitiondb.adapters.django.tenancy.abstract_models import DomainModelMixin, TenantModelMixin
 
 
 class Organization(TenantModelMixin):
@@ -99,7 +99,7 @@ The library supplies the provisioning form and template, access inspection and r
 | To customize... | Do this |
 | --- | --- |
 | Business setup and verification | Subclass `TenantWorkflow`, override `seed(tenant)` and `verify_tenant(tenant)`, and set `TENANT_WORKFLOW` |
-| Extra admin form fields | Subclass `TenantProvisionForm` (from `partitiondb.adapters.django.registry.forms`) and set `provisioning_form_class` on `ManagedTenantAdmin` |
+| Extra admin form fields | Subclass `TenantProvisionForm` (from `partitiondb.adapters.django.tenancy.forms`) and set `provisioning_form_class` on `ManagedTenantAdmin` |
 | The `create_tenant` command | Subclass `create_tenant.Command`, add arguments, and override `creation_options()` to pass `tenant_data` |
 | Admin behavior | Override `get_provisioning_form_class`, `get_provisioning_fieldsets`, `provisioning_template_name` or `get_workflow` |
 
@@ -109,7 +109,7 @@ The library supplies the provisioning form and template, access inspection and r
 
 ### Tenant resolution
 
-The managed resolver uses fresh, active-only registry and domain lookups. Unknown or inactive hosts **fail closed**. The low-level `DjangoRegistry(model, domain_model=...)` (in `partitiondb.adapters.django.registry`) also provides `resolve_host`, `get` and `list_tenants`; lookups run outside tenant scope.
+The managed resolver uses fresh, active-only registry and domain lookups. Unknown or inactive hosts **fail closed**. The low-level `DjangoRegistry(model, domain_model=...)` (in `partitiondb.adapters.django.tenancy`) also provides `resolve_host`, `get` and `list_tenants`; lookups run outside tenant scope.
 
 > [!NOTE]
 > The host guard does not verify DNS ownership or issue TLS certificates.
@@ -170,7 +170,7 @@ Use `TenantAdminSite` and `TenantModelAdmin` from `partitiondb.adapters.django.a
 The existing imports from `partitiondb.adapters.django.administration.tenant` also remain supported.
 
 1. Set `TENANT_ADMIN_PERMISSIONS(request, tenant)` to return permission strings.
-2. Set `TENANT_ADMIN_LOG_MODEL` to a tenant-local subclass of `TenantAdminAuditMixin` (from `partitiondb.adapters.django.registry.models`).
+2. Set `TENANT_ADMIN_LOG_MODEL` to a tenant-local subclass of `TenantAdminAuditMixin` (from `partitiondb.adapters.django.tenancy.abstract_models`).
 3. Mount the site in the **tenant** URLconf, and Django's platform admin only in the **shared** URLconf.
 4. Keep shared models off the tenant site.
 
@@ -202,8 +202,9 @@ from partitiondb.adapters.django.configuration import DjangoSetup
 
 TENANCY = DjangoSetup(
     shared_apps={
-        "partitiondb_registry": "partitiondb.adapters.django.registry_app",
-        "partitiondb_access_control": "partitiondb.adapters.django.access_control",
+        "partitiondb_tenancy": "partitiondb.adapters.django.tenancy",
+        "partitiondb_infrastructure": "partitiondb.adapters.django.infrastructure",
+        "partitiondb_database_access": "partitiondb.adapters.django.database_access",
         "accounts": "apps.accounts.apps.AccountsConfig",
         "admin": "partitiondb.adapters.django.administration.apps.PartitionDBAdminConfig",
         "auth": "django.contrib.auth",
@@ -218,9 +219,9 @@ TENANCY = DjangoSetup(
     tenant_urlconf="config.urls",
     shared_hosts=["localhost", "127.0.0.1"],
     shared_urlconf="config.urls_platform",
-    authorize="partitiondb.adapters.django.registry_app.tenancy.authorize_tenant",
+    authorize="partitiondb.adapters.django.tenancy.permissions.authorize_tenant",
     tenant_admin=False,  # The provider owns login; tenant admin remains available.
-    TENANT_ADMIN_PERMISSIONS="partitiondb.adapters.django.registry_app.tenancy.tenant_admin_permissions",
+    TENANT_ADMIN_PERMISSIONS="partitiondb.adapters.django.tenancy.permissions.tenant_admin_permissions",
     TENANT_ADMIN_LOG_MODEL="audit.AdminAudit",
     TENANT_AUTH_PATHS=["/accounts/", "/_allauth/", "/api/auth/", "/admin/login/", "/admin/logout/"],
     TENANT_AUTH_URLCONF="config.urls_auth",

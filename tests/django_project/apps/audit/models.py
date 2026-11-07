@@ -1,4 +1,4 @@
-from partitiondb.adapters.django.registry.models import TenantAdminAuditMixin
+from partitiondb.adapters.django.tenancy.abstract_models import TenantAdminAuditMixin
 
 
 class AdminAudit(TenantAdminAuditMixin):

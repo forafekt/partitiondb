@@ -14,42 +14,20 @@ def test_path():
 
 
 @pytest.mark.postgres
-@pytest.mark.parametrize("layout", ["unconstrained", "legacy", "typed"])
-def test_checkpoint_store_explicit_upgrade_preserves_untyped_and_typed_identity(conn, tenants, layout):
+def test_checkpoint_store_install_preserves_current_baseline_identity(conn, tenants):
     from dataclasses import replace
 
     from partitiondb.postgres.provisioning import PostgresProvisioningStore
     from partitiondb.provisioning import Stage
 
     store = PostgresProvisioningStore(conn, schema=tenants[0].schema)
-    # Cover both historical layouts and the original constrained installer.
-    old_check = psycopg.sql.SQL(
-        "CHECK (stage IN ('new', 'creating', 'schema_ready', 'migrating', 'migrated', 'active'))"
-        if layout != "unconstrained"
-        else ""
-    )
-    type_column = psycopg.sql.SQL(", tenant_type text" if layout == "typed" else "")
-    conn.execute(
-        psycopg.sql.SQL(
-            "CREATE TABLE {} (tenant_id text PRIMARY KEY, schema_name text NOT NULL, "
-            "database_alias text NOT NULL, stage text NOT NULL {}{}, "
-            "UNIQUE(database_alias, schema_name))"
-        ).format(store.table, old_check, type_column)
-    )
-    conn.execute(
-        psycopg.sql.SQL(
-            "INSERT INTO {} (tenant_id, schema_name, database_alias, stage) VALUES (%s, %s, 'default', 'migrated')"
-        ).format(store.table),
-        ("legacy", tenants[1].schema),
-    )
-    if layout == "typed":
-        conn.execute(psycopg.sql.SQL("UPDATE {} SET tenant_type = 'full'").format(store.table))
     store.install()
-    store.install()  # Explicit installation/upgrade is repeatable.
-    with store.lock("legacy"):
-        old = store.get("legacy")
-        assert old.tenant == Tenant("legacy", tenants[1].schema, tenant_type="full" if layout == "typed" else None)
-        assert old.stage == Stage.MIGRATED
+    first = Tenant("first", tenants[1].schema)
+    store.register(first)
+    store.install()
+    with store.lock(first.id):
+        assert store.get(first.id).tenant == first
+        assert store.get(first.id).stage == Stage.NEW
     typed = Tenant("typed", "typed_" + uuid.uuid4().hex, tenant_type="full")
     store.register(typed)
     with store.lock(typed.id):
@@ -259,36 +237,6 @@ def test_durable_provisioning_store_and_exclusion(conn, tenants):
             assert other_store.get(tenant.id).stage == Stage.ACTIVE
     with pytest.raises(RuntimeError):
         store.get(tenant.id)
-
-
-@pytest.mark.postgres
-def test_checkpoint_store_upgrade_failure_preserves_existing_table(conn, tenants):
-    from partitiondb.postgres.provisioning import PostgresProvisioningStore
-
-    store = PostgresProvisioningStore(conn, schema=tenants[0].schema)
-    conn.execute(
-        psycopg.sql.SQL(
-            "CREATE TABLE {} (tenant_id text PRIMARY KEY, schema_name text NOT NULL, "
-            "database_alias text NOT NULL, stage text NOT NULL)"
-        ).format(store.table)
-    )
-    conn.execute(
-        psycopg.sql.SQL("INSERT INTO {} VALUES ('legacy', 'org_legacy', 'default', 'unknown')").format(store.table)
-    )
-    with pytest.raises(psycopg.errors.CheckViolation):
-        store.install()
-    assert conn.execute(psycopg.sql.SQL("SELECT * FROM {}").format(store.table)).fetchall() == [
-        ("legacy", "org_legacy", "default", "unknown")
-    ]
-    # The failed upgrade must also roll back its added column.
-    assert (
-        conn.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_schema = %s "
-            "AND table_name = 'pdb_provisioning' AND column_name = 'tenant_type'",
-            (tenants[0].schema,),
-        ).fetchall()
-        == []
-    )
 
 
 @pytest.mark.postgres

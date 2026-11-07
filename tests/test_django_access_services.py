@@ -5,8 +5,8 @@ from unittest.mock import Mock
 import pytest
 from django.core.exceptions import ValidationError
 
-from partitiondb.adapters.django.access_control.bindings import DjangoRoleBindingRecorder
-from partitiondb.adapters.django.access_control.policy_models import TenantAccessMixin
+from partitiondb.adapters.django.database_access.bindings import DjangoRoleBindingRecorder
+from partitiondb.adapters.django.database_access.policy_models import TenantAccessMixin
 from partitiondb.postgres.role_manager import RoleBinding
 from partitiondb.tenancy.identity import Tenant
 

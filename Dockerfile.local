@@ -18,6 +18,10 @@ RUN pip install --no-cache-dir '/wheels/'*.whl 'Django>=6.0,<6.1' \
     && rm -rf /wheels && useradd --uid 10001 --create-home app
 COPY tests/django_project ./tests/django_project
 COPY docker/local ./docker/local
+# Validate the installed wheel and local entry-point imports without runtime
+# volumes, credentials, database connections or fixture writes.
+RUN DJANGO_SETTINGS_MODULE=config.settings python tests/django_project/manage.py check \
+    && DJANGO_SETTINGS_MODULE=config.settings python -c "import runpy; runpy.run_path('docker/local/initialize_app.py', run_name='build_check')"
 USER 10001:10001
 EXPOSE 8000
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-"]
